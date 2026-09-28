@@ -54,6 +54,8 @@ Clients may rewrite a stored anchor after an `exact` or `relocated` result, or a
 
 **Why:** this prevents silent drift when clients use different heuristics.
 
+*Refined by D20.*
+
 ## D10. A suggestion is applicable if its quote resolves exactly (2026-09-28)
 
 Applicability is derived, never stored. A suggestion is applicable if its anchor resolves by steps 0–3. After step 4 or when orphaned, it is stale. Anchors of suggestions are never rewritten in a way that changes `quote.exact`. A stale suggestion needs a user to re-target it. See §4.2.
@@ -71,3 +73,47 @@ Accepting a suggestion edits the document and records `accepted` with the applie
 Each suggestion has one anchor and one replacement string. Changes across several places are several suggestions, grouped in the data model.
 
 **Why:** this keeps applicability, storage, and conflicts simple. Multi-range and multi-file edits can be added later.
+
+## D13. Annotations are append-only event logs (2026-09-28)
+
+Every change is an immutable event, and annotation state is derived by replaying the events. See §2.3–§2.5.
+
+**Why:** when annotations are committed to git and edited on branches, merging is a union of events and never a JSON merge conflict. History and authorship are built in.
+
+## D14. Events record causal parents; concurrent writes are surfaced as conflicts (2026-09-28)
+
+Each event lists `after`, the heads of the annotation's history that its writer had seen. A field with several concurrent heads is conflicted and shown to the user, with a deterministic provisional value (greatest id). There are no silent last-writer-wins rules, except that concurrent automatic `reanchor` events never conflict. A delete that is concurrent with other changes is a conflict. See §2.5.
+
+**Why:** a Lamport counter was considered, but it can't reliably detect concurrent edits, and the goal is to never lose a human decision silently. The history of each annotation is small, so ancestry checks are cheap.
+
+## D15. Ids are UUIDv7 (2026-09-28)
+
+**Why:** they are standard, can be generated offline, sort roughly by creation time, and have libraries everywhere.
+
+## D16. Kinds are comment, suggestion, and reply; a highlight is a comment with no body (2026-09-28)
+
+An optional `label` covers highlighter colours and tags. See §2.2.
+
+**Why:** fewer kinds, and a highlight can gain a comment later without changing kind.
+
+## D17. Replies are annotations in flat threads (2026-09-28)
+
+A reply is its own annotation with `parent` pointing to a comment or suggestion. Replies to replies are not allowed.
+
+**Why:** concurrent replies never conflict, replies reuse all annotation machinery, and flat threads match Google Docs, Overleaf, and GitHub reviews.
+
+## D18. Authors are a stable id plus a name, defaulting to the git identity (2026-09-28)
+
+`author.id` SHOULD be a URI. Without explicit configuration, clients inside a git repository default to `mailto:<user.email>` and `user.name`. There is no authentication in v1. See §2.7.
+
+**Why:** zero configuration in git repositories, without making git a requirement.
+
+## D19. Bodies are CommonMark (2026-09-28)
+
+**Why:** review comments need code and links, and the raw text is still readable in clients that can't render Markdown.
+
+## D20. Anchors are rewritten only after relocation (2026-09-28)
+
+This refines D9. Clients rewrite an anchor (a `reanchor` event) only after a `relocated` result, never after `exact`. See §3.8.
+
+**Why:** it keeps logs and diffs quiet when documents are only being read, and still refreshes anchors that have actually drifted.

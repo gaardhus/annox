@@ -1,0 +1,1679 @@
+{
+  "description": "Event replay test vectors for annox spec §2.5. For each case, derive the state of annotation `annotation` from `events` and compare with `expected` (§2.5.6). Event order in `events` is arbitrary and must not affect the result.",
+  "specVersion": "0.0",
+  "cases": [
+    {
+      "name": "linear",
+      "description": "Create, edit, resolve in sequence: no conflicts.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?"
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "body": "Is this bound tight?"
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0002-7000-8000-000000000000"
+          ],
+          "type": "status",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "status": "resolved"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "comment",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "body": "Is this bound tight?",
+        "label": null,
+        "status": "resolved",
+        "deleted": false,
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "concurrent-body",
+      "description": "The example from §2.6: concurrent body edits conflict; provisional value from the greatest id.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?"
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "body": "Is this bound tight?"
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "status",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "status": "resolved"
+        },
+        {
+          "id": "01926d3a-0004-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0003-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:04:00Z",
+          "body": "Tight — see Lemma 4."
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "comment",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "body": "Tight — see Lemma 4.",
+        "label": null,
+        "status": "resolved",
+        "deleted": false,
+        "conflicts": {
+          "body": [
+            "01926d3a-0002-7000-8000-000000000000",
+            "01926d3a-0004-7000-8000-000000000000"
+          ]
+        }
+      }
+    },
+    {
+      "name": "conflict-resolved",
+      "description": "The §2.6 conflict resolved by an edit after both heads.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?"
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "body": "Is this bound tight?"
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "status",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "status": "resolved"
+        },
+        {
+          "id": "01926d3a-0004-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0003-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:04:00Z",
+          "body": "Tight — see Lemma 4."
+        },
+        {
+          "id": "01926d3a-0005-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0002-7000-8000-000000000000",
+            "01926d3a-0004-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:05:00Z",
+          "body": "Is this bound tight? — Tight, see Lemma 4."
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "comment",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "body": "Is this bound tight? — Tight, see Lemma 4.",
+        "label": null,
+        "status": "resolved",
+        "deleted": false,
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "different-fields",
+      "description": "Concurrent edits to different fields (body vs label) do not conflict.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?"
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "body": "New body"
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "label": "important"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "comment",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "body": "New body",
+        "label": "important",
+        "status": "open",
+        "deleted": false,
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "accept-vs-reject",
+      "description": "Concurrent accept and reject of a suggestion: status conflict.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "suggestion",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": null,
+          "edit": {
+            "replacement": "we show that"
+          }
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "status",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "status": "accepted",
+          "appliedVersion": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "status",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "status": "rejected"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "suggestion",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "body": null,
+        "label": null,
+        "status": "rejected",
+        "edit": {
+          "replacement": "we show that"
+        },
+        "deleted": false,
+        "conflicts": {
+          "status": [
+            "01926d3a-0002-7000-8000-000000000000",
+            "01926d3a-0003-7000-8000-000000000000"
+          ]
+        }
+      }
+    },
+    {
+      "name": "delete-vs-edit",
+      "description": "Delete concurrent with an edit: delete conflict.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?"
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "delete",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z"
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "body": "Still relevant!"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "comment",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "body": "Still relevant!",
+        "label": null,
+        "status": "open",
+        "deleted": true,
+        "conflicts": {
+          "deleted": [
+            "01926d3a-0002-7000-8000-000000000000",
+            "01926d3a-0003-7000-8000-000000000000"
+          ]
+        }
+      }
+    },
+    {
+      "name": "delete-after-edit",
+      "description": "Delete made after seeing the edit: no conflict.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?"
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "body": "Edited"
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0002-7000-8000-000000000000"
+          ],
+          "type": "delete",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:03:00Z"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "comment",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "body": "Edited",
+        "label": null,
+        "status": "open",
+        "deleted": true,
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "delete-vs-restore",
+      "description": "Concurrent delete and restore: the deleted field conflicts.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?"
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "delete",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z"
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0002-7000-8000-000000000000"
+          ],
+          "type": "restore",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:03:00Z"
+        },
+        {
+          "id": "01926d3a-0004-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0002-7000-8000-000000000000"
+          ],
+          "type": "delete",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:04:00Z"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "comment",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "body": "Is this tight?",
+        "label": null,
+        "status": "open",
+        "deleted": true,
+        "conflicts": {
+          "deleted": [
+            "01926d3a-0003-7000-8000-000000000000",
+            "01926d3a-0004-7000-8000-000000000000"
+          ]
+        }
+      }
+    },
+    {
+      "name": "delete-vs-reanchor",
+      "description": "Delete concurrent with an automatic reanchor: not a conflict.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?"
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "delete",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z"
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "reanchor",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 46,
+                "end": 55
+              },
+              "quote": {
+                "exact": "the bound",
+                "prefix": "ts}\nIn Section 3, we prove that ",
+                "suffix": " is tight for all $n$.\n"
+              }
+            }
+          }
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "comment",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 46,
+              "end": 55
+            },
+            "quote": {
+              "exact": "the bound",
+              "prefix": "ts}\nIn Section 3, we prove that ",
+              "suffix": " is tight for all $n$.\n"
+            }
+          }
+        },
+        "body": "Is this tight?",
+        "label": null,
+        "status": "open",
+        "deleted": true,
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "reanchor-vs-reanchor",
+      "description": "Concurrent automatic reanchors never conflict; the greatest id wins.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?"
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "reanchor",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 46,
+                "end": 55
+              },
+              "quote": {
+                "exact": "the bound",
+                "prefix": "ts}\nIn Section 3, we prove that ",
+                "suffix": " is tight for all $n$.\n"
+              }
+            }
+          }
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "reanchor",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 56,
+                "end": 64
+              },
+              "quote": {
+                "exact": "is tight",
+                "prefix": "tion 3, we prove that the bound ",
+                "suffix": " for all $n$.\n"
+              }
+            }
+          }
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "comment",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 56,
+              "end": 64
+            },
+            "quote": {
+              "exact": "is tight",
+              "prefix": "tion 3, we prove that the bound ",
+              "suffix": " for all $n$.\n"
+            }
+          }
+        },
+        "body": "Is this tight?",
+        "label": null,
+        "status": "open",
+        "deleted": false,
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "retarget-vs-reanchor",
+      "description": "A deliberate retarget wins over a concurrent reanchor, even with a smaller id.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "suggestion",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": null,
+          "edit": {
+            "replacement": "we show that"
+          }
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "retarget",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 46,
+                "end": 55
+              },
+              "quote": {
+                "exact": "the bound",
+                "prefix": "ts}\nIn Section 3, we prove that ",
+                "suffix": " is tight for all $n$.\n"
+              }
+            }
+          },
+          "edit": {
+            "replacement": "we show"
+          }
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "reanchor",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 56,
+                "end": 64
+              },
+              "quote": {
+                "exact": "is tight",
+                "prefix": "tion 3, we prove that the bound ",
+                "suffix": " for all $n$.\n"
+              }
+            }
+          }
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "suggestion",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 46,
+              "end": 55
+            },
+            "quote": {
+              "exact": "the bound",
+              "prefix": "ts}\nIn Section 3, we prove that ",
+              "suffix": " is tight for all $n$.\n"
+            }
+          }
+        },
+        "body": null,
+        "label": null,
+        "status": "open",
+        "edit": {
+          "replacement": "we show"
+        },
+        "deleted": false,
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "retarget-vs-retarget",
+      "description": "Two concurrent retargets conflict on target and replacement.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "suggestion",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": null,
+          "edit": {
+            "replacement": "we show that"
+          }
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "retarget",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 46,
+                "end": 55
+              },
+              "quote": {
+                "exact": "the bound",
+                "prefix": "ts}\nIn Section 3, we prove that ",
+                "suffix": " is tight for all $n$.\n"
+              }
+            }
+          },
+          "edit": {
+            "replacement": "we show"
+          }
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "retarget",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 56,
+                "end": 64
+              },
+              "quote": {
+                "exact": "is tight",
+                "prefix": "tion 3, we prove that the bound ",
+                "suffix": " for all $n$.\n"
+              }
+            }
+          },
+          "edit": {
+            "replacement": "we argue"
+          }
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "suggestion",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 56,
+              "end": 64
+            },
+            "quote": {
+              "exact": "is tight",
+              "prefix": "tion 3, we prove that the bound ",
+              "suffix": " for all $n$.\n"
+            }
+          }
+        },
+        "body": null,
+        "label": null,
+        "status": "open",
+        "edit": {
+          "replacement": "we argue"
+        },
+        "deleted": false,
+        "conflicts": {
+          "target": [
+            "01926d3a-0002-7000-8000-000000000000",
+            "01926d3a-0003-7000-8000-000000000000"
+          ],
+          "replacement": [
+            "01926d3a-0002-7000-8000-000000000000",
+            "01926d3a-0003-7000-8000-000000000000"
+          ]
+        }
+      }
+    },
+    {
+      "name": "dangling",
+      "description": "An event whose `after` references a missing event is ignored, and so are its descendants.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?"
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0002-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "body": "Depends on missing e2"
+        },
+        {
+          "id": "01926d3a-0004-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0003-7000-8000-000000000000"
+          ],
+          "type": "status",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:04:00Z",
+          "status": "resolved"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "comment",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "body": "Is this tight?",
+        "label": null,
+        "status": "open",
+        "deleted": false,
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "invalid-and-unknown",
+      "description": "A retarget on a comment is invalid and an unknown type is ignored; both still count as ancestors.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?"
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "retarget",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 46,
+                "end": 55
+              },
+              "quote": {
+                "exact": "the bound",
+                "prefix": "ts}\nIn Section 3, we prove that ",
+                "suffix": " is tight for all $n$.\n"
+              }
+            }
+          },
+          "edit": {
+            "replacement": "x"
+          }
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0002-7000-8000-000000000000"
+          ],
+          "type": "x-future",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "foo": 1
+        },
+        {
+          "id": "01926d3a-0004-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0003-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:04:00Z",
+          "body": "After ignored events"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "comment",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "body": "After ignored events",
+        "label": null,
+        "status": "open",
+        "deleted": false,
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "accepted",
+      "description": "Accepted suggestion exposes appliedVersion.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "suggestion",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": null,
+          "edit": {
+            "replacement": "we show that"
+          }
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "status",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "status": "accepted",
+          "appliedVersion": "sha256:abababababababababababababababababababababababababababababababab"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "suggestion",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "body": null,
+        "label": null,
+        "status": "accepted",
+        "edit": {
+          "replacement": "we show that"
+        },
+        "appliedVersion": "sha256:abababababababababababababababababababababababababababababababab",
+        "deleted": false,
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "reply",
+      "description": "A reply: body edits apply; a status event on a reply is invalid and ignored.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "reply",
+          "parent": "01926d3a-ffff-7000-8000-000000000000",
+          "body": "Yes, see Lemma 4."
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "body": "Yes — see Lemma 4."
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0002-7000-8000-000000000000"
+          ],
+          "type": "status",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "status": "resolved"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "reply",
+        "author": {
+          "id": "mailto:bob@example.org",
+          "name": "Bob"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "parent": "01926d3a-ffff-7000-8000-000000000000",
+        "body": "Yes — see Lemma 4.",
+        "deleted": false,
+        "conflicts": {}
+      }
+    }
+  ]
+}

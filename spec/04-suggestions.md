@@ -6,7 +6,7 @@ Anchors, resolution, and resolution steps are defined in §3. The key words MUST
 
 ## 4.1 Shape
 
-A suggestion is an annotation with `kind: "suggestion"`, an anchor (`target`, §3.5), and an `edit`:
+A suggestion is an annotation with `kind: "suggestion"`, an anchor (`target`, §3.5), and an `edit`. Its derived state (§2.5.6) looks like this:
 
 ```json
 {
@@ -29,7 +29,7 @@ A suggestion is an annotation with `kind: "suggestion"`, an anchor (`target`, §
 | `edit.replacement` | string | Text that replaces the anchored range. Uses LF line endings, like all normalized text (§3.2). |
 | `status` | string | Lifecycle state (§4.4). |
 
-Where the rest of the annotation's fields live (id, author, timestamps, thread) is defined in §2.
+The other fields (id, author, timestamps, and an optional `body` explaining the suggestion) are defined in §2. Discussion happens in replies, in the suggestion's thread.
 
 A suggestion covers exactly one range, and the edit forms follow from that:
 
@@ -66,10 +66,10 @@ Applicability only matters while the suggestion is `open`. Clients SHOULD show s
 
 §3.8 allows clients to rewrite anchors. For suggestions that is restricted further:
 
-- A client MAY rewrite the anchor of an open suggestion after resolution steps 0–3. These leave `quote.exact` unchanged.
+- A client MAY rewrite the anchor of an open suggestion after it is relocated by step 2 or 3. These steps leave `quote.exact` unchanged.
 - A client MUST NOT rewrite the anchor of a suggestion after step 4 or after a confirmed suggested location (§3.7.4). Those rewrites change `quote.exact`, and the suggestion would silently become applicable to text its author never saw.
 
-A stale suggestion becomes applicable again only when a user **re-targets** it. That means updating the anchor and reviewing `replacement` in the same action. The data model (§2) records who re-targeted it.
+A stale suggestion becomes applicable again only when a user **re-targets** it. That means updating the anchor and reviewing `replacement` in the same action, recorded as a `retarget` event (§2.4).
 
 ## 4.3 Applying
 
@@ -80,9 +80,9 @@ To accept an open suggestion, a client MUST:
 1. Resolve the anchor against *D*. If the suggestion is stale, stop. It MUST NOT be applied.
 2. Let `[c, d)` be the resolved range. Compute the new text `D' = D[0:c] + replacement + D[d:]`.
 3. Write *D'* to the document. The client SHOULD keep the file's existing line-ending style, byte order mark, and encoding when writing. This includes converting LF in `replacement` to CRLF if the file uses CRLF.
-4. Set `status` to `accepted` and record the **applied version**, the version of *D'* (§3.4).
+4. Write a `status` event (§2.4) with `status: "accepted"` and `appliedVersion` set to the version of *D'* (§3.4).
 
-Steps 3 and 4 write two different files and can't be atomic. Clients SHOULD write the document first. If step 4 is lost, the suggestion stays `open` with its text already applied, and it becomes stale because its quote is gone. A client MAY detect this case when `prefix + replacement + suffix` occurs in *D*, and offer to mark the suggestion accepted.
+Steps 3 and 4 write two different files and can't be atomic. Clients SHOULD write the document first. If step 4 is lost, the suggestion stays `open` with its text already applied, and it becomes stale because its quote is gone. A client MAY detect this case with an applied-text search (§4.3.3), and offer to mark the suggestion accepted.
 
 **Location confirmation.** Relocation by step 3 can pick a different occurrence than the author intended, if the original was deleted and the same text appears elsewhere. Accepting one suggestion at a time is safe, because the user accepts it at the location shown to them. A client that accepts many suggestions without showing each one ("accept all") SHOULD apply only suggestions whose resolution is step 0, 1, or 2. It SHOULD leave step-3 relocations for individual review.
 
@@ -93,6 +93,15 @@ Suggestions are not mutually exclusive, and the spec doesn't track dependencies 
 ### 4.3.2 Unsaved buffers
 
 A client that applies a suggestion to an editor buffer, rather than the file on disk, uses the buffer's normalized content as *D*. It records the applied version as the version of the buffer content after the edit.
+
+### 4.3.3 Applied-text search and reverting
+
+An **applied-text search** looks for the text a suggestion produces once applied. Find every occurrence *i* of `p + replacement + x` in *D*, where `p` and `x` are the anchor's stored prefix and suffix. If there is at least one, let `c` be the nearest (§3.7.1) of the candidate starts `i + len(p)`. The applied text is `[c, c+len(replacement))`. For an insertion, `replacement` is non-empty, so the pattern is never just `p + x`.
+
+It is used in two places:
+
+- **Lost acceptance** (§4.3): an open suggestion whose applied text is found was probably applied without the `status` event being written.
+- **Reverting**: when a status conflict between `accepted` and another status is resolved in favour of the other status (§2.5.4), the document still contains the edit. The client SHOULD offer to revert it. If the applied-text search succeeds, the client replaces `[c, c+len(replacement))` with `quote.exact`. Otherwise the user reverts by hand. The `status` event is written in either case.
 
 ## 4.4 Lifecycle
 
@@ -111,9 +120,9 @@ open ──reject──▶ rejected ──reopen──▶ open
 open ──withdraw─▶ withdrawn ──reopen──▶ open
 ```
 
-- `accepted` is terminal. Undoing an accepted suggestion is done by making a new suggestion.
+- `accepted` is terminal. Undoing an accepted suggestion is done by making a new suggestion. The only exception is resolving a concurrent status conflict (§2.5.4, §4.3.3).
 - A client SHOULD offer `withdraw` only to the suggestion's author, and `reject` and `accept` to anyone else. annox has no authentication (§1.2), so this is a user-interface convention. A reader MUST NOT treat a status as invalid because of who set it.
-- Each transition records who made it and when. The fields for this are defined in §2.
+- Each transition is a `status` event (§2.4), which records who made it and when.
 
 ### 4.4.1 Closed suggestions
 
@@ -137,4 +146,3 @@ Test vectors are in [`tests/suggestions.json`](tests/suggestions.json).
 ## Open questions
 
 - **Re-targeting by others.** Can anyone re-target a stale suggestion, or only its author? This is a user-interface convention like §4.4, but it may belong in §2.
-- **Mixed suggestion and comment.** Is a suggestion with a comment body one annotation, or a suggestion plus a reply? This is decided in §2.

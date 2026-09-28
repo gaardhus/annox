@@ -135,11 +135,12 @@ For an orphaned annotation, a client MAY run any heuristic, such as fuzzy matchi
 
 Over time, stored anchors drift away from the current document. Rewriting them keeps later resolutions fast (step 0) and accurate.
 
-- If the state is `exact` or `relocated`, a client MAY rewrite the anchor. It does this by creating a fresh anchor (§3.6) for the resolved range in *D*. After steps 0–3, `quote.exact` is unchanged by construction. After step 4, it takes the current text of the range, including its whitespace.
+- If the state is `relocated`, a client MAY rewrite the anchor. It does this by creating a fresh anchor (§3.6) for the resolved range in *D*. After steps 2–3, `quote.exact` is unchanged by construction. After step 4, it takes the current text of the range, including its whitespace.
+- If the state is `exact`, a client SHOULD NOT rewrite the anchor. The location hasn't changed, and rewriting would only add events (§2.4, `reanchor`) and diffs to shared files.
 - If a user confirms a suggested location, the client MAY rewrite the anchor for the confirmed range. In this case `quote.exact` takes the current text of that range, which may differ from the original quote.
 - A client MUST NOT rewrite an anchor based on an unconfirmed suggested location.
 
-Suggestions have stricter rewriting rules (§4.2.1). Whether previous anchors are kept as history is defined by the data model (§2).
+A rewrite is recorded as a `reanchor` event (§2.4), so previous anchors stay in the annotation's history. Suggestions have stricter rewriting rules (§4.2.1).
 
 ## 3.9 Example
 
