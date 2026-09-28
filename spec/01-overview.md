@@ -104,6 +104,8 @@ A tool that people use to annotate, typically an editor plugin. A Client MUST me
 
 Partial Clients, such as one that supports comments but not suggestions, are not conforming. A tool that can't meet the Client requirements can still conform as a Viewer.
 
+A Client MAY delegate the logic to an annox server instead of implementing it itself. An editor plugin that exposes every Client action through the protocol conforms as a Client when paired with a conforming Server (§6.7).
+
 ### Server
 
 An annotation server that speaks the protocol (§6). A Server MUST implement Client semantics for every change it makes on behalf of clients, and MUST implement §6. The details are defined in §6.

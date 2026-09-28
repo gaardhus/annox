@@ -147,3 +147,21 @@ A document gets an id and an event log (`document`, `move`, `merged`) in a `docu
 If several documents are at the same path, readers MUST load all of them. Clients SHOULD merge them into the one with the smallest id, leaving a `merged` redirect. See §5.8.
 
 **Why:** loading all of them keeps reads correct, including for stragglers. Merging stops later renames from moving only some of the duplicates, which would reintroduce the path-reuse bug.
+
+## D26. The annox server owns the logic (2026-09-28)
+
+Editors send intents and document content. The server writes events, re-anchors, applies suggestions, and returns resolved annotations. A low-level event-sync layer is deferred. See §6.
+
+**Why:** this is the full LSP-style benefit. Plugins stay thin, and every editor behaves the same because §2–§5 are implemented once.
+
+## D27. The protocol is LSP plus `annox/*` extensions (2026-09-28)
+
+The server is a language server. It reuses LSP's transport, lifecycle, document sync, and position-encoding negotiation, and uses diagnostics, hover, and code actions to give plain LSP editors basic support without a plugin. Annox-aware clients declare `experimental.annox` and use extension methods for everything else. See §6.2–§6.6.
+
+**Why:** it fits the original "LSP-compatible" goal, gives support in every LSP editor from day one, and document sync is already solved. The costs are supporting UTF-16 positions on the wire and a compromised plugin-free experience.
+
+## D28. A thin plugin paired with a conforming Server is a Client (2026-09-28)
+
+See §1.5 and §6.7.
+
+**Why:** this is how LSP works, and without it no thin plugin could conform.

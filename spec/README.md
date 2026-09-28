@@ -9,7 +9,7 @@
 | 3 | [Anchoring](03-anchoring.md) | draft |
 | 4 | [Suggestions](04-suggestions.md) | draft |
 | 5 | [Storage](05-storage.md) | draft |
-| 6 | [Protocol](06-protocol.md) | outline |
+| 6 | [Protocol](06-protocol.md) | draft |
 
 Design decisions and their rationale are recorded in [decisions.md](decisions.md).
 
