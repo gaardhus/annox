@@ -123,3 +123,27 @@ This refines D9. Clients rewrite an anchor (a `reanchor` event) only after a `re
 A Viewer is read-only. It replays events, resolves anchors, and must visibly mark conflicts and orphaned annotations. A Client must support everything: all kinds, full suggestion handling, and a way to resolve every conflict. Partial Clients are not conforming. A Server implements Client semantics plus §6. See §1.5.
 
 **Why:** a strict Client class guarantees users a consistent experience in every editor. The Viewer class keeps read-only tools, such as CI checks, previews, and exports, conforming without a merge UI.
+
+## D22. A single `.annox/` directory at the workspace root (2026-09-28)
+
+The workspace root is the nearest ancestor directory containing `.annox/annox.json`, found the same way git finds `.git`. See §5.1.
+
+**Why:** there's one place to look and one directory to commit, and all document paths are relative to it.
+
+## D23. One file per event, grouped in per-document folders (2026-09-28)
+
+Each event is its own immutable JSON file, and each document's events are grouped in a folder. See §5.2 and §5.4.
+
+**Why:** merges only ever add files, so they never conflict in git, sync tools, or hosted merge UIs, and no `.gitattributes` is needed. Per-document folders keep the files for each document together. Per-document JSONL logs were considered. They are more intuitive and faster to read, but they need `merge=union` and still conflict in sync tools.
+
+## D24. Documents have stable ids; folder names are cosmetic (2026-09-28)
+
+A document gets an id and an event log (`document`, `move`, `merged`) in a `document/` subfolder. Its folders are named `<path>~<id>`, and only the id suffix identifies the document. A rename is a `move` event, and the folder is moved as tidying. Anchor paths are informational. See §5.5 and §5.6.
+
+**Why:** an earlier draft used path-named folders plus rename records. The storage test vectors showed that it breaks path reuse: after renaming `main.tex` to `old-main.tex`, a new `main.tex` inherited the old document's annotations. Stable ids fix this, stragglers from branches without the rename land correctly, and concurrent renames are surfaced as ordinary conflicts.
+
+## D25. Duplicate document records are loaded together and merged by clients (2026-09-28)
+
+If several documents are at the same path, readers MUST load all of them. Clients SHOULD merge them into the one with the smallest id, leaving a `merged` redirect. See §5.8.
+
+**Why:** loading all of them keeps reads correct, including for stragglers. Merging stops later renames from moving only some of the duplicates, which would reintroduce the path-reuse bug.

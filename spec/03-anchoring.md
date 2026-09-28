@@ -6,9 +6,9 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY are to be interpreted 
 
 ## 3.1 Document identity
 
-An anchor identifies its document by `path`: a path relative to the workspace root (§5), using `/` as the separator. A `path` MUST NOT be absolute and MUST NOT contain `.` or `..` segments. Paths are compared byte-for-byte after UTF-8 encoding, so they are case-sensitive.
+An anchor records `path`: the document's path, relative to the workspace root (§5.1), when the anchor was created or last rewritten. It uses `/` as the separator. A `path` MUST NOT be absolute and MUST NOT contain `.` or `..` segments. Paths are compared byte-for-byte after UTF-8 encoding, so they are case-sensitive.
 
-What happens to annotations when a document is renamed or deleted is defined in §5.
+`path` is informational. Which document an annotation belongs to is decided by storage (§5.5), so an anchor keeps working after its document is renamed.
 
 ## 3.2 Normalized text
 
@@ -55,7 +55,7 @@ Each anchor records the version of the document at the time the anchor was creat
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `path` | string | yes | Document path (§3.1). |
+| `path` | string | yes | Document path when the anchor was written (§3.1). Informational. |
 | `version` | string | yes | Version of the text the selectors were computed from (§3.4). |
 | `selectors.position.start` | integer ≥ 0 | yes | Start offset. |
 | `selectors.position.end` | integer ≥ `start` | yes | End offset. |

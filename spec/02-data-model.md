@@ -2,7 +2,7 @@
 
 annox stores **events**, not annotations. Every change to an annotation (creating it, editing its body, changing its status, rewriting its anchor) is a new, immutable event. The current state of an annotation is **derived** by replaying its events. Events record which earlier events their writer had seen. That lets any reader tell when two changes were made concurrently, for example on two git branches, and show the conflict instead of silently picking a winner.
 
-How events are laid out in files is defined in §5. The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY are to be interpreted as described in RFC 2119.
+How events are laid out in files is defined in §5. Documents have event logs of their own, which follow the same envelope and replay rules (§5.5.1). The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY are to be interpreted as described in RFC 2119.
 
 ## 2.1 Common types
 
@@ -82,7 +82,7 @@ The transitions in §4.4 are guidance for user interfaces. When deriving state, 
 
 Replaces the anchor with a fresh one (§3.8). Only for comments and suggestions.
 
-- `target`: the new anchor.
+- `target`: the new anchor. Its `path` SHOULD be the document's current path (§5.5).
 
 `reanchor` events are written by clients as a side effect of resolution, not as a deliberate user decision. They are treated specially in conflict detection (§2.5.3).
 
@@ -90,7 +90,7 @@ Replaces the anchor with a fresh one (§3.8). Only for comments and suggestions.
 
 Re-targets a stale suggestion (§4.2.1): the anchor and the replacement change together, as a deliberate user action. Only for suggestions.
 
-- `target`: the new anchor.
+- `target`: the new anchor. Its `path` SHOULD be the document's current path (§5.5).
 - `edit`: `{ "replacement": string }`.
 
 ### `delete` and `restore`
