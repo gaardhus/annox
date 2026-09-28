@@ -62,9 +62,9 @@ Unless disabled, the server publishes a diagnostic for every open root annotatio
 |---|---|---|---|
 | Comment | resolved range | Hint | first line of the body, or the label, or "Highlight" |
 | Suggestion, applicable | resolved range | Information | `Suggestion: "<quote>" → "<replacement>"` |
-| Suggestion, stale | last known range | Information | the above, prefixed with "Stale" |
+| Suggestion, stale but located (step 4) | resolved range | Information | the above, prefixed with "Stale" |
 | Conflicted annotation | resolved range | Warning | the above, prefixed with "Conflict" |
-| Orphaned annotation(s) | start of the document | Warning | "N annotations could not be located" |
+| Orphaned annotation(s), including orphaned suggestions | start of the document | Warning | "N annotations could not be located" |
 
 `source` is `"annox"`, `code` is the annotation kind, and `data` holds `{ "annotation": <id> }`. Resolved threads and closed suggestions are not published.
 

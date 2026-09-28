@@ -136,7 +136,7 @@ A conflicted field is presented as a conflict: readers report every head. Viewer
 There are two special rules:
 
 1. **Anchor rewrites never conflict.** If every head of `target` except at most one is a `reanchor` event, the field is not conflicted. Its value comes from the one non-`reanchor` head if there is one (a deliberate `retarget` wins over a concurrent automatic refresh). Otherwise it comes from the `reanchor` head with the greatest id. If two or more heads are `create` or `retarget` events, the field is conflicted as usual.
-2. **Delete conflicts with concurrent changes.** If `deleted` has a single head that is a `delete` event, and some valid event that isn't a `reanchor` is not an ancestor of that head, the annotation has a **delete conflict**. Someone changed it without having seen the deletion. The `deleted` field is then reported as conflicted, with the `delete` head and those events as the competing entries.
+2. **Delete conflicts with concurrent changes.** If `deleted` has a single head that is a `delete` event, and some valid event that isn't a `reanchor` is not an ancestor of that head, the annotation has a **delete conflict**. Someone changed it without having seen the deletion, or changed it after it was deleted. The `deleted` field is then reported as conflicted, with the `delete` head and those events as the competing entries.
 
 ### 2.5.4 Resolving conflicts
 

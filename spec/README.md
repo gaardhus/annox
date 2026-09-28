@@ -15,12 +15,8 @@ Design decisions and their rationale are recorded in [decisions.md](decisions.md
 
 Conformance test vectors are in [tests/](tests/). [`anchoring.json`](tests/anchoring.json) covers anchor resolution (§3.7), [`suggestions.json`](tests/suggestions.json) covers suggestion applicability and application (§4), [`replay.json`](tests/replay.json) covers deriving annotation state from events (§2.5), and [`storage.json`](tests/storage.json) covers loading documents from a workspace, including renames and duplicates (§5).
 
-## Drafting order
+## Status
 
-Sections are drafted in dependency order, not reading order:
+All sections have a first draft. Each section ends with its open questions. They are the main remaining work before a 0.1 release.
 
-1. Anchoring and re-anchoring (§3)
-2. Suggestions and conflicts (§4)
-3. Data model (§2), shaped by 3 and 4
-4. Sidecar storage (§5)
-5. Protocol (§6)
+The test vectors were generated with a throwaway reference implementation and cross-checked against the worked examples in §3.9 and §4.5.

@@ -45,7 +45,7 @@ A suggestion covers exactly one range, and the edit forms follow from that:
 
 **Base version.** `target.version` is the suggestion's base version: the document version its anchor was last checked against.
 
-Related changes, such as renaming a term in several places, are expressed as several suggestions. Grouping them is part of the data model (§2).
+Related changes, such as renaming a term in several places, are expressed as several suggestions. v1 has no way to group them (see open questions).
 
 ## 4.2 Applicability
 
@@ -121,7 +121,7 @@ open ──withdraw─▶ withdrawn ──reopen──▶ open
 ```
 
 - `accepted` is terminal. Undoing an accepted suggestion is done by making a new suggestion. The only exception is resolving a concurrent status conflict (§2.5.4, §4.3.3).
-- A client SHOULD offer `withdraw` only to the suggestion's author, and `reject` and `accept` to anyone else. annox has no authentication (§1.2), so this is a user-interface convention. A reader MUST NOT treat a status as invalid because of who set it.
+- A client SHOULD offer `withdraw` only to the suggestion's author, and `reject` and `accept` to anyone else. annox has no authentication (§1.3), so this is a user-interface convention. A reader MUST NOT treat a status as invalid because of who set it.
 - Each transition is a `status` event (§2.4), which records who made it and when.
 
 ### 4.4.1 Closed suggestions
@@ -145,4 +145,5 @@ Test vectors are in [`tests/suggestions.json`](tests/suggestions.json).
 
 ## Open questions
 
+- **Grouping.** Should related suggestions, such as the same fix in several places, be linkable so they can be accepted together?
 - **Re-targeting by others.** Can anyone re-target a stale suggestion, or only its author? This is a user-interface convention like §4.4, but it may belong in §2.

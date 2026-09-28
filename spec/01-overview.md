@@ -33,7 +33,7 @@ annox is an open standard for annotating plain-text documents with highlights, c
                               └─────────────────────────────────────┘
 ```
 
-1. **Storage (§5).** Annotations live in sidecar files next to the documents. They're usually committed to version control and need no server.
+1. **Storage (§5).** Annotations live as files in a `.annox/` directory at the workspace root, separate from the documents. They're usually committed to version control and need no server.
 2. **Events (§2).** Nothing is edited in place. Every change, from creating a comment to resolving a thread or accepting a suggestion, is appended as an immutable event. Each event records which earlier events its writer had seen. That makes merging two branches trivial, and it lets concurrent changes be detected and shown to the user instead of silently lost.
 3. **State (§2.5).** Replaying an annotation's events gives its current state, including any unresolved conflicts.
 4. **Anchoring (§3).** Each comment and suggestion is anchored to a range of text by offsets, quoted text, and context. When the document has changed, including changes made by tools that know nothing about annox, a deterministic algorithm finds the range again or reports the annotation as orphaned.
@@ -57,7 +57,7 @@ annox is an open standard for annotating plain-text documents with highlights, c
 
 | Term | Meaning |
 |---|---|
-| **Document** | A plain-text file being annotated, identified by its path relative to the workspace root (§3.1). |
+| **Document** | A plain-text file being annotated. Once it has annotations, it has a document record with a stable id, so its identity survives renames (§5.5). |
 | **Workspace** | A directory tree whose root holds the annox storage (§5). All document paths are relative to it. |
 | **Normalized text** | A document's content after decoding, BOM removal, and line-ending normalization (§3.2). All offsets and hashes are computed over it. |
 | **Version** | A content hash of normalized text (§3.4). |
@@ -65,7 +65,7 @@ annox is an open standard for annotating plain-text documents with highlights, c
 | **Root** | A comment or suggestion, which starts a thread. |
 | **Thread** | A root and its replies. |
 | **Highlight** | A comment with no body. |
-| **Event** | An immutable record of one change to one annotation (§2.3). |
+| **Event** | An immutable record of one change to one annotation (§2.3) or one document record (§5.5.1). |
 | **Head** | An event that no other known event lists in its `after`. The heads of a field are defined in §2.5.2. |
 | **Conflict** | A field with more than one concurrent head (§2.5.3). |
 | **Anchor** | The `target` of a root: path, version, and selectors (§3.5). |
@@ -88,7 +88,7 @@ A read-only tool, such as a web preview, an export, or a CI check. A Viewer MUST
 - read storage (§5) and derive annotation state by replay (§2.5);
 - resolve anchors (§3.7) and determine suggestion applicability (§4.2);
 - visibly mark every conflicted annotation (§2.5.3) and every orphaned open annotation (§3.7.3);
-- pass the test vectors in [`tests/replay.json`](tests/replay.json), [`tests/anchoring.json`](tests/anchoring.json), and the applicability results in [`tests/suggestions.json`](tests/suggestions.json).
+- pass the test vectors in [`tests/storage.json`](tests/storage.json), [`tests/replay.json`](tests/replay.json), [`tests/anchoring.json`](tests/anchoring.json), and the applicability results in [`tests/suggestions.json`](tests/suggestions.json).
 
 A Viewer MUST NOT write events or modify documents.
 
