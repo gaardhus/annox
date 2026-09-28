@@ -53,3 +53,21 @@ The version is `sha256:` plus the hex digest of the normalized text. It doesn't 
 Clients may rewrite a stored anchor after an `exact` or `relocated` result, or after the user confirms a suggested location. Orphaned anchors are never modified or deleted automatically. See §3.8.
 
 **Why:** this prevents silent drift when clients use different heuristics.
+
+## D10. A suggestion is applicable if its quote resolves exactly (2026-09-28)
+
+Applicability is derived, never stored. A suggestion is applicable if its anchor resolves by steps 0–3. After step 4 or when orphaned, it is stale. Anchors of suggestions are never rewritten in a way that changes `quote.exact`. A stale suggestion needs a user to re-target it. See §4.2.
+
+**Why:** in steps 0–3 the resolved range contains exactly the text the author saw, so the suggestion's meaning is intact. Overlapping suggestions go stale on their own once one is applied, with no dependency tracking.
+
+## D11. Accepting a suggestion applies it (2026-09-28)
+
+Accepting a suggestion edits the document and records `accepted` with the applied version in one user action. `accepted` is terminal. `rejected` and `withdrawn` can be reopened. See §4.3 and §4.4.
+
+**Why:** this matches Google Docs and Overleaf, and there's no approved-but-not-applied state that could get out of sync.
+
+## D12. A suggestion covers exactly one range (2026-09-28)
+
+Each suggestion has one anchor and one replacement string. Changes across several places are several suggestions, grouped in the data model.
+
+**Why:** this keeps applicability, storage, and conflicts simple. Multi-range and multi-file edits can be added later.

@@ -139,7 +139,7 @@ Over time, stored anchors drift away from the current document. Rewriting them k
 - If a user confirms a suggested location, the client MAY rewrite the anchor for the confirmed range. In this case `quote.exact` takes the current text of that range, which may differ from the original quote.
 - A client MUST NOT rewrite an anchor based on an unconfirmed suggested location.
 
-Whether previous anchors are kept as history is defined by the data model (§2).
+Suggestions have stricter rewriting rules (§4.2.1). Whether previous anchors are kept as history is defined by the data model (§2).
 
 ## 3.9 Example
 

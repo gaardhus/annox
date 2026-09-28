@@ -1,0 +1,294 @@
+{
+  "description": "Suggestion applicability and application test vectors for annox spec §4. For each case: normalize `document` (§3.2), resolve the suggestion's anchor (§3.7), derive applicability (§4.2), and if applicable compute the result (§4.3 step 2). `result` is normalized text, or null when stale.",
+  "specVersion": "0.0",
+  "cases": [
+    {
+      "name": "replace-at-base",
+      "description": "Document unchanged: replacement applies at the stored offsets.",
+      "document": "\\section{Results}\nIn Section 3, we prove that the bound is tight for all $n$.\n",
+      "suggestion": {
+        "kind": "suggestion",
+        "target": {
+          "path": "doc.txt",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "edit": {
+          "replacement": "we show that"
+        },
+        "status": "open"
+      },
+      "expected": {
+        "applicability": "applicable",
+        "resolutionStep": 0,
+        "result": "\\section{Results}\nIn Section 3, we show that the bound is tight for all $n$.\n"
+      }
+    },
+    {
+      "name": "replace-relocated",
+      "description": "The example from §4.5: relocated by step 3, still applicable.",
+      "document": "\\section{Results}\nAs shown in Section 3, we prove that the bound is tight for all $n \\geq 1$.\n",
+      "suggestion": {
+        "kind": "suggestion",
+        "target": {
+          "path": "doc.txt",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "edit": {
+          "replacement": "we show that"
+        },
+        "status": "open"
+      },
+      "expected": {
+        "applicability": "applicable",
+        "resolutionStep": 3,
+        "result": "\\section{Results}\nAs shown in Section 3, we show that the bound is tight for all $n \\geq 1$.\n"
+      }
+    },
+    {
+      "name": "delete-context",
+      "description": "Deletion (empty replacement) after an unrelated insertion earlier in the document: step 2.",
+      "document": "% draft\n\\section{Results}\nIn Section 3, we prove that the bound is tight for all $n$.\n",
+      "suggestion": {
+        "kind": "suggestion",
+        "target": {
+          "path": "doc.txt",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 64,
+              "end": 76
+            },
+            "quote": {
+              "exact": " for all $n$",
+              "prefix": "we prove that the bound is tight",
+              "suffix": ".\n"
+            }
+          }
+        },
+        "edit": {
+          "replacement": ""
+        },
+        "status": "open"
+      },
+      "expected": {
+        "applicability": "applicable",
+        "resolutionStep": 2,
+        "result": "% draft\n\\section{Results}\nIn Section 3, we prove that the bound is tight.\n"
+      }
+    },
+    {
+      "name": "insert-point",
+      "description": "Insertion at a point range after an edit elsewhere: step 2.",
+      "document": "zeroth line\nfirst line\nsecond line\n",
+      "suggestion": {
+        "kind": "suggestion",
+        "target": {
+          "path": "doc.txt",
+          "version": "sha256:c2097f55f01fc297fc7f4acf21438123e06e4d409a818524428534e850642f4f",
+          "selectors": {
+            "position": {
+              "start": 11,
+              "end": 11
+            },
+            "quote": {
+              "exact": "",
+              "prefix": "first line\n",
+              "suffix": "second line\n"
+            }
+          }
+        },
+        "edit": {
+          "replacement": "inserted line\n"
+        },
+        "status": "open"
+      },
+      "expected": {
+        "applicability": "applicable",
+        "resolutionStep": 2,
+        "result": "zeroth line\nfirst line\ninserted line\nsecond line\n"
+      }
+    },
+    {
+      "name": "stale-whitespace",
+      "description": "Quote only found after whitespace collapsing (step 4): stale.",
+      "document": "The main result is that the bound is\ntight whenever the graph is connected.\n",
+      "suggestion": {
+        "kind": "suggestion",
+        "target": {
+          "path": "doc.txt",
+          "version": "sha256:1338f12e99a3168f20404f2d27b01120ed2388354ddc4d875d6585e7956ed50f",
+          "selectors": {
+            "position": {
+              "start": 24,
+              "end": 61
+            },
+            "quote": {
+              "exact": "the bound is tight whenever\nthe graph",
+              "prefix": "The main result is that\n",
+              "suffix": " is connected.\n"
+            }
+          }
+        },
+        "edit": {
+          "replacement": "the bound holds whenever the graph"
+        },
+        "status": "open"
+      },
+      "expected": {
+        "applicability": "stale",
+        "resolutionStep": 4,
+        "result": null
+      }
+    },
+    {
+      "name": "stale-orphaned",
+      "description": "Quoted text was rewritten: orphaned, stale.",
+      "document": "\\section{Results}\nIn Section 3, the bound is shown to be tight.\n",
+      "suggestion": {
+        "kind": "suggestion",
+        "target": {
+          "path": "doc.txt",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "edit": {
+          "replacement": "we show that"
+        },
+        "status": "open"
+      },
+      "expected": {
+        "applicability": "stale",
+        "resolutionStep": 5,
+        "result": null
+      }
+    },
+    {
+      "name": "overlap-first",
+      "description": "First of two overlapping suggestions: applicable.",
+      "document": "\\section{Results}\nIn Section 3, we prove that the bound is tight for all $n$.\n",
+      "suggestion": {
+        "kind": "suggestion",
+        "target": {
+          "path": "doc.txt",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 46,
+              "end": 64
+            },
+            "quote": {
+              "exact": "the bound is tight",
+              "prefix": "ts}\nIn Section 3, we prove that ",
+              "suffix": " for all $n$.\n"
+            }
+          }
+        },
+        "edit": {
+          "replacement": "the bound is sharp"
+        },
+        "status": "open"
+      },
+      "expected": {
+        "applicability": "applicable",
+        "resolutionStep": 0,
+        "result": "\\section{Results}\nIn Section 3, we prove that the bound is sharp for all $n$.\n"
+      }
+    },
+    {
+      "name": "overlap-second",
+      "description": "Second suggestion on overlapping text, resolved after the first was applied: stale.",
+      "document": "\\section{Results}\nIn Section 3, we prove that the bound is sharp for all $n$.\n",
+      "suggestion": {
+        "kind": "suggestion",
+        "target": {
+          "path": "doc.txt",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 56,
+              "end": 72
+            },
+            "quote": {
+              "exact": "is tight for all",
+              "prefix": "tion 3, we prove that the bound ",
+              "suffix": " $n$.\n"
+            }
+          }
+        },
+        "edit": {
+          "replacement": "holds for all"
+        },
+        "status": "open"
+      },
+      "expected": {
+        "applicability": "stale",
+        "resolutionStep": 5,
+        "result": null
+      }
+    },
+    {
+      "name": "overlap-disjoint",
+      "description": "A disjoint suggestion stays applicable after another was applied.",
+      "document": "\\section{Results}\nIn Section 3, we prove that the bound is sharp for all $n$.\n",
+      "suggestion": {
+        "kind": "suggestion",
+        "target": {
+          "path": "doc.txt",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "edit": {
+          "replacement": "we show that"
+        },
+        "status": "open"
+      },
+      "expected": {
+        "applicability": "applicable",
+        "resolutionStep": 3,
+        "result": "\\section{Results}\nIn Section 3, we show that the bound is sharp for all $n$.\n"
+      }
+    }
+  ]
+}

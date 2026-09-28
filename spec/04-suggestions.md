@@ -1,26 +1,140 @@
 # 4. Suggestions
 
+A **suggestion** is an annotation that proposes replacing the text of its anchored range with new text. This section defines what a suggestion stores, when it can be applied to a document that has changed since the suggestion was written, what applying it means, and its lifecycle.
+
+Anchors, resolution, and resolution steps are defined in §3. The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY are to be interpreted as described in RFC 2119.
+
 ## 4.1 Shape
 
-_To define:_ an anchored range plus replacement text. Insertions are empty ranges and deletions are empty replacements.
+A suggestion is an annotation with `kind: "suggestion"`, an anchor (`target`, §3.5), and an `edit`:
 
-## 4.2 Base version
+```json
+{
+  "kind": "suggestion",
+  "target": {
+    "path": "paper.tex",
+    "version": "sha256:…",
+    "selectors": {
+      "position": { "start": 32, "end": 45 },
+      "quote": { "exact": "we prove that", "prefix": "…", "suffix": "…" }
+    }
+  },
+  "edit": { "replacement": "we show that" },
+  "status": "open"
+}
+```
 
-_To define:_ each suggestion records the document version it was written against.
+| Field | Type | Meaning |
+|---|---|---|
+| `edit.replacement` | string | Text that replaces the anchored range. Uses LF line endings, like all normalized text (§3.2). |
+| `status` | string | Lifecycle state (§4.4). |
 
-## 4.3 Lifecycle
+Where the rest of the annotation's fields live (id, author, timestamps, thread) is defined in §2.
 
-_To define:_ states **open**, **accepted**, **rejected**, and **withdrawn**, and who may perform each transition.
+A suggestion covers exactly one range, and the edit forms follow from that:
 
-## 4.4 Staleness and conflicts
+| Edit | Anchor | `replacement` |
+|---|---|---|
+| Replacement | non-empty range | non-empty |
+| Deletion | non-empty range | `""` |
+| Insertion | point range | non-empty |
 
-_To define:_ what happens when the anchored text has changed since the base version. Options: the suggestion is stale, it applies because the quote still matches, or it conflicts.
+`replacement` MUST NOT equal `quote.exact`. A point range with an empty `replacement` is invalid, because it would change nothing. Readers SHOULD ignore invalid suggestions and MAY report them.
 
-## 4.5 Applying
+**Original text.** While a suggestion is open, `quote.exact` is the text it proposes to replace. Clients render the suggestion as a change from `quote.exact` to `replacement`.
 
-_To define:_ how a client applies an accepted suggestion to the document, and what it records afterwards.
+**Base version.** `target.version` is the suggestion's base version: the document version its anchor was last checked against.
+
+Related changes, such as renaming a term in several places, are expressed as several suggestions. Grouping them is part of the data model (§2).
+
+## 4.2 Applicability
+
+Whether a suggestion can be applied is **derived** from the current document. It is never stored. To find out, resolve the suggestion's anchor against *D* (§3.7):
+
+| Resolution | Applicability |
+|---|---|
+| `exact` (step 0 or 1) | **applicable** |
+| `relocated` by step 2 or 3 | **applicable** |
+| `relocated` by step 4 | **stale** |
+| `orphaned` | **stale** |
+
+In steps 0–3, the resolved range contains exactly `quote.exact`, so the text the suggestion was written against is still intact. In step 4 the whitespace differs, so the suggestion author never saw the text it would now replace.
+
+Applicability only matters while the suggestion is `open`. Clients SHOULD show stale suggestions differently from applicable ones, and MUST NOT offer to apply a stale suggestion (§4.3).
+
+### 4.2.1 Anchor rewriting for suggestions
+
+§3.8 allows clients to rewrite anchors. For suggestions that is restricted further:
+
+- A client MAY rewrite the anchor of an open suggestion after resolution steps 0–3. These leave `quote.exact` unchanged.
+- A client MUST NOT rewrite the anchor of a suggestion after step 4 or after a confirmed suggested location (§3.7.4). Those rewrites change `quote.exact`, and the suggestion would silently become applicable to text its author never saw.
+
+A stale suggestion becomes applicable again only when a user **re-targets** it. That means updating the anchor and reviewing `replacement` in the same action. The data model (§2) records who re-targeted it.
+
+## 4.3 Applying
+
+**Accepting** a suggestion applies it to the document and records the acceptance in a single user action. There is no accepted-but-not-applied state.
+
+To accept an open suggestion, a client MUST:
+
+1. Resolve the anchor against *D*. If the suggestion is stale, stop. It MUST NOT be applied.
+2. Let `[c, d)` be the resolved range. Compute the new text `D' = D[0:c] + replacement + D[d:]`.
+3. Write *D'* to the document. The client SHOULD keep the file's existing line-ending style, byte order mark, and encoding when writing. This includes converting LF in `replacement` to CRLF if the file uses CRLF.
+4. Set `status` to `accepted` and record the **applied version**, the version of *D'* (§3.4).
+
+Steps 3 and 4 write two different files and can't be atomic. Clients SHOULD write the document first. If step 4 is lost, the suggestion stays `open` with its text already applied, and it becomes stale because its quote is gone. A client MAY detect this case when `prefix + replacement + suffix` occurs in *D*, and offer to mark the suggestion accepted.
+
+**Location confirmation.** Relocation by step 3 can pick a different occurrence than the author intended, if the original was deleted and the same text appears elsewhere. Accepting one suggestion at a time is safe, because the user accepts it at the location shown to them. A client that accepts many suggestions without showing each one ("accept all") SHOULD apply only suggestions whose resolution is step 0, 1, or 2. It SHOULD leave step-3 relocations for individual review.
+
+### 4.3.1 Overlapping suggestions
+
+Suggestions are not mutually exclusive, and the spec doesn't track dependencies between them. Once one suggestion is applied, every other open suggestion is resolved against the new text as usual. Suggestions whose quote was changed become stale. Disjoint suggestions stay applicable.
+
+### 4.3.2 Unsaved buffers
+
+A client that applies a suggestion to an editor buffer, rather than the file on disk, uses the buffer's normalized content as *D*. It records the applied version as the version of the buffer content after the edit.
+
+## 4.4 Lifecycle
+
+| Status | Meaning | Terminal |
+|---|---|---|
+| `open` | Awaiting a decision. | no |
+| `accepted` | Applied to the document (§4.3). | yes |
+| `rejected` | Declined by a reviewer. | no |
+| `withdrawn` | Retracted by its author. | no |
+
+Allowed transitions:
+
+```
+open ──accept──▶ accepted
+open ──reject──▶ rejected ──reopen──▶ open
+open ──withdraw─▶ withdrawn ──reopen──▶ open
+```
+
+- `accepted` is terminal. Undoing an accepted suggestion is done by making a new suggestion.
+- A client SHOULD offer `withdraw` only to the suggestion's author, and `reject` and `accept` to anyone else. annox has no authentication (§1.2), so this is a user-interface convention. A reader MUST NOT treat a status as invalid because of who set it.
+- Each transition records who made it and when. The fields for this are defined in §2.
+
+### 4.4.1 Closed suggestions
+
+Suggestions that are `accepted`, `rejected`, or `withdrawn` are **closed**.
+
+- Clients SHOULD NOT resolve closed suggestions against the current document. After it is applied, an accepted suggestion's quote no longer exists, and that is expected.
+- A closed suggestion MUST NOT be presented as orphaned. §3.7.3 applies to open annotations only.
+- Clients MUST NOT rewrite the anchors of closed suggestions. The anchor, together with the applied version, records exactly what changed.
+
+## 4.5 Example
+
+Using the document from §3.9 after its edit (`As shown in Section 3, …`), a suggestion on "we prove that" with `replacement: "we show that"` resolves by step 3 to `[41, 54)`. It is applicable, and accepting it produces:
+
+```
+\section{Results}
+As shown in Section 3, we show that the bound is tight for all $n \geq 1$.
+```
+
+Test vectors are in [`tests/suggestions.json`](tests/suggestions.json).
 
 ## Open questions
 
-- Can a single suggestion span multiple ranges or files, like a `WorkspaceEdit`?
-- Do suggestions on the same text interact, e.g. by being mutually exclusive?
+- **Re-targeting by others.** Can anyone re-target a stale suggestion, or only its author? This is a user-interface convention like §4.4, but it may belong in §2.
+- **Mixed suggestion and comment.** Is a suggestion with a comment body one annotation, or a suggestion plus a reply? This is decided in §2.
