@@ -1,0 +1,331 @@
+{
+  "description": "Anchor resolution test vectors for annox spec §3. For each case: normalize `document` (§3.2), resolve `anchor` against it (§3.7), and compare with `expected`. Offsets are code points; `start`/`end` are null when orphaned.",
+  "specVersion": "0.0",
+  "cases": [
+    {
+      "name": "version-match",
+      "description": "Document unchanged: step 0.",
+      "document": "\\section{Results}\nIn Section 3, we prove that the bound is tight for all $n$.\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+        "selectors": {
+          "position": {
+            "start": 32,
+            "end": 45
+          },
+          "quote": {
+            "exact": "we prove that",
+            "prefix": "\\section{Results}\nIn Section 3, ",
+            "suffix": " the bound is tight for all $n$."
+          }
+        }
+      },
+      "expected": {
+        "state": "exact",
+        "start": 32,
+        "end": 45
+      }
+    },
+    {
+      "name": "crlf-normalized",
+      "description": "Same text with CRLF line endings normalizes to the same version: step 0.",
+      "document": "\\section{Results}\r\nIn Section 3, we prove that the bound is tight for all $n$.\r\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+        "selectors": {
+          "position": {
+            "start": 32,
+            "end": 45
+          },
+          "quote": {
+            "exact": "we prove that",
+            "prefix": "\\section{Results}\nIn Section 3, ",
+            "suffix": " the bound is tight for all $n$."
+          }
+        }
+      },
+      "expected": {
+        "state": "exact",
+        "start": 32,
+        "end": 45
+      }
+    },
+    {
+      "name": "bom-stripped",
+      "description": "A leading byte order mark is removed before hashing: step 0.",
+      "document": "﻿\\section{Results}\nIn Section 3, we prove that the bound is tight for all $n$.\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+        "selectors": {
+          "position": {
+            "start": 32,
+            "end": 45
+          },
+          "quote": {
+            "exact": "we prove that",
+            "prefix": "\\section{Results}\nIn Section 3, ",
+            "suffix": " the bound is tight for all $n$."
+          }
+        }
+      },
+      "expected": {
+        "state": "exact",
+        "start": 32,
+        "end": 45
+      }
+    },
+    {
+      "name": "position-check",
+      "description": "Text appended far after the anchor; offsets and context still match: step 1.",
+      "document": "\\section{Results}\nIn Section 3, we prove that the bound is tight for all $n$.\n\nA new paragraph at the end.\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+        "selectors": {
+          "position": {
+            "start": 32,
+            "end": 45
+          },
+          "quote": {
+            "exact": "we prove that",
+            "prefix": "\\section{Results}\nIn Section 3, ",
+            "suffix": " the bound is tight for all $n$."
+          }
+        }
+      },
+      "expected": {
+        "state": "exact",
+        "start": 32,
+        "end": 45
+      }
+    },
+    {
+      "name": "context-search",
+      "description": "A new section inserted before; full context found at a new offset: step 2.",
+      "document": "\\section{Intro}\nSome words.\n\n\\section{Results}\nIn Section 3, we prove that the bound is tight for all $n$.\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+        "selectors": {
+          "position": {
+            "start": 32,
+            "end": 45
+          },
+          "quote": {
+            "exact": "we prove that",
+            "prefix": "\\section{Results}\nIn Section 3, ",
+            "suffix": " the bound is tight for all $n$."
+          }
+        }
+      },
+      "expected": {
+        "state": "relocated",
+        "start": 61,
+        "end": 74
+      }
+    },
+    {
+      "name": "quote-unique",
+      "description": "The worked example from §3.9: context changed, quote occurs once: step 3.",
+      "document": "\\section{Results}\nAs shown in Section 3, we prove that the bound is tight for all $n \\geq 1$.\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+        "selectors": {
+          "position": {
+            "start": 32,
+            "end": 45
+          },
+          "quote": {
+            "exact": "we prove that",
+            "prefix": "\\section{Results}\nIn Section 3, ",
+            "suffix": " the bound is tight for all $n$."
+          }
+        }
+      },
+      "expected": {
+        "state": "relocated",
+        "start": 41,
+        "end": 54
+      }
+    },
+    {
+      "name": "quote-scored",
+      "description": "Quote \"the\" occurs several times; the occurrence whose surrounding text best matches the stored context wins: step 3.",
+      "document": "Note: we fix the input first. Then the bound follows from a lemma, and the proof is short.\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:e8c09320c79a1cb93130406d09ce679a096976b9125dd347cc53863880fb03a0",
+        "selectors": {
+          "position": {
+            "start": 23,
+            "end": 26
+          },
+          "quote": {
+            "exact": "the",
+            "prefix": "We fix the input. Then ",
+            "suffix": " bound follows from the lemma, a"
+          }
+        }
+      },
+      "expected": {
+        "state": "relocated",
+        "start": 35,
+        "end": 38
+      }
+    },
+    {
+      "name": "quote-ambiguous",
+      "description": "Quote occurs twice with equally poor context: nothing selected, orphaned.",
+      "document": "one beta two beta three\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:adf7157c8a5bbb4b099d39ba5ef34b73a3787f5e9326b3eb24ac8b86fd03ff96",
+        "selectors": {
+          "position": {
+            "start": 6,
+            "end": 10
+          },
+          "quote": {
+            "exact": "beta",
+            "prefix": "alpha ",
+            "suffix": " gamma\n"
+          }
+        }
+      },
+      "expected": {
+        "state": "orphaned",
+        "start": null,
+        "end": null
+      }
+    },
+    {
+      "name": "whitespace-reflow",
+      "description": "Hard-wrapped paragraph re-wrapped; quote found with whitespace collapsed: step 4. The range covers the new text including its line break.",
+      "document": "The main result is that the bound is\ntight whenever the graph is connected.\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:1338f12e99a3168f20404f2d27b01120ed2388354ddc4d875d6585e7956ed50f",
+        "selectors": {
+          "position": {
+            "start": 24,
+            "end": 61
+          },
+          "quote": {
+            "exact": "the bound is tight whenever\nthe graph",
+            "prefix": "The main result is that\n",
+            "suffix": " is connected.\n"
+          }
+        }
+      },
+      "expected": {
+        "state": "relocated",
+        "start": 24,
+        "end": 61
+      }
+    },
+    {
+      "name": "quote-deleted",
+      "description": "The anchored text was removed: orphaned.",
+      "document": "\\section{Results}\nIn Section 3, the bound is shown to be tight.\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+        "selectors": {
+          "position": {
+            "start": 32,
+            "end": 45
+          },
+          "quote": {
+            "exact": "we prove that",
+            "prefix": "\\section{Results}\nIn Section 3, ",
+            "suffix": " the bound is tight for all $n$."
+          }
+        }
+      },
+      "expected": {
+        "state": "orphaned",
+        "start": null,
+        "end": null
+      }
+    },
+    {
+      "name": "point-context",
+      "description": "Point anchor (empty range); text inserted before it; found by prefix+suffix: step 2.",
+      "document": "zeroth line\nfirst line\nsecond line\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:c2097f55f01fc297fc7f4acf21438123e06e4d409a818524428534e850642f4f",
+        "selectors": {
+          "position": {
+            "start": 11,
+            "end": 11
+          },
+          "quote": {
+            "exact": "",
+            "prefix": "first line\n",
+            "suffix": "second line\n"
+          }
+        }
+      },
+      "expected": {
+        "state": "relocated",
+        "start": 23,
+        "end": 23
+      }
+    },
+    {
+      "name": "point-orphaned",
+      "description": "Point anchor whose surrounding text changed: steps 3 and 4 do not apply, orphaned.",
+      "document": "first row\nsecond row\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:c2097f55f01fc297fc7f4acf21438123e06e4d409a818524428534e850642f4f",
+        "selectors": {
+          "position": {
+            "start": 11,
+            "end": 11
+          },
+          "quote": {
+            "exact": "",
+            "prefix": "first line\n",
+            "suffix": "second line\n"
+          }
+        }
+      },
+      "expected": {
+        "state": "orphaned",
+        "start": null,
+        "end": null
+      }
+    },
+    {
+      "name": "malformed-anchor",
+      "description": "Version matches but position does not cover the quote; step 0 is skipped and search relocates it.",
+      "document": "\\section{Results}\nIn Section 3, we prove that the bound is tight for all $n$.\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+        "selectors": {
+          "position": {
+            "start": 0,
+            "end": 13
+          },
+          "quote": {
+            "exact": "we prove that",
+            "prefix": "\\section{Results}\nIn Section 3, ",
+            "suffix": " the bound is tight for all $n$."
+          }
+        }
+      },
+      "expected": {
+        "state": "relocated",
+        "start": 32,
+        "end": 45
+      }
+    }
+  ]
+}
