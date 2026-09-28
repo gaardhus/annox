@@ -4,7 +4,7 @@
 
 | # | Section | Status |
 |---|---------|--------|
-| 1 | [Overview](01-overview.md) | outline |
+| 1 | [Overview](01-overview.md) | draft |
 | 2 | [Data model](02-data-model.md) | draft |
 | 3 | [Anchoring](03-anchoring.md) | draft |
 | 4 | [Suggestions](04-suggestions.md) | draft |

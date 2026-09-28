@@ -117,3 +117,9 @@ A reply is its own annotation with `parent` pointing to a comment or suggestion.
 This refines D9. Clients rewrite an anchor (a `reanchor` event) only after a `relocated` result, never after `exact`. See §3.8.
 
 **Why:** it keeps logs and diffs quiet when documents are only being read, and still refreshes anchors that have actually drifted.
+
+## D21. Conformance classes: Viewer, Client, Server (2026-09-28)
+
+A Viewer is read-only. It replays events, resolves anchors, and must visibly mark conflicts and orphaned annotations. A Client must support everything: all kinds, full suggestion handling, and a way to resolve every conflict. Partial Clients are not conforming. A Server implements Client semantics plus §6. See §1.5.
+
+**Why:** a strict Client class guarantees users a consistent experience in every editor. The Viewer class keeps read-only tools, such as CI checks, previews, and exports, conforming without a merge UI.

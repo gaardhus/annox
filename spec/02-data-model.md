@@ -131,7 +131,7 @@ The **heads of a field** are the valid events writing that field that are not an
 
 ### 2.5.3 Conflicts
 
-A conflicted field is presented as a conflict: readers report every head, and clients SHOULD show the competing values to the user. So that every client displays the same thing until the conflict is resolved, the **provisional value** of a conflicted field is the one written by the head with the greatest id.
+A conflicted field is presented as a conflict: readers report every head. Viewers MUST visibly mark conflicted annotations, and Clients MUST offer a way to resolve them (§1.5). So that every client displays the same thing until the conflict is resolved, the **provisional value** of a conflicted field is the one written by the head with the greatest id.
 
 There are two special rules:
 

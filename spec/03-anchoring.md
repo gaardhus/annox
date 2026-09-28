@@ -125,7 +125,7 @@ Notes:
 
 ### 3.7.3 Orphaned annotations
 
-An orphaned annotation MUST NOT be deleted, and its stored anchor MUST NOT be modified, as a result of resolution. Clients SHOULD show orphaned annotations to the user, for example in a list outside the document, so they can be re-attached or dismissed.
+An orphaned annotation MUST NOT be deleted, and its stored anchor MUST NOT be modified, as a result of resolution. Viewers and Clients MUST show orphaned open annotations to the user, for example in a list outside the document, so they can be re-attached or dismissed (§1.5).
 
 ### 3.7.4 Suggested locations (non-normative)
 
