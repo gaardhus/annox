@@ -47,6 +47,7 @@ All ranges on the wire are LSP `Range`s. Offsets appear only inside stored ancho
 - **Open documents.** The server tracks open documents through `textDocument/didOpen`, `didChange`, and `didClose`, the same as any language server. For an open document, *D* (§3.7) is the normalized buffer content, even when it isn't saved (§4.3.2). The server re-resolves annotations as the buffer changes. It SHOULD debounce this.
 - **Closed documents** are read from disk when needed.
 - **Storage changes.** The server MUST notice changes to `.annox/` made by others, such as `git pull` or another tool. It registers for `workspace/didChangeWatchedFiles` on `.annox/**` if the client supports that, and otherwise watches the files itself. It reloads the affected documents and pushes updates (§6.6.3).
+- **Sync.** If the workspace names a sync hub (§7.2), the server SHOULD act as a replica (§7) whenever credentials are configured, and push updates for events arriving from the hub like any other storage change.
 - **Renames.** On `workspace/didRenameFiles`, the server writes `move` events and moves folders as described in §5.6. It SHOULD register for file-operation notifications to receive these.
 - **Anchor rewrites** (§3.8) are done by the server only for documents that are saved, so anchors never refer to buffer content that may be thrown away.
 
@@ -110,6 +111,7 @@ LSP has no standard way to ask the user for free text, so writing comments, repl
     "range": { "start": { "line": 1, "character": 23 }, "end": { "line": 1, "character": 36 } }
   },
   "applicable": true,
+  "local": false,
   "conflicts": {},
   "replies": []
 }
@@ -118,6 +120,7 @@ LSP has no standard way to ask the user for free text, so writing comments, repl
 - `target` is omitted. Clients work with `resolution.range`.
 - `resolution.range` is absent when the annotation is orphaned.
 - `applicable` is present only for open suggestions (§4.2).
+- `local` is true for local-only annotations (§5.11).
 - `replies` holds the thread's reply AnnotationViews, in the order of §2.5.5. Replies have no `resolution`.
 - `conflicts` maps each conflicted field to its competing values, so the client can show them:
 
@@ -139,8 +142,9 @@ Every request that changes something writes the corresponding events (§2.4), th
 | Method | Params | Effect |
 |---|---|---|
 | `annox/annotations` | `{ textDocument, includeClosed?: boolean, includeDeleted?: boolean }` | Returns `{ annotations: AnnotationView[], document: DocumentInfo }`. It changes nothing. |
-| `annox/create` | `{ textDocument, kind: "comment" \| "suggestion", range, body?, label?, replacement? }` | `create` event. The anchor is computed from the buffer (§3.6). For a suggestion, `replacement` is required. |
-| `annox/reply` | `{ parent, body }` | `create` of a reply. |
+| `annox/create` | `{ textDocument, kind: "comment" \| "suggestion", range, body?, label?, replacement?, local?: boolean }` | `create` event. The anchor is computed from the buffer (§3.6). For a suggestion, `replacement` is required. With `local: true`, the annotation is local-only (§5.11). |
+| `annox/reply` | `{ parent, body, local?: boolean }` | `create` of a reply. It is local if `local` is true or the parent is local (§5.11). |
+| `annox/publish` | `{ annotations: Id[] }` | Publishes local annotations and their local replies (§5.11). Returns the published AnnotationViews. |
 | `annox/edit` | `{ annotation, body?, label? }` | `edit` event. |
 | `annox/setStatus` | `{ annotation, status }` | `status` event. Not for `accepted`: use `annox/accept`. |
 | `annox/accept` | `{ annotation }` | Applies the suggestion (below). |
@@ -191,5 +195,4 @@ Failed requests use JSON-RPC errors with these codes. They are outside the range
 
 ## Open questions
 
-- **Real-time collaboration.** Should a server be able to sync events with other servers or a hosted backend, and push remote changes live? A low-level event-sync layer could be added without changing §6.6.
 - **Batching.** Should there be a bulk `annox/acceptAll` that follows §4.3's rule for accepting many suggestions at once?

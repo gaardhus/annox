@@ -38,6 +38,7 @@ annox is an open standard for annotating plain-text documents with highlights, c
 3. **State (§2.5).** Replaying an annotation's events gives its current state, including any unresolved conflicts.
 4. **Anchoring (§3).** Each comment and suggestion is anchored to a range of text by offsets, quoted text, and context. When the document has changed, including changes made by tools that know nothing about annox, a deterministic algorithm finds the range again or reports the annotation as orphaned.
 5. **Suggestions (§4).** A suggestion proposes replacing its anchored text. It can be applied as long as that exact text can still be found. Accepting it edits the document.
+6. **Protocol and sync (§6, §7).** Optionally, editors hand this logic to an annox server that speaks LSP, and servers keep each other up to date live through a sync hub.
 
 ## 1.2 Goals
 
@@ -50,7 +51,7 @@ annox is an open standard for annotating plain-text documents with highlights, c
 ## 1.3 Non-goals (v1)
 
 - Rich document formats (see [D1](decisions.md#d1-v1-targets-plain-text-documents-2026-09-28)).
-- Real-time co-editing of the document itself. annox annotates documents; it does not sync them.
+- Real-time co-editing of the document itself. annox annotates documents and syncs annotations (§7). It does not sync the documents.
 - Authentication or access control.
 
 ## 1.4 Terminology
@@ -73,13 +74,15 @@ annox is an open standard for annotating plain-text documents with highlights, c
 | **Resolution** | Locating an anchor in the current document. The result is `exact`, `relocated`, or `orphaned` (§3.7). |
 | **Orphaned** | An annotation whose anchor can't be located. It is kept and shown, never deleted automatically. |
 | **Applicable / stale** | Whether a suggestion can currently be applied (§4.2). |
-| **Viewer, Client, Server** | Conformance classes (§1.5). |
+| **Local-only annotation** | An annotation stored in `.annox/local/`, never shared (§5.11). |
+| **Replica, hub** | The two roles in sync (§7.1). |
+| **Viewer, Client, Server, Hub** | Conformance classes (§1.5). |
 
 ## 1.5 Conformance
 
 The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, RECOMMENDED, and MAY in this specification are to be interpreted as described in RFC 2119 and RFC 8174 when, and only when, they appear in all capitals.
 
-An implementation claims conformance to one of three classes. Each class includes everything in the classes above it.
+An implementation claims conformance to one of four classes. Viewer, Client, and Server each include everything in the classes above them.
 
 ### Viewer
 
@@ -99,6 +102,7 @@ A tool that people use to annotate, typically an editor plugin. A Client MUST me
 - write valid events (§2.3, §2.4), with `after` set to the current heads (§2.5.1);
 - create anchors (§3.6), and rewrite them only as allowed (§3.8, §4.2.1);
 - support all annotation kinds: create and reply to comments; create, accept, reject, withdraw, and re-target suggestions, applying accepted ones to the document as specified (§4.3);
+- support local-only annotations, including publishing them (§5.11);
 - offer the user a way to resolve every kind of conflict (§2.5.4), including offering to revert a suggestion's edit (§4.3.3);
 - pass all test vectors, including the application results in [`tests/suggestions.json`](tests/suggestions.json).
 
@@ -108,7 +112,13 @@ A Client MAY delegate the logic to an annox server instead of implementing it it
 
 ### Server
 
-An annotation server that speaks the protocol (§6). A Server MUST implement Client semantics for every change it makes on behalf of clients, and MUST implement §6. The details are defined in §6.
+An annotation server that speaks the protocol (§6). A Server MUST implement Client semantics for every change it makes on behalf of clients, and MUST implement §6. The details are defined in §6. A Server MAY also act as a sync replica (§7.6).
+
+### Hub
+
+A sync hub (§7). A Hub MUST meet the requirements of §7.7. It doesn't need to meet the Viewer requirements, because it never interprets events.
+
+The Hub class stands on its own: the "includes the classes above" rule doesn't apply to it.
 
 ## 1.6 Prior art
 

@@ -177,3 +177,15 @@ Event files are never removed or rewritten, and logs only grow. The cache (§5.9
 A `delete` event hides an annotation. Its content stays in the event files and in version-control history, and the spec says so explicitly. See §2.4.
 
 **Why:** version-control history keeps the content no matter what, so an erase feature that only purges the working tree would suggest more than it does. Honest documentation is simpler and safer.
+
+## D31. Live sync through a hub, using a changefeed over JSON-RPC and WebSocket (2026-09-29)
+
+Replicas connect to one sync hub per workspace. The hub numbers events in the order it receives them, and replicas pull everything after their cursor, push what the hub lacks, and get live pushes. Authentication is delegated to the connection: TLS plus the hub's own scheme, with credentials kept outside `.annox/`. See §7.
+
+**Why:** immutable events make sync a pure set union, so a simple changefeed is enough. The hub needs no annox logic. Peer-to-peer sync and set reconciliation were considered but judged too complex for v1. Sync coexists with git because synced events are ordinary files.
+
+## D32. Local-only annotations live in a git-ignored `.annox/local/` (2026-09-29)
+
+It has the same layout as `docs/`, and readers load both areas together. An annotation lives entirely in one area. Publishing moves the files, and local document records reuse the duplicate-merging mechanism when published. See §5.11.
+
+**Why:** it enables private highlights and draft reviews, like GitHub's pending reviews, while reusing the existing machinery. A `private` field on annotations was rejected, because committed files aren't private.

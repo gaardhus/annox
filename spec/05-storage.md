@@ -16,7 +16,7 @@ Document paths (§3.1) are relative to the workspace root.
 <workspace root>/
   .annox/
     annox.json                          format marker (§5.3)
-    .gitignore                          contains "cache/"
+    .gitignore                          contains "cache/" and "local/"
     docs/
       paper.tex~0192f0c4-…/             folder of document 0192f0c4-… (§5.5)
         document/
@@ -29,6 +29,8 @@ Document paths (§3.1) are relative to the workspace root.
           document/
             0192f2b7-….json
           0192f2c3-….json
+    local/                              local-only annotations, never shared (§5.11)
+      docs/…                            same layout as docs/ above
     cache/                              optional, never shared (§5.9)
 ```
 
@@ -46,6 +48,7 @@ Document paths (§3.1) are relative to the workspace root.
 - A Client MUST NOT write to a workspace whose `format` it doesn't support.
 - A Viewer MAY read such a workspace on a best-effort basis, and SHOULD warn the user.
 - Readers MUST ignore unknown fields in `annox.json`.
+- `sync` optionally names the workspace's sync hub (§7.2).
 
 ## 5.4 Event files
 
@@ -115,7 +118,7 @@ An event written by a branch that didn't have the rename lands in a folder with 
 
 To load the annotations of the file at path *P*:
 
-1. Find every document folder under `.annox/docs/` and group the folders by document id.
+1. Find every document folder under `.annox/docs/` and `.annox/local/docs/` (§5.11), and group the folders by document id.
 2. For each document id, read the `document/` events from all of its folders, and derive `path` and `mergedInto` (§5.5.1).
 3. Let *R* be the set of documents at *P*. Let *S* be every document whose canonical document is in *R*. This includes merged duplicates.
 4. Read the annotation event files in every folder of every document in *S*, and derive each annotation's state (§2.5).
@@ -143,16 +146,27 @@ Duplicate records happen when two branches each start annotating the same new fi
 
 ## 5.9 Cache
 
-`.annox/cache/` MAY hold anything a tool finds useful, such as derived state or a path-to-document index. Its contents MUST be derivable from the rest of `.annox/`, MUST NOT be shared, and MAY be deleted at any time. `.annox/.gitignore` MUST list `cache/`.
+`.annox/cache/` MAY hold anything a tool finds useful, such as derived state or a path-to-document index. Its contents MUST be derivable from the rest of `.annox/`, MUST NOT be shared, and MAY be deleted at any time. `.annox/.gitignore` MUST list `cache/` and `local/`.
 
 ## 5.10 Version control
 
-`.annox/` is meant to be committed alongside the documents. Nothing in it needs special merge configuration.
+`.annox/` is meant to be committed alongside the documents, except `cache/` and `local/`. Nothing in it needs special merge configuration. Annotations can also be shared live through a sync hub (§7). Sync and version control can be used together.
+
+## 5.11 Local-only annotations
+
+`.annox/local/` holds annotations that are never shared: private highlights and notes, and draft comments not yet published, such as a review in progress. It is excluded from version control (§5.9) and from sync (§7.1). `local/docs/` has the same layout and rules as `docs/`, and readers load both together (§5.7.1).
+
+- **One area per annotation.** All events of an annotation MUST be in the same area, either shared or local. Otherwise a shared event could list a local event in `after`, and other copies would see it as dangling (§2.5.1).
+- **Replies.** A local reply to a shared root is allowed. A shared reply MUST NOT have a local parent, because others couldn't see the thread.
+- **Document records.** A local annotation on a document that has a shared document record uses that record's id. Its folder is `local/docs/<path>~<id>/`, with no `document/` subfolder. If there is no shared record, the Client creates a local one under `local/docs/`.
+- **Publishing** an annotation makes it shared. The Client moves all of the annotation's event files from its local folder to the shared folder of the same document. It SHOULD publish the annotation's local replies at the same time. If the document record is local, the Client publishes that too, by moving its `document/` events. If a shared record for the same path appeared in the meantime, the two are duplicates and are merged as described in §5.8.
+- **Display.** Clients MUST visibly distinguish local annotations from shared ones, and MUST offer a way to publish them. Viewers MAY omit local annotations.
+
+A rename (§5.6) writes `move` events to every document record at the old path, in whichever area each record lives.
 
 Test vectors are in [`tests/storage.json`](tests/storage.json).
 
 ## Open questions
 
 - **Scale.** A heavily annotated workspace can hold thousands of event files, and v1 has no compaction (D29). Is a cache (§5.9) enough in practice?
-- **Local-only annotations.** Should there be a git-ignored area for private highlights and notes that are never shared?
 - **Case-insensitive filesystems.** Two documents whose paths differ only in case can't coexist on macOS or Windows. That limitation already applies to the documents themselves, but folder names inherit it.

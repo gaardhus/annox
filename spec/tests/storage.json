@@ -1,5 +1,5 @@
 {
-  "description": "Storage test vectors for annox spec §5. Each case gives a workspace's files (path relative to the workspace root → content) and a document path. Load it (§5.7.1) and compare with `expected`: `documents` maps every document id to its derived `path`, `mergedInto`, and `conflicts` (§5.5.1); `at` lists documents at the path (R); `loaded` the documents whose annotations are loaded (S); `folders` the folders read (relative to .annox/docs/); `events` the annotation event ids read; `annotations` the annotation ids. All lists are sorted.",
+  "description": "Storage test vectors for annox spec §5. Each case gives a workspace's files (path relative to the workspace root → content) and a document path. Load it (§5.7.1) and compare with `expected`: `documents` maps every document id to its derived `path`, `mergedInto`, and `conflicts` (§5.5.1); `at` lists documents at the path (R); `loaded` the documents whose annotations are loaded (S); `folders` the folders read (relative to .annox/, so shared folders start with docs/ and local ones with local/docs/); `events` the annotation event ids read; `annotations` the annotation ids. All lists are sorted.",
   "specVersion": "0.0",
   "cases": [
     {
@@ -35,7 +35,7 @@
           "01926d3a-0100-7000-8000-000000000000"
         ],
         "folders": [
-          "paper.tex~01926d3a-0100-7000-8000-000000000000"
+          "docs/paper.tex~01926d3a-0100-7000-8000-000000000000"
         ],
         "events": [
           "01926d3a-0001-7000-8000-000000000000",
@@ -78,7 +78,7 @@
           "01926d3a-0200-7000-8000-000000000000"
         ],
         "folders": [
-          "ch2/intro.md~01926d3a-0200-7000-8000-000000000000"
+          "docs/ch2/intro.md~01926d3a-0200-7000-8000-000000000000"
         ],
         "events": [
           "01926d3a-0002-7000-8000-000000000000"
@@ -114,7 +114,7 @@
           "01926d3a-0100-7000-8000-000000000000"
         ],
         "folders": [
-          "paper.tex~01926d3a-0100-7000-8000-000000000000"
+          "docs/paper.tex~01926d3a-0100-7000-8000-000000000000"
         ],
         "events": [
           "01926d3a-0001-7000-8000-000000000000",
@@ -152,7 +152,7 @@
           "01926d3a-0100-7000-8000-000000000000"
         ],
         "folders": [
-          "paper.tex~01926d3a-0100-7000-8000-000000000000"
+          "docs/paper.tex~01926d3a-0100-7000-8000-000000000000"
         ],
         "events": [
           "01926d3a-0001-7000-8000-000000000000"
@@ -215,8 +215,8 @@
           "01926d3a-0100-7000-8000-000000000000"
         ],
         "folders": [
-          "draft.tex~01926d3a-0100-7000-8000-000000000000",
-          "paper.tex~01926d3a-0100-7000-8000-000000000000"
+          "docs/draft.tex~01926d3a-0100-7000-8000-000000000000",
+          "docs/paper.tex~01926d3a-0100-7000-8000-000000000000"
         ],
         "events": [
           "01926d3a-0001-7000-8000-000000000000",
@@ -260,7 +260,7 @@
           "01926d3a-0200-7000-8000-000000000000"
         ],
         "folders": [
-          "main.tex~01926d3a-0200-7000-8000-000000000000"
+          "docs/main.tex~01926d3a-0200-7000-8000-000000000000"
         ],
         "events": [
           "01926d3a-0002-7000-8000-000000000000"
@@ -303,7 +303,7 @@
           "01926d3a-0100-7000-8000-000000000000"
         ],
         "folders": [
-          "old-main.tex~01926d3a-0100-7000-8000-000000000000"
+          "docs/old-main.tex~01926d3a-0100-7000-8000-000000000000"
         ],
         "events": [
           "01926d3a-0001-7000-8000-000000000000"
@@ -340,7 +340,7 @@
           "01926d3a-0100-7000-8000-000000000000"
         ],
         "folders": [
-          "a.md~01926d3a-0100-7000-8000-000000000000"
+          "docs/a.md~01926d3a-0100-7000-8000-000000000000"
         ],
         "events": [
           "01926d3a-0001-7000-8000-000000000000"
@@ -384,8 +384,8 @@
           "01926d3a-0200-7000-8000-000000000000"
         ],
         "folders": [
-          "intro.md~01926d3a-0100-7000-8000-000000000000",
-          "intro.md~01926d3a-0200-7000-8000-000000000000"
+          "docs/intro.md~01926d3a-0100-7000-8000-000000000000",
+          "docs/intro.md~01926d3a-0200-7000-8000-000000000000"
         ],
         "events": [
           "01926d3a-0001-7000-8000-000000000000",
@@ -432,8 +432,8 @@
           "01926d3a-0200-7000-8000-000000000000"
         ],
         "folders": [
-          "intro.md~01926d3a-0100-7000-8000-000000000000",
-          "intro.md~01926d3a-0200-7000-8000-000000000000"
+          "docs/intro.md~01926d3a-0100-7000-8000-000000000000",
+          "docs/intro.md~01926d3a-0200-7000-8000-000000000000"
         ],
         "events": [
           "01926d3a-0001-7000-8000-000000000000",
@@ -478,7 +478,7 @@
           "01926d3a-0100-7000-8000-000000000000"
         ],
         "folders": [
-          "a.md~01926d3a-0100-7000-8000-000000000000"
+          "docs/a.md~01926d3a-0100-7000-8000-000000000000"
         ],
         "events": [
           "01926d3a-0001-7000-8000-000000000000"
@@ -552,13 +552,134 @@
           "01926d3a-0100-7000-8000-000000000000"
         ],
         "folders": [
-          "paper.tex~01926d3a-0100-7000-8000-000000000000"
+          "docs/paper.tex~01926d3a-0100-7000-8000-000000000000"
         ],
         "events": [
           "01926d3a-0001-7000-8000-000000000000"
         ],
         "annotations": [
           "01926d3a-0001-7000-8000-000000000000"
+        ]
+      }
+    },
+    {
+      "name": "local-with-shared-record",
+      "description": "A local annotation on a document with a shared record uses the shared id; its local folder has no document/ subfolder. Both areas load.",
+      "files": {
+        ".annox/annox.json": "{ \"format\": 1 }\n",
+        ".annox/.gitignore": "cache/\n",
+        ".annox/docs/paper.tex~01926d3a-0100-7000-8000-000000000000/document/01926d3a-0100-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0100-7000-8000-000000000000\",\n  \"document\": \"01926d3a-0100-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"document\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T15:00:00Z\",\n  \"path\": \"paper.tex\"\n}\n",
+        ".annox/docs/paper.tex~01926d3a-0100-7000-8000-000000000000/01926d3a-0001-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0001-7000-8000-000000000000\",\n  \"annotation\": \"01926d3a-0001-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"create\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T14:00:00Z\",\n  \"kind\": \"comment\",\n  \"target\": {\n    \"path\": \"x\",\n    \"version\": \"sha256:066f0dd650a93335b6f09283c11769b9053c87a602e57091fc354aa6eb992fdd\",\n    \"selectors\": {\n      \"position\": {\n        \"start\": 6,\n        \"end\": 11\n      },\n      \"quote\": {\n        \"exact\": \"world\",\n        \"prefix\": \"Hello \",\n        \"suffix\": \", this is a document.\\n\"\n      }\n    }\n  }\n}\n",
+        ".annox/local/docs/paper.tex~01926d3a-0100-7000-8000-000000000000/01926d3a-0002-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0002-7000-8000-000000000000\",\n  \"annotation\": \"01926d3a-0002-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"create\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T14:00:00Z\",\n  \"kind\": \"comment\",\n  \"target\": {\n    \"path\": \"x\",\n    \"version\": \"sha256:066f0dd650a93335b6f09283c11769b9053c87a602e57091fc354aa6eb992fdd\",\n    \"selectors\": {\n      \"position\": {\n        \"start\": 6,\n        \"end\": 11\n      },\n      \"quote\": {\n        \"exact\": \"world\",\n        \"prefix\": \"Hello \",\n        \"suffix\": \", this is a document.\\n\"\n      }\n    }\n  }\n}\n"
+      },
+      "path": "paper.tex",
+      "expected": {
+        "documents": {
+          "01926d3a-0100-7000-8000-000000000000": {
+            "path": "paper.tex",
+            "mergedInto": null,
+            "conflicts": {}
+          }
+        },
+        "at": [
+          "01926d3a-0100-7000-8000-000000000000"
+        ],
+        "loaded": [
+          "01926d3a-0100-7000-8000-000000000000"
+        ],
+        "folders": [
+          "docs/paper.tex~01926d3a-0100-7000-8000-000000000000",
+          "local/docs/paper.tex~01926d3a-0100-7000-8000-000000000000"
+        ],
+        "events": [
+          "01926d3a-0001-7000-8000-000000000000",
+          "01926d3a-0002-7000-8000-000000000000"
+        ],
+        "annotations": [
+          "01926d3a-0001-7000-8000-000000000000",
+          "01926d3a-0002-7000-8000-000000000000"
+        ]
+      }
+    },
+    {
+      "name": "local-record-only",
+      "description": "A local annotation on a document without a shared record lives with a local document record.",
+      "files": {
+        ".annox/annox.json": "{ \"format\": 1 }\n",
+        ".annox/.gitignore": "cache/\n",
+        ".annox/local/docs/draft.md~01926d3a-0100-7000-8000-000000000000/document/01926d3a-0100-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0100-7000-8000-000000000000\",\n  \"document\": \"01926d3a-0100-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"document\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T15:00:00Z\",\n  \"path\": \"draft.md\"\n}\n",
+        ".annox/local/docs/draft.md~01926d3a-0100-7000-8000-000000000000/01926d3a-0001-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0001-7000-8000-000000000000\",\n  \"annotation\": \"01926d3a-0001-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"create\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T14:00:00Z\",\n  \"kind\": \"comment\",\n  \"target\": {\n    \"path\": \"x\",\n    \"version\": \"sha256:066f0dd650a93335b6f09283c11769b9053c87a602e57091fc354aa6eb992fdd\",\n    \"selectors\": {\n      \"position\": {\n        \"start\": 6,\n        \"end\": 11\n      },\n      \"quote\": {\n        \"exact\": \"world\",\n        \"prefix\": \"Hello \",\n        \"suffix\": \", this is a document.\\n\"\n      }\n    }\n  }\n}\n"
+      },
+      "path": "draft.md",
+      "expected": {
+        "documents": {
+          "01926d3a-0100-7000-8000-000000000000": {
+            "path": "draft.md",
+            "mergedInto": null,
+            "conflicts": {}
+          }
+        },
+        "at": [
+          "01926d3a-0100-7000-8000-000000000000"
+        ],
+        "loaded": [
+          "01926d3a-0100-7000-8000-000000000000"
+        ],
+        "folders": [
+          "local/docs/draft.md~01926d3a-0100-7000-8000-000000000000"
+        ],
+        "events": [
+          "01926d3a-0001-7000-8000-000000000000"
+        ],
+        "annotations": [
+          "01926d3a-0001-7000-8000-000000000000"
+        ]
+      }
+    },
+    {
+      "name": "local-record-published-duplicate",
+      "description": "A local record was published while someone else created a shared record for the same path: duplicates, both loaded (§5.8).",
+      "files": {
+        ".annox/annox.json": "{ \"format\": 1 }\n",
+        ".annox/.gitignore": "cache/\n",
+        ".annox/docs/intro.md~01926d3a-0200-7000-8000-000000000000/document/01926d3a-0200-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0200-7000-8000-000000000000\",\n  \"document\": \"01926d3a-0200-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"document\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T15:00:00Z\",\n  \"path\": \"intro.md\"\n}\n",
+        ".annox/docs/intro.md~01926d3a-0200-7000-8000-000000000000/01926d3a-0002-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0002-7000-8000-000000000000\",\n  \"annotation\": \"01926d3a-0002-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"create\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T14:00:00Z\",\n  \"kind\": \"comment\",\n  \"target\": {\n    \"path\": \"x\",\n    \"version\": \"sha256:066f0dd650a93335b6f09283c11769b9053c87a602e57091fc354aa6eb992fdd\",\n    \"selectors\": {\n      \"position\": {\n        \"start\": 6,\n        \"end\": 11\n      },\n      \"quote\": {\n        \"exact\": \"world\",\n        \"prefix\": \"Hello \",\n        \"suffix\": \", this is a document.\\n\"\n      }\n    }\n  }\n}\n",
+        ".annox/docs/intro.md~01926d3a-0100-7000-8000-000000000000/document/01926d3a-0100-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0100-7000-8000-000000000000\",\n  \"document\": \"01926d3a-0100-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"document\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T15:00:00Z\",\n  \"path\": \"intro.md\"\n}\n",
+        ".annox/docs/intro.md~01926d3a-0100-7000-8000-000000000000/01926d3a-0001-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0001-7000-8000-000000000000\",\n  \"annotation\": \"01926d3a-0001-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"create\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T14:00:00Z\",\n  \"kind\": \"comment\",\n  \"target\": {\n    \"path\": \"x\",\n    \"version\": \"sha256:066f0dd650a93335b6f09283c11769b9053c87a602e57091fc354aa6eb992fdd\",\n    \"selectors\": {\n      \"position\": {\n        \"start\": 6,\n        \"end\": 11\n      },\n      \"quote\": {\n        \"exact\": \"world\",\n        \"prefix\": \"Hello \",\n        \"suffix\": \", this is a document.\\n\"\n      }\n    }\n  }\n}\n"
+      },
+      "path": "intro.md",
+      "expected": {
+        "documents": {
+          "01926d3a-0100-7000-8000-000000000000": {
+            "path": "intro.md",
+            "mergedInto": null,
+            "conflicts": {}
+          },
+          "01926d3a-0200-7000-8000-000000000000": {
+            "path": "intro.md",
+            "mergedInto": null,
+            "conflicts": {}
+          }
+        },
+        "at": [
+          "01926d3a-0100-7000-8000-000000000000",
+          "01926d3a-0200-7000-8000-000000000000"
+        ],
+        "loaded": [
+          "01926d3a-0100-7000-8000-000000000000",
+          "01926d3a-0200-7000-8000-000000000000"
+        ],
+        "folders": [
+          "docs/intro.md~01926d3a-0100-7000-8000-000000000000",
+          "docs/intro.md~01926d3a-0200-7000-8000-000000000000"
+        ],
+        "events": [
+          "01926d3a-0001-7000-8000-000000000000",
+          "01926d3a-0002-7000-8000-000000000000"
+        ],
+        "annotations": [
+          "01926d3a-0001-7000-8000-000000000000",
+          "01926d3a-0002-7000-8000-000000000000"
         ]
       }
     }
