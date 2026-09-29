@@ -171,4 +171,4 @@ Test vectors are in [`tests/storage.json`](tests/storage.json).
 
 ## Open questions
 
-- **Scale (to validate with an implementation).** A heavily annotated workspace can hold thousands of event files, and v1 has no compaction (D29). Is a cache (§5.9) enough in practice?
+- **Scale** is validated ([D40](decisions.md#d40-performance-is-validated-implementations-should-index-cache-and-debounce-2026-09-29)). About 20,000 event files (5,000 annotations) read in about 170 ms and derive in about 150 ms, and a tool that caches between changes pays this only when storage changes. Compaction isn't needed at that scale.

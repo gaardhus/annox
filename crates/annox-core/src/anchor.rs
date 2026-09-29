@@ -108,26 +108,29 @@ pub fn resolve(doc: &Text, anchor: &Anchor) -> Resolution {
     }
 
     // Step 2: context search.
-    let context: Vec<char> = [&p[..], &q[..], &x[..]].concat();
-    let starts: Vec<usize> = occurrences(d, &context).into_iter().map(|i| i + p.len()).collect();
+    let quote = &anchor.selectors.quote;
+    let context = format!("{}{}{}", quote.prefix, quote.exact, quote.suffix);
+    let starts: Vec<usize> = doc.haystack().find_all(&context).into_iter().map(|i| i + p.len()).collect();
     if let Some(c) = nearest(&starts, s) {
         return Resolution::relocated(c, c + q.len(), 2);
     }
 
+    let as_string = |chars: &[char]| chars.iter().collect::<String>();
     if !q.is_empty() {
         // Step 3: quote search.
-        if let Some(c) = select_by_context(d, &occurrences(d, &q), q.len(), &p, &x) {
+        if let Some(c) = select_by_context(d, &doc.haystack().find_all(&quote.exact), q.len(), &p, &x) {
             return Resolution::relocated(c, c + q.len(), 3);
         }
         // Step 4, quote variant: whitespace-insensitive quote search.
         let (wq, _) = collapse(&q);
         if wq.iter().any(|&c| c != ' ') {
-            let (wd, spans) = collapse(d);
+            let w = doc.collapsed();
             let (wp, _) = collapse(&p);
             let (wx, _) = collapse(&x);
-            if let Some(i) = select_by_context(&wd, &occurrences(&wd, &wq), wq.len(), &wp, &wx) {
+            let occ = w.haystack.find_all(&as_string(&wq));
+            if let Some(i) = select_by_context(&w.chars, &occ, wq.len(), &wp, &wx) {
                 let j = i + wq.len();
-                return Resolution::relocated(spans[i].0, spans[j - 1].1, 4);
+                return Resolution::relocated(w.spans[i].0, w.spans[j - 1].1, 4);
             }
         }
     } else {
@@ -141,16 +144,18 @@ pub fn resolve(doc: &Text, anchor: &Anchor) -> Resolution {
             [&wp[..], &wx[..]].concat()
         };
         if pattern.iter().any(|&c| c != ' ') {
-            let (wd, spans) = collapse(d);
-            let points: Vec<usize> = occurrences(&wd, &pattern)
+            let w = doc.collapsed();
+            let points: Vec<usize> = w
+                .haystack
+                .find_all(&as_string(&pattern))
                 .into_iter()
                 .map(|i| {
                     if merged {
-                        spans[i + wp.len() - 1].0
+                        w.spans[i + wp.len() - 1].0
                     } else {
                         let k = i + wp.len();
-                        if k < wd.len() {
-                            spans[k].0
+                        if k < w.chars.len() {
+                            w.spans[k].0
                         } else {
                             d.len()
                         }
@@ -164,16 +169,6 @@ pub fn resolve(doc: &Text, anchor: &Anchor) -> Resolution {
     }
 
     Resolution::ORPHANED
-}
-
-/// Every index where `needle` occurs in `hay`, overlaps included (§3.7.1).
-pub(crate) fn occurrences(hay: &[char], needle: &[char]) -> Vec<usize> {
-    if needle.len() > hay.len() {
-        return Vec::new();
-    }
-    (0..=hay.len() - needle.len())
-        .filter(|&i| hay[i..i + needle.len()] == *needle)
-        .collect()
 }
 
 /// The candidate closest to `s`, with ties going to the lower offset (§3.7.1).
@@ -226,7 +221,7 @@ fn is_whitespace(c: char) -> bool {
 
 /// The collapsed form of `t` and the source span of each of its code points
 /// (§3.7.1).
-fn collapse(t: &[char]) -> (Vec<char>, Vec<(usize, usize)>) {
+pub(crate) fn collapse(t: &[char]) -> (Vec<char>, Vec<(usize, usize)>) {
     let mut out = Vec::with_capacity(t.len());
     let mut spans = Vec::with_capacity(t.len());
     let mut k = 0;

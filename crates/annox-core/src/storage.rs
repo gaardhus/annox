@@ -282,9 +282,19 @@ pub struct Loaded {
 impl Loaded {
     /// Derived state of every loaded annotation (§2.5.6), by id.
     pub fn derive(&self) -> BTreeMap<String, Value> {
+        // Group once, so each annotation only replays its own events.
+        let mut by_annotation: BTreeMap<&str, Vec<Event>> = BTreeMap::new();
+        for e in &self.events {
+            if let Some(a) = e.annotation.as_deref() {
+                by_annotation.entry(a).or_default().push(e.clone());
+            }
+        }
         self.annotations
             .iter()
-            .filter_map(|id| replay::derive_annotation(&self.events, id).map(|v| (id.clone(), v)))
+            .filter_map(|id| {
+                let events = by_annotation.get(id.as_str())?;
+                replay::derive_annotation(events, id).map(|v| (id.clone(), v))
+            })
             .collect()
     }
 }

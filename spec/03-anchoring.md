@@ -186,4 +186,4 @@ It also stores the new document's `version`.
 
 ## Open questions
 
-- **Performance (to validate with an implementation).** Steps 3 and 4 on large documents with many anchors cost O(document × anchors). This is probably fine for v1, but it needs measuring.
+- **Performance** is validated ([D40](decisions.md#d40-performance-is-validated-implementations-should-index-cache-and-debounce-2026-09-29)). Resolution is linear in document length per anchor. With indexed substring search, 1,000 anchors in a 100k-character document resolve in about 5–50 ms. The one expensive case is a quote that occurs thousands of times, because step 3 scores every occurrence.

@@ -66,11 +66,11 @@ impl Server<'_> {
     }
 
     /// The open document holding `id`, analyzed.
-    fn locate(&self, id: &str) -> Result<(Url, Analysis), Failure> {
+    fn locate(&self, id: &str) -> Result<(Url, std::rc::Rc<Analysis>), Failure> {
         self.find(id).ok_or((UNKNOWN_ANNOTATION, format!("unknown annotation {id}")))
     }
 
-    fn analyze_uri(&self, uri: &Url) -> Result<Analysis, Failure> {
+    fn analyze_uri(&self, uri: &Url) -> Result<std::rc::Rc<Analysis>, Failure> {
         self.analyze(uri).ok_or((NO_WORKSPACE, "the document is not in an annox workspace".to_owned()))
     }
 
@@ -92,6 +92,8 @@ impl Server<'_> {
             doc.include_closed = include_closed;
             doc.include_deleted = include_deleted;
         }
+        // An explicit request always reflects storage as it is now.
+        self.invalidate();
         let a = self.analyze_uri(&uri)?;
         Ok(json!({
             "annotations": views::views(&a, self.encoding, include_closed, include_deleted),
@@ -142,6 +144,7 @@ impl Server<'_> {
         if let Err(e) = Workspace::init(&init.root) {
             return self.reply(init.command, Err(io_failure(e)));
         }
+        self.invalidate();
         let result = self.m_create(&init.params);
         self.reply(init.command, result);
         self.refresh_all();
@@ -170,8 +173,9 @@ impl Server<'_> {
             replacement,
             local: params["local"].as_bool().unwrap_or(false),
         };
-        let event = ops::create_annotation(&a.ws, &a.index, &a.rel, &a.text, &new, &self.author(&a.ws))
-            .map_err(io_failure)?;
+        let event = ops::create_annotation(&a.ws, &a.index, &a.rel, &a.text, &new, &self.author(&a.ws));
+        self.invalidate();
+        let event = event.map_err(io_failure)?;
         self.view_of(&uri, &event.id)
     }
 
@@ -186,7 +190,9 @@ impl Server<'_> {
             return fail(INVALID_OPERATION, "replies must be to a comment or suggestion");
         }
         let local = params["local"].as_bool().unwrap_or(false);
-        let event = ops::create_reply(&a.ws, &a.index, parent, body, local, &self.author(&a.ws)).map_err(io_failure)?;
+        let event = ops::create_reply(&a.ws, &a.index, parent, body, local, &self.author(&a.ws));
+        self.invalidate();
+        let event = event.map_err(io_failure)?;
         self.view_of(&uri, &event.id)
     }
 
@@ -196,8 +202,9 @@ impl Server<'_> {
         let mut published = Vec::new();
         for id in &ids {
             let (uri, a) = self.locate(id)?;
-            let moved = ops::publish(&a.ws, &a.index, std::slice::from_ref(id), &self.author(&a.ws))
-                .map_err(io_failure)?;
+            let moved = ops::publish(&a.ws, &a.index, std::slice::from_ref(id), &self.author(&a.ws));
+            self.invalidate();
+            let moved = moved.map_err(io_failure)?;
             if !moved.is_empty() {
                 published.push(self.view_of(&uri, id)?);
             }
@@ -283,7 +290,9 @@ impl Server<'_> {
         let (Some(from), Some(to)) = (ws.relative(&from), ws.relative(&to)) else {
             return fail(INVALID_PARAMS, "both paths must be inside the workspace");
         };
-        let moved = ops::move_document(&ws, &Index::read(&ws), &from, &to, &self.author(&ws)).map_err(io_failure)?;
+        let moved = ops::move_document(&ws, &Index::read(&ws), &from, &to, &self.author(&ws));
+        self.invalidate();
+        let moved = moved.map_err(io_failure)?;
         Ok(json!({ "moved": moved }))
     }
 
@@ -308,7 +317,7 @@ impl Server<'_> {
             Ok(ids) => ids,
             Err(e) => return self.reply(command, fail(INVALID_PARAMS, format!("annotations: {e}"))),
         };
-        let mut target: Option<(Url, Analysis)> = None;
+        let mut target: Option<(Url, std::rc::Rc<Analysis>)> = None;
         let mut results = Vec::new();
         let mut chosen: Vec<String> = Vec::new();
         let mut edits: Vec<(usize, usize, String)> = Vec::new();

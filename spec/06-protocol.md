@@ -44,7 +44,7 @@ All ranges on the wire are LSP `Range`s. Offsets appear only inside stored ancho
 
 ## 6.4 Documents and changes
 
-- **Open documents.** The server tracks open documents through `textDocument/didOpen`, `didChange`, and `didClose`, the same as any language server. For an open document, *D* (§3.7) is the normalized buffer content, even when it isn't saved (§4.3.2). The server re-resolves annotations as the buffer changes. It SHOULD debounce this.
+- **Open documents.** The server tracks open documents through `textDocument/didOpen`, `didChange`, and `didClose`, the same as any language server. For an open document, *D* (§3.7) is the normalized buffer content, even when it isn't saved (§4.3.2). The server re-resolves annotations as the buffer changes. It SHOULD debounce this, and SHOULD cache what it read from storage until storage changes, rather than re-reading it on every edit.
 - **Closed documents** are read from disk when needed.
 - **Storage changes.** The server MUST notice changes to `.annox/` made by others, such as `git pull` or another tool. It registers for `workspace/didChangeWatchedFiles` on `.annox/**` if the client supports that, and otherwise watches the files itself. It reloads the affected documents and pushes updates (§6.6.3).
 - **Sync.** If the workspace names a sync hub (§7.2), the server SHOULD act as a replica (§7) whenever credentials are configured, and push updates for events arriving from the hub like any other storage change.

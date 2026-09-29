@@ -231,3 +231,13 @@ When duplicate document records span the local and shared areas, the survivor is
 This refines D38. The rule that `into` must be smaller applies only within an area. A local record may merge into a shared record with any id. See §5.5.1.
 
 **Why:** found while implementing publishing. D38 made the smallest *shared* id the survivor, but the rule that `into` must be smaller then made the required merge invalid whenever the local record had the smaller id. Merges still can't loop, because shared records never merge into local ones.
+
+## D40. Performance is validated: implementations should index, cache, and debounce (2026-09-29)
+
+Measured with the reference implementation (`cargo run --release -p annox-core --example bench`, and `-p annox-lsp --example keystroke`):
+
+- **Resolution** is linear in document length per anchor. For 1,000 anchors in a 100k-character document it takes about 5 ms when relocating, 35 ms when orphaned, and 0.2 ms when unchanged. Step 3 is the one slow case, when a quote occurs thousands of times.
+- **Storage:** 20,000 event files read in about 170 ms, and 5,000 annotations derive in about 150 ms.
+- **Server:** keystrokes cost nothing, because resolution is debounced by 150 ms. One refresh then takes about 80 ms for 1,000 annotations, and hover takes 0.3 ms.
+
+**Why:** the spec's algorithms needed no changes. The first implementation's slowness came from naive character-by-character search, rebuilding the collapsed text for every anchor, a quadratic replay, and re-reading storage on every keystroke. §6.4 now recommends caching as well as debouncing.

@@ -1,6 +1,6 @@
 //! Applicability and applying suggestions (§4).
 
-use crate::anchor::{self, nearest, occurrences, Anchor, Resolution, State};
+use crate::anchor::{self, nearest, Anchor, Resolution, State};
 use crate::text::Text;
 
 /// Whether a resolution makes a suggestion applicable (§4.2): exact, or
@@ -38,10 +38,9 @@ pub fn apply(doc: &Text, target: &Anchor, replacement: &str) -> Result<Applied, 
 /// Finds the text a suggestion produces once applied (§4.3.3), used to
 /// detect lost acceptances and to revert.
 pub fn applied_text_search(doc: &Text, target: &Anchor, replacement: &str) -> Option<(usize, usize)> {
-    let p: Vec<char> = target.selectors.quote.prefix.chars().collect();
-    let x: Vec<char> = target.selectors.quote.suffix.chars().collect();
-    let r: Vec<char> = replacement.chars().collect();
-    let pattern: Vec<char> = [&p[..], &r[..], &x[..]].concat();
-    let starts: Vec<usize> = occurrences(&doc.chars, &pattern).into_iter().map(|i| i + p.len()).collect();
-    nearest(&starts, target.selectors.position.start).map(|c| (c, c + r.len()))
+    let quote = &target.selectors.quote;
+    let pattern = format!("{}{replacement}{}", quote.prefix, quote.suffix);
+    let prefix_len = quote.prefix.chars().count();
+    let starts: Vec<usize> = doc.haystack().find_all(&pattern).into_iter().map(|i| i + prefix_len).collect();
+    nearest(&starts, target.selectors.position.start).map(|c| (c, c + replacement.chars().count()))
 }

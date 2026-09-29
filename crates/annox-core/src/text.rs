@@ -33,13 +33,68 @@ pub fn version(normalized: &str) -> String {
     out
 }
 
+/// A string prepared for fast substring search, with a map from byte
+/// offsets back to code-point offsets.
+#[derive(Clone, Debug)]
+pub(crate) struct Haystack {
+    text: String,
+    /// Byte offset of each code point, plus the total length.
+    char_bytes: Vec<usize>,
+}
+
+impl Haystack {
+    pub(crate) fn new(chars: &[char]) -> Haystack {
+        let text: String = chars.iter().collect();
+        let mut char_bytes: Vec<usize> = text.char_indices().map(|(b, _)| b).collect();
+        char_bytes.push(text.len());
+        Haystack { text, char_bytes }
+    }
+
+    /// Code-point offsets of every occurrence of `needle`, overlaps included
+    /// (§3.7.1).
+    pub(crate) fn find_all(&self, needle: &str) -> Vec<usize> {
+        if needle.is_empty() {
+            return (0..self.char_bytes.len()).collect();
+        }
+        let mut out = Vec::new();
+        let mut from = 0;
+        while let Some(pos) = self.text[from..].find(needle) {
+            let byte = from + pos;
+            let index = self.char_bytes.partition_point(|&b| b < byte);
+            out.push(index);
+            // Advance one code point, so overlapping occurrences are found.
+            from = self.char_bytes[index + 1];
+        }
+        out
+    }
+}
+
+/// The collapsed form of a text and the source span of each of its code
+/// points (§3.7.1).
+#[derive(Clone, Debug)]
+pub(crate) struct Collapsed {
+    pub(crate) chars: Vec<char>,
+    pub(crate) spans: Vec<(usize, usize)>,
+    pub(crate) haystack: Haystack,
+}
+
 /// Normalized text indexed by code point, which is the unit of every
 /// offset in annox (§3.3).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Text {
     pub chars: Vec<char>,
     pub version: String,
+    haystack: std::sync::OnceLock<Haystack>,
+    collapsed: std::sync::OnceLock<Collapsed>,
 }
+
+impl PartialEq for Text {
+    fn eq(&self, other: &Text) -> bool {
+        self.version == other.version && self.chars == other.chars
+    }
+}
+
+impl Eq for Text {}
 
 impl Text {
     /// Normalizes `raw` and indexes it.
@@ -53,7 +108,23 @@ impl Text {
         Text {
             chars: normalized.chars().collect(),
             version,
+            haystack: std::sync::OnceLock::new(),
+            collapsed: std::sync::OnceLock::new(),
         }
+    }
+
+    /// The search index, built on first use.
+    pub(crate) fn haystack(&self) -> &Haystack {
+        self.haystack.get_or_init(|| Haystack::new(&self.chars))
+    }
+
+    /// The collapsed form (§3.7.1), built on first use.
+    pub(crate) fn collapsed(&self) -> &Collapsed {
+        self.collapsed.get_or_init(|| {
+            let (chars, spans) = crate::anchor::collapse(&self.chars);
+            let haystack = Haystack::new(&chars);
+            Collapsed { chars, spans, haystack }
+        })
     }
 
     pub fn len(&self) -> usize {
@@ -94,6 +165,15 @@ mod tests {
     #[test]
     fn normalizes_bom_and_line_endings() {
         assert_eq!(normalize("\u{feff}a\r\nb\rc\n"), "a\nb\nc\n");
+    }
+
+    #[test]
+    fn find_all_returns_overlapping_code_point_offsets() {
+        let h = Haystack::new(&"aé😀aaa😀a".chars().collect::<Vec<_>>());
+        assert_eq!(h.find_all("aa"), vec![3, 4]);
+        assert_eq!(h.find_all("😀a"), vec![2, 6]);
+        assert_eq!(h.find_all("x"), Vec::<usize>::new());
+        assert_eq!(h.find_all("").len(), 9);
     }
 
     #[test]

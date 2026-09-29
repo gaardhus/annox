@@ -6,9 +6,11 @@ mod methods;
 pub mod position;
 mod views;
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
+use std::rc::Rc;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use annox_core::anchor::{self, Anchor, Resolution, State};
 use annox_core::ops;
@@ -122,6 +124,8 @@ pub fn run(connection: &Connection) -> anyhow::Result<()> {
         replicas: HashMap::new(),
         sync_tx,
         sync_rx,
+        cache: RefCell::new(Cache::default()),
+        dirty: HashMap::new(),
     };
     if dynamic_watch {
         server.register_watcher();
@@ -188,7 +192,28 @@ pub(crate) struct Server<'a> {
     replicas: HashMap<PathBuf, Option<Sender<ToReplica>>>,
     sync_tx: Sender<FromReplica>,
     sync_rx: Receiver<FromReplica>,
+    cache: RefCell<Cache>,
+    /// Documents edited since their last refresh, with when to refresh them.
+    dirty: HashMap<Url, Instant>,
 }
+
+/// Workspace indexes and document analyses, reused until storage changes.
+#[derive(Default)]
+pub(crate) struct Cache {
+    generation: u64,
+    indexes: HashMap<PathBuf, Rc<Index>>,
+    /// Per document: the generation and text version it was built from.
+    analyses: HashMap<Url, (u64, String, Rc<Analysis>)>,
+    /// Per document: loaded events and derived states, which depend only on
+    /// storage, so text edits don't re-derive them.
+    derived: HashMap<Url, Derived>,
+}
+
+/// Loaded events and derived annotation states of one document.
+type Derived = Rc<(Loaded, BTreeMap<String, Value>)>;
+
+/// How long typing must pause before annotations are re-resolved (§6.4).
+const DEBOUNCE: Duration = Duration::from_millis(150);
 
 /// A root annotation of a document, resolved against its current text.
 pub(crate) struct Item {
@@ -228,7 +253,7 @@ impl Item {
 pub(crate) struct Analysis {
     ws: Workspace,
     rel: String,
-    index: Index,
+    index: Rc<Index>,
     loaded: Loaded,
     text: Text,
     items: Vec<Item>,
@@ -255,7 +280,12 @@ impl Server<'_> {
         let ticker = if self.poll { crossbeam_channel::tick(POLL_INTERVAL) } else { crossbeam_channel::never() };
         let sync_rx = self.sync_rx.clone();
         loop {
+            let debounce = match self.dirty.values().min() {
+                Some(due) => crossbeam_channel::after(due.saturating_duration_since(Instant::now())),
+                None => crossbeam_channel::never(),
+            };
             crossbeam_channel::select! {
+                recv(debounce) -> _ => self.flush_dirty(),
                 recv(self.connection.receiver) -> msg => match msg {
                     Ok(Message::Request(req)) => {
                         if self.connection.handle_shutdown(&req)? {
@@ -304,8 +334,28 @@ impl Server<'_> {
             }
         }
         if changed {
+            self.invalidate();
             self.refresh_all();
         }
+    }
+
+    /// Refreshes documents whose typing pause has elapsed.
+    fn flush_dirty(&mut self) {
+        let now = Instant::now();
+        let due: Vec<Url> = self.dirty.iter().filter(|(_, t)| **t <= now).map(|(u, _)| u.clone()).collect();
+        for uri in due {
+            self.dirty.remove(&uri);
+            self.refresh(&uri);
+        }
+    }
+
+    /// Forgets cached indexes and analyses after storage changed.
+    pub(crate) fn invalidate(&self) {
+        let mut cache = self.cache.borrow_mut();
+        cache.generation += 1;
+        cache.indexes.clear();
+        cache.analyses.clear();
+        cache.derived.clear();
     }
 
     fn send(&self, msg: impl Into<Message>) {
@@ -355,12 +405,15 @@ impl Server<'_> {
                     if let Some(change) = p.content_changes.into_iter().last() {
                         let uri = p.text_document.uri;
                         self.set_text(uri.clone(), &change.text);
-                        self.refresh(&uri);
+                        // Re-resolve once typing pauses (§6.4).
+                        self.dirty.insert(uri, Instant::now() + DEBOUNCE);
                     }
                 }
             }
             DidSaveTextDocument::METHOD => {
                 if let Ok(p) = serde_json::from_value::<DidSaveTextDocumentParams>(n.params) {
+                    // Saving is a natural point to pick up outside changes too.
+                    self.invalidate();
                     self.refresh(&p.text_document.uri);
                 }
             }
@@ -372,7 +425,10 @@ impl Server<'_> {
                     }
                 }
             }
-            DidChangeWatchedFiles::METHOD => self.refresh_all(),
+            DidChangeWatchedFiles::METHOD => {
+                self.invalidate();
+                self.refresh_all();
+            }
             DidRenameFiles::METHOD => {
                 if let Ok(p) = serde_json::from_value::<RenameFilesParams>(n.params) {
                     self.on_rename(p);
@@ -453,7 +509,8 @@ impl Server<'_> {
     }
 
     /// Loads, replays, and resolves the annotations of `uri` (§5.7.1, §3.7).
-    fn analyze(&self, uri: &Url) -> Option<Analysis> {
+    /// Results are cached until storage or the document's text changes.
+    fn analyze(&self, uri: &Url) -> Option<Rc<Analysis>> {
         let path: PathBuf = uri.to_file_path().ok()?;
         let ws = Workspace::find(&path)?;
         let rel = ws.relative(&path)?;
@@ -461,11 +518,31 @@ impl Server<'_> {
             Some(doc) => doc.text.clone(),
             None => Text::from_raw(&std::fs::read_to_string(&path).unwrap_or_default()),
         };
-        let index = Index::read(&ws);
-        let loaded = index.load(&rel);
+        let generation = self.cache.borrow().generation;
+        if let Some((g, version, a)) = self.cache.borrow().analyses.get(uri) {
+            if *g == generation && *version == text.version {
+                return Some(a.clone());
+            }
+        }
+        let cached = self.cache.borrow().indexes.get(&ws.root).cloned();
+        let index = cached.unwrap_or_else(|| {
+            let index = Rc::new(Index::read(&ws));
+            self.cache.borrow_mut().indexes.insert(ws.root.clone(), index.clone());
+            index
+        });
+        let cached = self.cache.borrow().derived.get(uri).cloned();
+        let derived = cached.unwrap_or_else(|| {
+            let loaded = index.load(&rel);
+            let states = loaded.derive();
+            let derived = Rc::new((loaded, states));
+            self.cache.borrow_mut().derived.insert(uri.clone(), derived.clone());
+            derived
+        });
+        let (loaded, states) = &*derived;
+        let loaded = loaded.clone();
         let mut items = Vec::new();
         let mut replies: BTreeMap<String, Vec<Value>> = BTreeMap::new();
-        for (id, state) in loaded.derive() {
+        for (id, state) in states.clone() {
             if state["kind"] == "reply" {
                 let parent = state["parent"].as_str().unwrap_or_default().to_owned();
                 replies.entry(parent).or_default().push(state);
@@ -475,11 +552,14 @@ impl Server<'_> {
             let resolution = anchor::resolve(&text, &target);
             items.push(Item { id, state, target, resolution });
         }
-        Some(Analysis { ws, rel, index, loaded, text, items, replies })
+        let version = text.version.clone();
+        let analysis = Rc::new(Analysis { ws, rel, index, loaded, text, items, replies });
+        self.cache.borrow_mut().analyses.insert(uri.clone(), (generation, version, analysis.clone()));
+        Some(analysis)
     }
 
     /// Finds the open document that holds annotation `id` (a root or reply).
-    fn find(&self, id: &str) -> Option<(Url, Analysis)> {
+    fn find(&self, id: &str) -> Option<(Url, Rc<Analysis>)> {
         self.open.keys().find_map(|uri| {
             let a = self.analyze(uri)?;
             (a.item(id).is_some() || a.reply(id).is_some()).then(|| (uri.clone(), a))
@@ -510,9 +590,9 @@ impl Server<'_> {
     }
 
     fn write_event(&self, a: &Analysis, annotation: &str, kind: &str, fields: Map<String, Value>) -> Result<(), Failure> {
-        ops::append_event(&a.ws, &a.index, annotation, kind, fields, &self.author(&a.ws))
-            .map(|_| ())
-            .map_err(|e| (INTERNAL_ERROR, e.to_string()))
+        let result = ops::append_event(&a.ws, &a.index, annotation, kind, fields, &self.author(&a.ws));
+        self.invalidate();
+        result.map(|_| ()).map_err(|e| (INTERNAL_ERROR, e.to_string()))
     }
 
     /// The AnnotationView of `id` after reloading `uri` (§6.6.1).
@@ -597,7 +677,10 @@ impl Server<'_> {
 
     fn on_sync(&mut self, event: FromReplica) {
         match event {
-            FromReplica::Changed { .. } => self.refresh_all(),
+            FromReplica::Changed { .. } => {
+                self.invalidate();
+                self.refresh_all();
+            }
             FromReplica::Status { message, .. } => self.log(format!("annox sync: {message}")),
             FromReplica::Presence { root, peers } => {
                 if !self.annox_client {
@@ -820,6 +903,7 @@ impl Server<'_> {
             let Some(ws) = Workspace::find(&new_path) else { continue };
             let (Some(from), Some(to)) = (ws.relative(&old_path), ws.relative(&new_path)) else { continue };
             let _ = ops::move_document(&ws, &Index::read(&ws), &from, &to, &self.author(&ws));
+            self.invalidate();
         }
         self.refresh_all();
     }
