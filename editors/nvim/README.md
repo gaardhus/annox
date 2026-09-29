@@ -40,6 +40,7 @@ Changes others make to `.annox/`, such as a `git pull`, show up within a second 
 | `:Annox thread` | Show the thread under the cursor in a floating window. |
 | `:Annox accept` / `reject` | Accept or reject the suggestion under the cursor. Accepting edits the buffer, and you can undo as usual. |
 | `:'<,'>Annox accept` / `:Annox! accept` | Accept every suggestion touching the selection, or in the whole buffer, as one edit that a single undo reverts. If some suggestions moved because the text around them changed, you're asked once whether to accept them too. Stale or overlapping suggestions are skipped and reported. |
+| `:'<,'>Annox reject` / `:Annox! reject` | Reject every suggestion touching the selection, or in the whole buffer, after one confirmation. Rejected suggestions can be reopened one by one. |
 | `:Annox resolve` / `reopen` | Resolve or reopen a thread. |
 | `:Annox orphans` | Pick from annotations whose text could no longer be found. |
 | `:Annox reattach` | Attach an orphaned comment to the selection. |

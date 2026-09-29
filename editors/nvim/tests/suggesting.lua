@@ -188,6 +188,28 @@ end)
 -- Accepting "slow" changed the text around "fox", which then needed the prompt.
 check(#prompts == 1 and prompts[1]:find("^1 of these suggestion moved"), "one prompt: " .. vim.inspect(prompts))
 
+-- Bulk reject: the text stays, and the whole buffer asks once.
+annox.suggest({ range = line_range(3, 7), replacement = "fast" })
+annox.suggest({ range = line_range(13, 17), replacement = "good" })
+annox.suggest({ range = line_range(24, 27), replacement = "dog" })
+wait("three suggestions", function()
+  return #suggestions() == 3
+end)
+prompts = {}
+vim.fn.setpos("'<", { buf, 1, 1, 0 })
+vim.fn.setpos("'>", { buf, 1, 6, 0 })
+vim.cmd("'<,'>Annox reject")
+wait("selection rejected", function()
+  return #suggestions() == 2
+end)
+check(#prompts == 0, "no prompt for one suggestion")
+vim.cmd("Annox! reject")
+wait("rest rejected", function()
+  return #suggestions() == 0
+end)
+check(#prompts == 1 and prompts[1] == "Reject 2 suggestions?", "one prompt: " .. vim.inspect(prompts))
+check(text() == "he slow very nice brown cat.", "rejecting leaves the text")
+
 -- Orphaned annotations are announced above the text, not silently dropped.
 annox.comment({ range = { start = { line = 0, character = 4 }, ["end"] = { line = 0, character = 9 } }, body = "Fast?" })
 wait("comment", function()

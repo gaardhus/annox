@@ -462,7 +462,24 @@ M.resolve = status_action("resolved", is_kind("comment", "open"))
 M.reopen = status_action("open", function(a)
   return a.status ~= "open"
 end)
-M.reject = status_action("rejected", is_kind("suggestion", "open"))
+
+--- The open suggestions shown in the buffer: those touching the last visual
+--- selection with `visual`, and all of them otherwise. Nil if no server is
+--- attached.
+local function open_suggestions(bufnr, visual)
+  local client = client_for(bufnr)
+  if not client then
+    return request(bufnr)
+  end
+  local sel = visual and visual_range(bufnr, client.offset_encoding)
+  return buffer_annotations(bufnr, function(a)
+    local r = a.resolution and a.resolution.range
+    return a.kind == "suggestion"
+      and a.status == "open"
+      and r ~= nil
+      and (not sel or (before(r.start, sel["end"]) and before(sel.start, r["end"])))
+  end)
+end
 
 --- Accepts several suggestions as one edit, which a single undo reverts
 --- (§6.6.2), and reports the ones the server skipped. Suggestions found by
@@ -540,21 +557,59 @@ function M.accept(opts)
   opts = opts or {}
   local bufnr = vim.api.nvim_get_current_buf()
   if opts.visual or opts.all then
-    local client = client_for(bufnr)
-    if not client then
-      return request(bufnr)
-    end
-    local sel = opts.visual and visual_range(bufnr, client.offset_encoding)
-    return accept_all(bufnr, buffer_annotations(bufnr, function(a)
-      local r = a.resolution and a.resolution.range
-      return a.kind == "suggestion"
-        and a.status == "open"
-        and r ~= nil
-        and (not sel or (before(r.start, sel["end"]) and before(sel.start, r["end"])))
-    end), opts.confirmed)
+    local suggestions = open_suggestions(bufnr, opts.visual)
+    return suggestions and accept_all(bufnr, suggestions, opts.confirmed)
   end
   with_annotation(opts, is_kind("suggestion", "open"), function(id)
     request(bufnr, "annox/accept", { annotation = id })
+  end)
+end
+
+local reject_one = status_action("rejected", is_kind("suggestion", "open"))
+
+--- Rejects the suggestion under the cursor. With `visual`, rejects every open
+--- suggestion touching the last visual selection, and with `all`, every open
+--- suggestion in the buffer, after asking once unless `confirmed`. Rejecting
+--- doesn't touch the text, so each is its own `status` event, and each can be
+--- reopened. opts: { annotation?, visual?, all?, confirmed? }
+function M.reject(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  if not (opts.visual or opts.all) then
+    return reject_one(opts)
+  end
+  local suggestions = open_suggestions(bufnr, opts.visual)
+  if not suggestions then
+    return
+  end
+  if #suggestions == 0 then
+    return vim.notify("annox: no suggestions to reject", vim.log.levels.INFO)
+  end
+  local function reject_all()
+    local client, pending, rejected = client_for(bufnr), #suggestions, 0
+    for _, a in ipairs(suggestions) do
+      client:request("annox/setStatus", { annotation = a.id, status = "rejected" }, function(err)
+        rejected = rejected + (err and 0 or 1)
+        pending = pending - 1
+        if pending == 0 then
+          local failed = #suggestions - rejected
+          local message = string.format("annox: rejected %d", rejected)
+          if failed > 0 then
+            message = message .. string.format("; %d failed", failed)
+          end
+          vim.notify(message, failed > 0 and vim.log.levels.WARN or vim.log.levels.INFO)
+        end
+      end, bufnr)
+    end
+  end
+  if #suggestions == 1 or opts.confirmed then
+    return reject_all()
+  end
+  local yes = string.format("Reject all %d", #suggestions)
+  vim.ui.select({ yes, "Cancel" }, { prompt = string.format("Reject %d suggestions?", #suggestions) }, function(choice)
+    if choice == yes then
+      reject_all()
+    end
   end)
 end
 
@@ -1227,7 +1282,7 @@ local subcommands = {
   resolve = function() M.resolve() end,
   reopen = function() M.reopen() end,
   accept = function(o) M.accept({ visual = o.range > 0, all = o.bang }) end,
-  reject = function() M.reject() end,
+  reject = function(o) M.reject({ visual = o.range > 0, all = o.bang }) end,
   thread = function() M.thread() end,
   orphans = function() M.orphans() end,
   list = function() M.list() end,
