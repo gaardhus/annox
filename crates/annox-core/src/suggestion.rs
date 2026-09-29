@@ -4,9 +4,9 @@ use crate::anchor::{self, nearest, Anchor, Resolution, State};
 use crate::text::Text;
 
 /// Whether a resolution makes a suggestion applicable (§4.2): exact, or
-/// relocated by step 2 or 3.
+/// relocated by step 2, 3, or 5.
 pub fn is_applicable(resolution: &Resolution) -> bool {
-    resolution.state != State::Orphaned && resolution.step <= 3
+    resolution.state != State::Orphaned && resolution.step != 4
 }
 
 /// A suggestion applied to a document (§4.3 step 2).

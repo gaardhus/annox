@@ -247,3 +247,9 @@ Measured with the reference implementation (`cargo run --release -p annox-core -
 A mode in which typing makes suggestions is described in a non-normative §4.6. Edits are turned into suggestions when the user pauses, and the document keeps its text. A change touching one of the user's suggestions from the same session extends it with a `retarget` event. §4.2.1 now only requires marking re-targets made by someone other than the author.
 
 **Why:** it matches online editors, and needs no new events or protocol methods. Keeping the buffer's text unchanged, rather than holding the proposed text until the user saves, means the file can never end up containing suggested text, and anchors stay exact. `retarget` already changes the anchor and the replacement together, which is exactly what extending a suggestion does. Showing "re-targeted by" for an author's own edits would mark nearly every suggestion made this way.
+
+## D42. Points relocate by partial context (2026-09-29)
+
+Resolution gains step 5 for point anchors (empty quotes, such as insertions and point comments). A point is placed at the single offset with the best context score, if that score is at least half of the stored prefix and suffix together. Orphaned is now step 6. Suggestions relocated by step 5 are applicable, but bulk accept leaves them for individual review, like step 3. See §3.7.2 and §4.2.
+
+**Why:** found in use. Changing "What" to "How" a few characters before an insertion orphaned it, because steps 2 and 4 need the whole context and step 3 needs a quote. Replacements survived the same edit through step 3, so insertions were much more fragile. Step 5 is the point counterpart of step 3. It runs after step 4 so that every anchor that resolved before resolves the same way, including insertions next to re-wrapped whitespace, which stay stale (D36). The half-context minimum keeps a point from moving to a place that merely shares a few characters with its context.

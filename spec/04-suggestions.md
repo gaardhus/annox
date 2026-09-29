@@ -54,11 +54,11 @@ Whether a suggestion can be applied is **derived** from the current document. It
 | Resolution | Applicability |
 |---|---|
 | `exact` (step 0 or 1) | **applicable** |
-| `relocated` by step 2 or 3 | **applicable** |
+| `relocated` by step 2, 3, or 5 | **applicable** |
 | `relocated` by step 4 | **stale** |
 | `orphaned` | **stale** |
 
-In steps 0–3, the resolved range contains exactly `quote.exact`, so the text the suggestion was written against is still intact. In step 4 the whitespace differs, so the suggestion author never saw the text it would now replace. For insertions, which relocate by the point variant of step 4, the surrounding whitespace changed, and it's unclear exactly where in the whitespace the author meant to insert. They are stale for the same reason, and are shown at their relocated position so that they can be re-targeted easily.
+In steps 0–3 and 5, the resolved range contains exactly `quote.exact`, so the text the suggestion was written against is still intact. For step 5 that text is empty: an insertion whose surrounding text was partly edited still inserts at a position its author saw. In step 4 the whitespace differs, so the suggestion author never saw the text it would now replace. For insertions, which relocate by the point variant of step 4, the surrounding whitespace changed, and it's unclear exactly where in the whitespace the author meant to insert. They are stale for the same reason, and are shown at their relocated position so that they can be re-targeted easily.
 
 Applicability only matters while the suggestion is `open`. Clients SHOULD show stale suggestions differently from applicable ones, and MUST NOT offer to apply a stale suggestion (§4.3).
 
@@ -66,7 +66,7 @@ Applicability only matters while the suggestion is `open`. Clients SHOULD show s
 
 §3.8 allows clients to rewrite anchors. For suggestions that is restricted further:
 
-- A client MAY rewrite the anchor of an open suggestion after it is relocated by step 2 or 3. These steps leave `quote.exact` unchanged.
+- A client MAY rewrite the anchor of an open suggestion after it is relocated by step 2, 3, or 5. These steps leave `quote.exact` unchanged.
 - A client MUST NOT rewrite the anchor of a suggestion after step 4 or after a confirmed suggested location (§3.7.4). Those rewrites change `quote.exact`, and the suggestion would silently become applicable to text its author never saw.
 
 A stale suggestion becomes applicable again only when a user **re-targets** it. That means updating the anchor and reviewing `replacement` in the same action, recorded as a `retarget` event (§2.4).
@@ -86,7 +86,7 @@ To accept an open suggestion, a client MUST:
 
 Steps 3 and 4 write two different files and can't be atomic. Clients SHOULD write the document first. If step 4 is lost, the suggestion stays `open` with its text already applied, and it becomes stale because its quote is gone. A client MAY detect this case with an applied-text search (§4.3.3), and offer to mark the suggestion accepted.
 
-**Location confirmation.** Relocation by step 3 can pick a different occurrence than the author intended, if the original was deleted and the same text appears elsewhere. Accepting one suggestion at a time is safe, because the user accepts it at the location shown to them. A client that accepts many suggestions without showing each one ("accept all") SHOULD apply only suggestions whose resolution is step 0, 1, or 2. It SHOULD leave step-3 relocations for individual review.
+**Location confirmation.** Relocation by step 3 can pick a different occurrence than the author intended, if the original was deleted and the same text appears elsewhere. Step 5 relies on partial context in the same way. Accepting one suggestion at a time is safe, because the user accepts it at the location shown to them. A client that accepts many suggestions without showing each one ("accept all") SHOULD apply only suggestions whose resolution is step 0, 1, or 2. It SHOULD leave step-3 and step-5 relocations for individual review.
 
 ### 4.3.1 Overlapping suggestions
 

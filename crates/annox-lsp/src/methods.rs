@@ -310,7 +310,7 @@ impl Server<'_> {
         }
     }
 
-    /// Bulk accept (§6.6.2): skips stale, step-3, and overlapping
+    /// Bulk accept (§6.6.2): skips stale, step-3 and step-5, and overlapping
     /// suggestions, then applies the rest as one edit.
     fn m_accept_all(&mut self, command: RequestId, params: &Value) {
         let ids: Vec<String> = match serde_json::from_value(params["annotations"].clone()) {
@@ -338,7 +338,7 @@ impl Server<'_> {
             let replacement = item.state["edit"]["replacement"].as_str().unwrap_or_default().to_owned();
             let error = match suggestion::apply(&a.text, &item.target, &replacement) {
                 Err(_) => Some((STALE_SUGGESTION, "the suggestion is stale")),
-                Ok(applied) if applied.resolution.step >= 3 => Some((NEEDS_REVIEW, "relocated by quote only; accept individually")),
+                Ok(applied) if applied.resolution.step >= 3 => Some((NEEDS_REVIEW, "relocated by partial context; accept individually")),
                 Ok(applied) if edits.iter().any(|(s, e, _)| overlaps((*s, *e), (applied.start, applied.end))) => {
                     Some((OVERLAP, "overlaps a suggestion already in this batch"))
                 }

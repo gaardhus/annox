@@ -279,7 +279,7 @@
     },
     {
       "name": "point-orphaned",
-      "description": "Point anchor whose surrounding text changed: steps 3 and 4 do not apply, orphaned.",
+      "description": "Point anchor whose surrounding text changed: steps 2 and 4 find no full context, and step 5 keeps only 8 of 23 context code points (\"\\n\" and \"second \"), below the 12 required. Orphaned.",
       "document": "first row\nsecond row\n",
       "anchor": {
         "path": "doc.txt",
@@ -350,6 +350,56 @@
         "state": "relocated",
         "start": 10,
         "end": 10
+      }
+    },
+    {
+      "name": "point-partial-context",
+      "description": "Point anchor after an edit inside its prefix (\"What\" -> \"How\"): no full context for steps 2 and 4. Step 5: offset 38 keeps 14 prefix code points (\" are you doing\") and all 32 suffix code points, 46 of 64, the unique best and at least 32.",
+      "document": "print(\"Hello Tobias! How are you doing?\")\nplt.plot([1, 2, 3], [1, 2, 3])\n",
+      "anchor": {
+        "path": "app.py",
+        "version": "sha256:baa60927038ce2b675e6988ae897488ececd310cf3d936e9fda532e661693837",
+        "selectors": {
+          "position": {
+            "start": 39,
+            "end": 39
+          },
+          "quote": {
+            "exact": "",
+            "prefix": "Hello Tobias! What are you doing",
+            "suffix": "?\")\nplt.plot([1, 2, 3], [1, 2, 3"
+          }
+        }
+      },
+      "expected": {
+        "state": "relocated",
+        "start": 38,
+        "end": 38
+      }
+    },
+    {
+      "name": "point-partial-ambiguous",
+      "description": "Point anchor whose context survives equally in two places: offsets 4 and 12 each keep the whole prefix \"cat \" and none of the suffix, scoring 4 of 8. Step 5 needs a unique best, so orphaned.",
+      "document": "cat mat\ncat bat\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:eea04df97fa4b28987e1f1ae7f53db34324eb8a3057372d0ad00e4cb09791573",
+        "selectors": {
+          "position": {
+            "start": 4,
+            "end": 4
+          },
+          "quote": {
+            "exact": "",
+            "prefix": "cat ",
+            "suffix": "sat\n"
+          }
+        }
+      },
+      "expected": {
+        "state": "orphaned",
+        "start": null,
+        "end": null
       }
     },
     {

@@ -113,17 +113,19 @@ Implementations MUST produce the same result as the following steps, run in orde
 4. **Whitespace-insensitive search.**
    - *Quote* (`q` not empty): if `W(q)` contains at least one non-whitespace code point, find every occurrence of `W(q)` in `W(D)` and select by context, using `W(p)` and `W(x)` scored against `W(D)`. If an occurrence `[i, j)` of `W(D)` is selected, map it back to *D* as `[a_i, b_{j−1})`. The result is that range, `relocated`.
    - *Point* (`q` empty): let `P = W(p)` and `X = W(x)`. If `P` ends with a space and `X` starts with one, the point sat inside a single whitespace run. In that case the pattern is `P + X[1:]`, and each match places the point at the start of the run: `a_{i+len(P)−1}`. Otherwise the pattern is `P + X`, and each match places the point at `a_{i+len(P)}`, or at `len(D)` if that index is `len(W(D))`. If the pattern contains at least one non-whitespace code point and has at least one occurrence *i* in `W(D)`, take the nearest of the resulting points `c`. The result is `[c, c)`, `relocated`.
-5. Otherwise the result is `orphaned`.
+5. **Partial context search** (`q` empty). Let `need = ⌈(len(p) + len(x)) / 2⌉`. If `need > 0`, compute the context score of the empty occurrence `[c, c)` (§3.7.1), using `p` and `x`, for every offset `0 ≤ c ≤ len(D)`. If exactly one offset has the highest score, and that score is at least `need`, the result is `[c, c)`, `relocated`.
+6. Otherwise the result is `orphaned`.
 
 Notes:
 
-- For a point range (`q` empty), step 2 searches for `p + x`, step 3 is skipped, and step 4 uses its point variant.
+- For a point range (`q` empty), step 2 searches for `p + x`, step 3 is skipped, step 4 uses its point variant, and step 5 applies. For a non-empty quote, step 5 is skipped.
+- In step 5, an offset scoring at least `need` has at least `⌈need / 2⌉` code points of the prefix directly before it or of the suffix directly after it. Implementations can therefore score only the offsets next to an occurrence of the last `⌈need / 2⌉` code points of `p`, or of the first `⌈need / 2⌉` of `x`.
 - In step 1, a slice that extends past either end of *D* never matches a non-empty `p` or `x`.
 - In step 0, if the stored anchor is internally inconsistent (`e > len(D)` or `D[s:e] ≠ q`), the anchor is malformed. Implementations MUST skip step 0 and continue with step 1.
 - Apart from the collapsing in step 4, all string comparisons compare code points exactly.
 - Step 4 only affects matching. The resulting range covers the document's real text, whitespace included, and that text may differ from `q` in its whitespace.
 
-> **Rationale.** Step 3 relocates a quote that appears more than once only if its surrounding text clearly picks one occurrence. Otherwise a comment on a common word such as "the" could silently jump to the wrong place. Step 4 rescues annotations, including point anchors, in hard-wrapped Markdown or LaTeX after the paragraph is re-wrapped.
+> **Rationale.** Step 3 relocates a quote that appears more than once only if its surrounding text clearly picks one occurrence. Otherwise a comment on a common word such as "the" could silently jump to the wrong place. Step 4 rescues annotations, including point anchors, in hard-wrapped Markdown or LaTeX after the paragraph is re-wrapped. A point has no quote to search for, so without step 5 any edit within its context, such as changing a word a few characters before an insertion, would orphan it. Step 5 is the point counterpart of step 3: it relocates a point when enough of its context still sits directly around one position. Requiring half the context keeps a point from jumping to an unrelated place when its whole neighborhood was rewritten.
 
 ### 3.7.3 Orphaned annotations
 
@@ -137,7 +139,7 @@ For an orphaned annotation, a client MAY run any heuristic, such as fuzzy matchi
 
 Over time, stored anchors drift away from the current document. Rewriting them keeps later resolutions fast (step 0) and accurate.
 
-- If the state is `relocated`, a client MAY rewrite the anchor. It does this by creating a fresh anchor (§3.6) for the resolved range in *D*. After steps 2–3, `quote.exact` is unchanged by construction. After step 4, it takes the current text of the range, including its whitespace.
+- If the state is `relocated`, a client MAY rewrite the anchor. It does this by creating a fresh anchor (§3.6) for the resolved range in *D*. After steps 2, 3, and 5, `quote.exact` is unchanged by construction. After step 4, it takes the current text of the range, including its whitespace.
 - If the state is `exact`, a client SHOULD NOT rewrite the anchor. The location hasn't changed, and rewriting would only add events (§2.4, `reanchor`) and diffs to shared files.
 - If a user confirms a suggested location, the client MAY rewrite the anchor for the confirmed range. In this case `quote.exact` takes the current text of that range, which may differ from the original quote.
 - A client MUST NOT rewrite an anchor based on an unconfirmed suggested location.

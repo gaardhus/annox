@@ -190,7 +190,7 @@
       },
       "expected": {
         "applicability": "stale",
-        "resolutionStep": 5,
+        "resolutionStep": 6,
         "result": null
       }
     },
@@ -224,6 +224,38 @@
         "applicability": "stale",
         "resolutionStep": 4,
         "result": null
+      }
+    },
+    {
+      "name": "insert-partial-context",
+      "description": "Insertion whose prefix was edited nearby: relocated by step 5, and still applicable.",
+      "document": "print(\"Hello Tobias! How are you doing?\")\nplt.plot([1, 2, 3], [1, 2, 3])\n",
+      "suggestion": {
+        "kind": "suggestion",
+        "target": {
+          "path": "app.py",
+          "version": "sha256:baa60927038ce2b675e6988ae897488ececd310cf3d936e9fda532e661693837",
+          "selectors": {
+            "position": {
+              "start": 39,
+              "end": 39
+            },
+            "quote": {
+              "exact": "",
+              "prefix": "Hello Tobias! What are you doing",
+              "suffix": "?\")\nplt.plot([1, 2, 3], [1, 2, 3"
+            }
+          }
+        },
+        "edit": {
+          "replacement": " today"
+        },
+        "status": "open"
+      },
+      "expected": {
+        "applicability": "applicable",
+        "resolutionStep": 5,
+        "result": "print(\"Hello Tobias! How are you doing today?\")\nplt.plot([1, 2, 3], [1, 2, 3])\n"
       }
     },
     {
@@ -286,7 +318,7 @@
       },
       "expected": {
         "applicability": "stale",
-        "resolutionStep": 5,
+        "resolutionStep": 6,
         "result": null
       }
     },

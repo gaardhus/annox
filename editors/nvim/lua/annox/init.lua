@@ -47,6 +47,7 @@ local function set_highlights()
     AnnoxPresence = "DiagnosticVirtualTextHint",
     AnnoxPresenceRange = "Visual",
     AnnoxInsertion = "Added",
+    AnnoxOrphans = "DiagnosticVirtualTextWarn",
   }
   for group, link in pairs(links) do
     vim.api.nvim_set_hl(0, group, { default = true, link = link })
@@ -90,6 +91,19 @@ local function inline(bufnr, a)
   return a.kind == "suggestion" and a.applicable and (M.config.inline_suggestions or M.suggesting[bufnr] ~= nil)
 end
 
+--- The number of open annotations in `bufnr` whose text could not be found,
+--- e.g. for a statusline.
+function M.orphan_count(bufnr)
+  local state = M.state[bufnr or vim.api.nvim_get_current_buf()]
+  local n = 0
+  for _, a in ipairs(state and state.annotations or {}) do
+    if a.resolution and a.resolution.state == "orphaned" then
+      n = n + 1
+    end
+  end
+  return n
+end
+
 --- Draws the annotations of `bufnr` as extmarks.
 function M.render(bufnr)
   vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
@@ -100,6 +114,16 @@ function M.render(bufnr)
   end
   local enc = client.offset_encoding
   local line_count = vim.api.nvim_buf_line_count(bufnr)
+  -- Orphaned annotations have no place in the text, so say so above it (§3.7.3).
+  local orphans = M.orphan_count(bufnr)
+  if orphans > 0 then
+    local text = string.format(
+      "⚠ %d annotation%s could not be located (:Annox orphans)",
+      orphans,
+      orphans == 1 and "" or "s"
+    )
+    vim.api.nvim_buf_set_extmark(bufnr, ns, 0, 0, { virt_lines = { { { text, "AnnoxOrphans" } } }, virt_lines_above = true })
+  end
   for _, a in ipairs(state.annotations) do
     local r = a.resolution and a.resolution.range
     if r and r.start.line < line_count then

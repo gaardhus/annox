@@ -70,11 +70,11 @@ vim.keymap.set("n", "<leader>aa", "<cmd>Annox accept<cr>")
 - Accepting a suggestion still edits the buffer.
 - Suggestions are shared right away. Suggestion mode has no private-draft variant.
 
-For a statusline, `require("annox").is_suggesting()` tells whether the current buffer is in suggestion mode.
+For a statusline, `require("annox").is_suggesting()` tells whether the current buffer is in suggestion mode, and `require("annox").orphan_count()` how many annotations could not be located. The latter are also announced in a line above the text.
 
 When the workspace syncs through a hub, collaborators' cursors appear as `▏Name` tags, and your own cursor is shared unless `presence = false`.
 
-Highlight groups, most linked to diagnostic groups by default: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, `AnnoxPresenceRange`, and, for inline suggestions, `AnnoxDeletion` and `AnnoxInsertion`.
+Highlight groups, most linked to diagnostic groups by default: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, `AnnoxPresenceRange`, for inline suggestions, `AnnoxDeletion` and `AnnoxInsertion`, and `AnnoxOrphans` for the notice about annotations that could not be located.
 
 ## Tests
 

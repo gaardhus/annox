@@ -148,5 +148,21 @@ vim.api.nvim_win_set_cursor(0, { 1, 0 })
 keys("x")
 check(text() == "he quick very nice brown fox.", "plain editing again")
 
+-- Orphaned annotations are announced above the text, not silently dropped.
+annox.comment({ range = { start = { line = 0, character = 4 }, ["end"] = { line = 0, character = 9 } }, body = "Fast?" })
+wait("comment", function()
+  return #annox.state[buf].annotations == 1
+end)
+vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "Something else entirely." })
+wait("orphan notice", function()
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, vim.api.nvim_get_namespaces().annox, 0, -1, { details = true })) do
+    local lines = m[4].virt_lines
+    if lines and lines[1][1][1]:find("1 annotation could not be located", 1, true) then
+      return true
+    end
+  end
+end)
+check(annox.orphan_count(buf) == 1, "orphan count")
+
 print("annox nvim suggesting: OK")
 vim.cmd.qall({ bang = true })

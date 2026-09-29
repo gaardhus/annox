@@ -61,7 +61,7 @@ pub enum State {
 }
 
 /// The result of resolving an anchor: its state, the range (absent when
-/// orphaned), and the step of §3.7.2 that produced it (5 when orphaned).
+/// orphaned), and the step of §3.7.2 that produced it (6 when orphaned).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Resolution {
     pub state: State,
@@ -78,7 +78,7 @@ impl Resolution {
         Resolution { state: State::Relocated, range: Some((start, end)), step }
     }
 
-    const ORPHANED: Resolution = Resolution { state: State::Orphaned, range: None, step: 5 };
+    const ORPHANED: Resolution = Resolution { state: State::Orphaned, range: None, step: 6 };
 }
 
 /// Resolves `anchor` against the current document `doc` (§3.7.2).
@@ -166,9 +166,46 @@ pub fn resolve(doc: &Text, anchor: &Anchor) -> Resolution {
                 return Resolution::relocated(c, c, 4);
             }
         }
+        // Step 5: partial context search for points.
+        if let Some(c) = partial_context(doc, &p, &x) {
+            return Resolution::relocated(c, c, 5);
+        }
     }
 
     Resolution::ORPHANED
+}
+
+/// Step 5 (§3.7.2): the single offset with the best context score, if that
+/// score is at least half of `len(p) + len(x)`.
+///
+/// An offset scoring at least `need` has at least `half = ceil(need / 2)` of
+/// the prefix before it or of the suffix after it, so only offsets next to an
+/// occurrence of `p`'s last `half` or `x`'s first `half` code points can win.
+fn partial_context(doc: &Text, p: &[char], x: &[char]) -> Option<usize> {
+    let need = (p.len() + x.len()).div_ceil(2);
+    if need == 0 {
+        return None;
+    }
+    let half = need.div_ceil(2);
+    let as_string = |chars: &[char]| chars.iter().collect::<String>();
+    let mut candidates = Vec::new();
+    if p.len() >= half {
+        let tail = as_string(&p[p.len() - half..]);
+        candidates.extend(doc.haystack().find_all(&tail).into_iter().map(|i| i + half));
+    }
+    if x.len() >= half {
+        candidates.extend(doc.haystack().find_all(&as_string(&x[..half])));
+    }
+    candidates.sort_unstable();
+    candidates.dedup();
+    let scored: Vec<(usize, usize)> =
+        candidates.into_iter().map(|c| (context_score(&doc.chars, c, c, p, x), c)).collect();
+    let best = scored.iter().map(|&(sc, _)| sc).max()?;
+    let mut winners = scored.iter().filter(|&&(sc, _)| sc == best);
+    match (winners.next(), winners.next()) {
+        (Some(&(_, c)), None) if best >= need => Some(c),
+        _ => None,
+    }
 }
 
 /// The candidate closest to `s`, with ties going to the lower offset (§3.7.1).
@@ -258,5 +295,16 @@ mod tests {
         );
         let r = resolve(&edited, &anchor);
         assert_eq!((r.state, r.range, r.step), (State::Relocated, Some((41, 54)), 3));
+    }
+
+    #[test]
+    fn point_survives_nearby_edit() {
+        // Changing "What" leaves 14 of the prefix's 32 code points and all
+        // of the suffix: 46 of 64.
+        let original = Text::from_raw("print(\"Hello Tobias! What are you doing?\")\nplt.plot([1, 2, 3], [1, 2, 3])\n");
+        let anchor = create(&original, 39, 39, "app.py");
+        let edited = Text::from_raw("print(\"Hello Tobias! How are you doing?\")\nplt.plot([1, 2, 3], [1, 2, 3])\n");
+        let r = resolve(&edited, &anchor);
+        assert_eq!((r.state, r.range, r.step), (State::Relocated, Some((38, 38)), 5));
     }
 }
