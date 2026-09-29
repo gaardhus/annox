@@ -13,11 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 """
 body = """
+{# Keep a blank line after the header; `trim` would drop a leading newline. #}
 ## [{{ version }}]{%- if release_link -%}({{ release_link }}){% endif %} - {{ timestamp | date(format="%Y-%m-%d") }}
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | striptags | trim | upper_first }}
 {% for commit in commits %}
-- {% if commit.scope %}*({{ commit.scope }})* {% endif %}{{ commit.message | upper_first }}\
+- {% if commit.scope %}*({{ commit.scope }})* {% endif %}{{ commit.message | split(pat="\n") | first | trim | upper_first }}\
   {% if commit.breaking and commit.breaking_description != commit.message %}: {{ commit.breaking_description }}{% endif %}\
   {% if commit.remote.pr_number %} ([#{{ commit.remote.pr_number }}]({{ remote.link }}/pull/{{ commit.remote.pr_number }})){% endif %}
 {%- endfor %}
