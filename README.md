@@ -56,7 +56,7 @@ annox status ID resolved
 annox accept ID
 ```
 
-Write commands use `--author`/`--name`, or `ANNOX_AUTHOR`/`ANNOX_AUTHOR_NAME`, and fall back to git's identity. Give an agent its own id, for example `ANNOX_AUTHOR=urn:agent:claude`, so its annotations are distinguishable from yours. A running `annox lsp` picks up the changes, so they appear in the editor. Run `annox help` for every command.
+Write commands use `--author`/`--name`, or `ANNOX_AUTHOR`/`ANNOX_AUTHOR_NAME`, and otherwise your [configured identity](#configuration). Give an agent its own id, for example `ANNOX_AUTHOR=urn:agent:claude`, so its annotations are distinguishable from yours. A running `annox lsp` picks up the changes, so they appear in the editor. Run `annox help` for every command.
 
 ### Agents
 
@@ -88,7 +88,7 @@ In `.annox/annox.json`, which is safe to commit:
 { "format": 1, "sync": { "url": "wss://hub.example.org/w/my-paper" } }
 ```
 
-Each user adds the hub to `~/.config/annox/credentials.json`, which is never committed:
+Each user adds the hub to their [credentials file](#configuration), which is never committed:
 
 ```json
 { "hubs": { "wss://hub.example.org/w/my-paper": { "token": "…" } } }
@@ -99,4 +99,32 @@ The server syncs only with hubs listed there. Remote hubs must use `wss://`, and
 ## Editor support
 
 - **Neovim:** [`editors/nvim/`](editors/nvim/README.md) is a plugin covering the full workflow: highlights, comments and suggestions, threads, accept and reject, suggestion mode, local drafts, re-targeting, conflict resolution, and history.
-- **Any other LSP editor:** point it at `annox lsp` for the plain-LSP features.
+- **Any other LSP editor:** point it at `annox lsp` for the plain-LSP features. It accepts `initializationOptions` of the form `{ "annox": { "author": { "id": "…", "name": "…" }, "diagnostics": true } }` (§6.2). Both are optional.
+
+## Configuration
+
+annox reads configuration from four places:
+
+| Where                              | Scope                    | Settings                                                                                              |
+| ---------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `.annox/annox.json`                | The workspace, committed | `format` and `sync.url`, the hub to sync with (see [Live sync](#live-sync))                           |
+| `~/.config/annox/config.json`      | You, on every workspace  | `author`, your identity                                                                               |
+| `~/.config/annox/credentials.json` | You, never committed     | `hubs`, a token per hub URL (see [Live sync](#live-sync))                                             |
+| Editor settings                    | One editor               | The LSP `initializationOptions` above, or the [Neovim plugin's options](editors/nvim/README.md#setup) |
+
+The user files live under `$XDG_CONFIG_HOME/annox/` when it's set. `ANNOX_CONFIG_FILE` and `ANNOX_CREDENTIALS_FILE` point at a file elsewhere. A missing file is the same as an empty one.
+
+`config.json` sets the identity your annotations are written as:
+
+```json
+{ "author": { "id": "mailto:ada@example.org", "name": "Ada Lovelace" } }
+```
+
+The identity is taken from the first of these that is set:
+
+1. The command: `--author`/`--name` for the CLI and `annox mcp`, or the editor's `author` option for `annox lsp`.
+2. `ANNOX_AUTHOR` and `ANNOX_AUTHOR_NAME`.
+3. `author` in `config.json`.
+4. Git's `user.email` and `user.name`, as `mailto:` plus the email.
+
+A name alone only renames the identity from the next step down. An id without a name stands on its own, so an agent's `ANNOX_AUTHOR=urn:agent:claude` never picks up your name. If `config.json` is invalid, the CLI refuses to write, and `annox lsp` logs a warning and uses git's identity.

@@ -29,7 +29,8 @@ pub const USAGE: &str = "  annox init [DIR]                            create a 
   annox restore ID                            undo a delete
 
   Write commands take --author ID and --name NAME, or read ANNOX_AUTHOR and
-  ANNOX_AUTHOR_NAME, and otherwise use git's identity.";
+  ANNOX_AUTHOR_NAME, then the author in ~/.config/annox/config.json, and
+  otherwise use git's identity.";
 
 /// Parsed arguments: positionals, `--flag value` options, and switches.
 struct Args {
@@ -114,7 +115,7 @@ pub fn run(args: &[String], cwd: &Path) -> anyhow::Result<Value> {
             if state["kind"] == "reply" {
                 bail!("{id} is a reply; reply to its parent {}", state["parent"].as_str().unwrap_or_default());
             }
-            let event = ops::create_reply(&ws, &index, id, args.require("body")?, false, &author(&args, &ws))?;
+            let event = ops::create_reply(&ws, &index, id, args.require("body")?, false, &author(&args, &ws)?)?;
             Ok(json!({ "id": event.id }))
         }
         "edit" => {
@@ -135,7 +136,7 @@ pub fn run(args: &[String], cwd: &Path) -> anyhow::Result<Value> {
             if fields.is_empty() {
                 bail!("nothing to change: pass --body or --label");
             }
-            ops::append_event(&ws, &index, id, "edit", fields, &author(&args, &ws))?;
+            ops::append_event(&ws, &index, id, "edit", fields, &author(&args, &ws)?)?;
             Ok(json!({ "id": id }))
         }
         "status" => {
@@ -159,7 +160,7 @@ pub fn run(args: &[String], cwd: &Path) -> anyhow::Result<Value> {
                 bail!("{id} is accepted, which is final; make a new suggestion to undo it");
             }
             let fields = Map::from_iter([("status".into(), json!(status))]);
-            ops::append_event(&ws, &index, id, "status", fields, &author(&args, &ws))?;
+            ops::append_event(&ws, &index, id, "status", fields, &author(&args, &ws)?)?;
             Ok(json!({ "id": id, "status": status }))
         }
         "accept" => {
@@ -175,28 +176,18 @@ pub fn run(args: &[String], cwd: &Path) -> anyhow::Result<Value> {
             let (ws, index) = open_workspace(&cwd)?;
             let id = args.positional(0, "annotation id")?;
             derived(&index, id)?;
-            ops::append_event(&ws, &index, id, command, Map::new(), &author(&args, &ws))?;
+            ops::append_event(&ws, &index, id, command, Map::new(), &author(&args, &ws)?)?;
             Ok(json!({ "id": id, "deleted": command == "delete" }))
         }
         other => bail!("unknown command {other}"),
     }
 }
 
-/// The author to write events as: flags, then environment, then git (§2.7).
-fn author(args: &Args, ws: &Workspace) -> Value {
-    let id = args.get("author").map(str::to_owned).or_else(|| std::env::var("ANNOX_AUTHOR").ok());
-    let name = args.get("name").map(str::to_owned).or_else(|| std::env::var("ANNOX_AUTHOR_NAME").ok());
-    match (id, name) {
-        (Some(id), Some(name)) => json!({ "id": id, "name": name }),
-        (Some(id), None) => json!({ "id": id }),
-        (None, name) => {
-            let mut author = crate::default_author(&ws.root);
-            if let Some(name) = name {
-                author["name"] = json!(name);
-            }
-            author
-        }
-    }
+/// The author to write events as: flags, then environment, then the user
+/// config file, then git (§2.7).
+fn author(args: &Args, ws: &Workspace) -> anyhow::Result<Value> {
+    let get = |flag, var| args.get(flag).map(str::to_owned).or_else(|| std::env::var(var).ok().filter(|v| !v.is_empty()));
+    crate::resolve_author(get("author", "ANNOX_AUTHOR"), get("name", "ANNOX_AUTHOR_NAME"), &ws.root).map_err(|e| anyhow!(e))
 }
 
 fn no_workspace(from: &Path) -> anyhow::Error {
@@ -290,7 +281,7 @@ fn create(command: &str, args: &Args, cwd: &Path) -> anyhow::Result<Value> {
         local: args.switch("local"),
     };
     let index = Index::read(&ws);
-    let event = ops::create_annotation(&ws, &index, &rel, &text, &new, &author(args, &ws))?;
+    let event = ops::create_annotation(&ws, &index, &rel, &text, &new, &author(args, &ws)?)?;
     Ok(json!({ "id": event.id, "path": rel, "line": line_of(&text, start) }))
 }
 
@@ -410,7 +401,7 @@ fn move_target(command: &str, args: &Args, cwd: &Path) -> anyhow::Result<Value> 
     } else {
         "reanchor"
     };
-    ops::append_event(&ws, &index, id, event, fields, &author(args, &ws))?;
+    ops::append_event(&ws, &index, id, event, fields, &author(args, &ws)?)?;
     Ok(json!({ "id": id, "path": path, "line": line_of(&text, start) }))
 }
 
@@ -453,6 +444,6 @@ fn accept(args: &Args, cwd: &Path) -> anyhow::Result<Value> {
         ("status".into(), json!("accepted")),
         ("appliedVersion".into(), json!(applied.text.version)),
     ]);
-    ops::append_event(&ws, &index, id, "status", fields, &author(args, &ws))?;
+    ops::append_event(&ws, &index, id, "status", fields, &author(args, &ws)?)?;
     Ok(json!({ "id": id, "status": "accepted", "path": path, "appliedVersion": applied.text.version }))
 }

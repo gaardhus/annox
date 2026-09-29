@@ -23,10 +23,7 @@ pub fn path() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("ANNOX_CREDENTIALS_FILE") {
         return Some(PathBuf::from(p));
     }
-    let config = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
-    Some(config.join("annox").join("credentials.json"))
+    Some(annox_core::config::dir()?.join("credentials.json"))
 }
 
 /// The credential for hub `url`, if configured.

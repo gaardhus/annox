@@ -7,8 +7,10 @@
 //! - [`event`] and [`replay`]: the event model and deriving state (§2)
 //! - [`storage`]: reading and writing `.annox/` (§5)
 //! - [`ops`]: higher-level operations that write events
+//! - [`config`]: per-user configuration, outside any workspace
 
 pub mod anchor;
+pub mod config;
 pub mod event;
 pub mod ops;
 pub mod replay;

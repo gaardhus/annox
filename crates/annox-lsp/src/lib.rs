@@ -59,9 +59,33 @@ const INTERNAL_ERROR: i32 = -32603;
 
 type Failure = (i32, String);
 
-/// The identity to write events under when none is configured: git's, if
-/// `root` is in a git repository (§2.7).
-pub fn default_author(root: &Path) -> Value {
+/// The identity to write events under when the session doesn't give one:
+/// `ANNOX_AUTHOR` and `ANNOX_AUTHOR_NAME`, then the user config file, then git.
+pub fn default_author(root: &Path) -> Result<Value, String> {
+    let env = |key| std::env::var(key).ok().filter(|v| !v.is_empty());
+    resolve_author(env("ANNOX_AUTHOR"), env("ANNOX_AUTHOR_NAME"), root)
+}
+
+/// The identity for an explicit `id` and `name`, either of which may be
+/// missing. Without an `id`, the user config's author is used, then git's, with
+/// `name` replacing its name. An explicit `id` never borrows another
+/// identity's name.
+pub fn resolve_author(id: Option<String>, name: Option<String>, root: &Path) -> Result<Value, String> {
+    if let Some(id) = id {
+        return Ok(match name {
+            Some(name) => json!({ "id": id, "name": name }),
+            None => json!({ "id": id }),
+        });
+    }
+    let mut author = annox_core::config::load()?.author.unwrap_or_else(|| git_author(root));
+    if let Some(name) = name {
+        author["name"] = json!(name);
+    }
+    Ok(author)
+}
+
+/// Git's identity, if `root` is in a git repository (§2.7).
+pub fn git_author(root: &Path) -> Value {
     let git = |key: &str| {
         std::process::Command::new("git")
             .arg("-C")
@@ -152,6 +176,9 @@ pub fn run(connection: &Connection) -> anyhow::Result<()> {
     };
     if dynamic_watch {
         server.register_watcher();
+    }
+    if let Err(e) = annox_core::config::load() {
+        server.warn(format!("annox: ignoring the config file, {e}"));
     }
     server.main_loop()
 }
@@ -590,7 +617,8 @@ impl Server<'_> {
     }
 
     fn author(&self, ws: &Workspace) -> Value {
-        self.author.clone().unwrap_or_else(|| default_author(&ws.root))
+        // A broken config file was reported at startup; write as git's identity meanwhile.
+        self.author.clone().unwrap_or_else(|| default_author(&ws.root).unwrap_or_else(|_| git_author(&ws.root)))
     }
 
     fn write_event(&self, a: &Analysis, annotation: &str, kind: &str, fields: Map<String, Value>) -> Result<(), Failure> {

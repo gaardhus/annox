@@ -14,7 +14,7 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim), pointing at this directory
   config = function()
     require("annox").setup({
       cmd = { "/path/to/annox/target/release/annox", "lsp" },
-      -- author = { id = "mailto:you@example.org", name = "You" },  -- defaults to your git identity
+      -- author = { id = "mailto:you@example.org", name = "You" },  -- defaults to ~/.config/annox/config.json, then git
       -- presence = false,  -- stop sharing your cursor with collaborators on a sync hub
       -- inline_suggestions = true,  -- always draw suggestions inline, not only in suggestion mode
       -- suggest_undo_key = false,  -- keep `u` as plain undo in suggestion mode
