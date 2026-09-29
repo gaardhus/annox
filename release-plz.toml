@@ -2,6 +2,7 @@
 # Versions come from git tags; nothing is published to crates.io.
 [workspace]
 git_only = true
+changelog_config = "cliff.toml"
 changelog_update = false
 git_release_enable = false
 
