@@ -1,4 +1,5 @@
-# Changelog and release notes, rendered by release-plz with git-cliff.
+# Changelog, release notes, and version bumps, by git-cliff
+# (https://git-cliff.org) from .github/workflows/release.yml.
 # Groups are ordered by the HTML comment in their name, which the template strips.
 
 [changelog]
@@ -14,13 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 """
 body = """
 {# Keep a blank line after the header; `trim` would drop a leading newline. #}
-## [{{ version }}]{%- if release_link -%}({{ release_link }}){% endif %} - {{ timestamp | date(format="%Y-%m-%d") }}
+## [{{ version | trim_start_matches(pat="v") }}]\
+{%- if previous.version %}(https://github.com/gaardhus/annox/compare/{{ previous.version }}...{{ version }})\
+{%- else %}(https://github.com/gaardhus/annox/releases/tag/{{ version }}){% endif %} \
+- {{ timestamp | date(format="%Y-%m-%d") }}
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | striptags | trim | upper_first }}
 {% for commit in commits %}
 - {% if commit.scope %}*({{ commit.scope }})* {% endif %}{{ commit.message | split(pat="\n") | first | trim | upper_first }}\
-  {% if commit.breaking and commit.breaking_description != commit.message %}: {{ commit.breaking_description }}{% endif %}\
-  {% if commit.remote.pr_number %} ([#{{ commit.remote.pr_number }}]({{ remote.link }}/pull/{{ commit.remote.pr_number }})){% endif %}
+  {% if commit.breaking and commit.breaking_description != commit.message %}: {{ commit.breaking_description }}{% endif %}
 {%- endfor %}
 {% endfor %}
 """
@@ -29,8 +32,14 @@ trim = true
 [git]
 conventional_commits = true
 filter_unconventional = false
+# Only release tags; older per-crate tags such as `annox-core-v0.1.1` are ignored.
+tag_pattern = "^v[0-9]"
 # Keep breaking changes even if their type is otherwise skipped, e.g. `refactor!:`.
 protect_breaking_commits = true
+commit_preprocessors = [
+  # Squash merges end the title with the PR number: link it.
+  { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/gaardhus/annox/pull/${1}))" },
+]
 commit_parsers = [
   { field = "breaking", pattern = "true", group = "<!-- 0 -->Breaking changes" },
   { message = "^feat", group = "<!-- 1 -->Added" },
@@ -38,7 +47,14 @@ commit_parsers = [
   { message = "^perf", group = "<!-- 3 -->Performance" },
   { message = "^docs", group = "<!-- 4 -->Documentation" },
   { message = "^refactor", group = "<!-- 5 -->Changed" },
+  # Not user-facing, and release commits themselves.
   { message = "^(style|test|ci|build|chore)", skip = true },
+  { message = "^Merge pull request", skip = true },
   { message = ".*", group = "<!-- 6 -->Other" },
 ]
 sort_commits = "oldest"
+
+[bump]
+# While on 0.x: breaking changes and features bump the minor version, fixes the patch.
+features_always_bump_minor = true
+breaking_always_bump_major = false

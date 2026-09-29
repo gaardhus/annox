@@ -1,11 +1,12 @@
 [package]
 name = "annox-sync"
-version = "0.1.1"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [dependencies]
-annox-core = { version = "0.1.1", path = "../annox-core" }
+annox-core = { path = "../annox-core" }
 crossbeam-channel = "0.5"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 serde_json = "1.0.151"

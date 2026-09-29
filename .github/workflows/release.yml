@@ -1,5 +1,8 @@
 name: Release
 
+# Every push to main updates a release PR that bumps the version and the
+# changelog (git-cliff, cliff.toml). Merging it tags `vX.Y.Z`, creates the
+# GitHub release, and attaches binaries, once CI passes.
 on:
   push:
     branches: [main]
@@ -12,35 +15,39 @@ jobs:
     name: CI
     uses: ./.github/workflows/ci.yml
 
-  # Tag and create a GitHub release for any version not yet released.
+  # Release the version in Cargo.toml if it has no tag yet.
   release:
     name: Release
     needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      # release-plz looks up the PR each commit came from.
-      pull-requests: read
     outputs:
-      tag: ${{ steps.tag.outputs.tag }}
+      tag: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
-      - id: release-plz
-        uses: release-plz/action@v0.5
-        with:
-          command: release
+      - id: release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - id: tag
-        env:
-          RELEASES: ${{ steps.release-plz.outputs.releases }}
-        run: echo "tag=$(jq -r '.[] | select(.package_name == "annox-lsp") | .tag' <<< "${RELEASES:-[]}")" >> "$GITHUB_OUTPUT"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
+          tag="v$version"
+          if git rev-parse -q --verify "refs/tags/$tag" > /dev/null; then
+            echo "$tag is already released"
+            exit 0
+          fi
+          # The notes are the version's section of CHANGELOG.md, as merged.
+          awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on
+          ' CHANGELOG.md > notes.md
+          gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes-file notes.md
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-  # Open or update a PR that bumps versions and the changelog from Conventional Commits.
+  # Open or update the release PR, if there are changes worth releasing.
   release-pr:
     name: Release PR
     runs-on: ubuntu-latest
@@ -48,19 +55,48 @@ jobs:
       contents: write
       pull-requests: write
     concurrency:
-      group: release-plz-${{ github.ref }}
-      cancel-in-progress: false
+      group: release-pr
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
-          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - uses: release-plz/action@v0.5.139
+      - uses: taiki-e/install-action@v2.87.22
         with:
-          command: release-pr
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tool: git-cliff@2.14.2
+      - id: next
+        run: |
+          current="v$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          # The latest tag if nothing since it bumps the version (e.g. only `ci:` commits).
+          next=$(git cliff --bumped-version)
+          if [ "$next" = "$current" ]; then
+            echo "Nothing to release since $current"
+            exit 0
+          fi
+          sed -i "0,/^version = \".*\"$/s//version = \"${next#v}\"/" Cargo.toml
+          cargo update --workspace
+          git cliff --unreleased --tag "$next" --strip header -o section.md
+          python3 - <<'EOF'
+          from pathlib import Path
+          changelog = Path("CHANGELOG.md")
+          marker = "## [Unreleased]\n"
+          head, rest = changelog.read_text().split(marker, 1)
+          section = Path("section.md").read_text().strip()
+          changelog.write_text(f"{head}{marker}\n{section}\n\n{rest.lstrip()}")
+          EOF
+          echo "tag=$next" >> "$GITHUB_OUTPUT"
+      - if: steps.next.outputs.tag != ''
+        uses: peter-evans/create-pull-request@v8.1.1
+        with:
+          branch: release
+          title: "chore: release ${{ steps.next.outputs.tag }}"
+          commit-message: "chore: release ${{ steps.next.outputs.tag }}"
+          body-path: section.md
+          add-paths: |
+            Cargo.toml
+            Cargo.lock
+            CHANGELOG.md
 
   # Attach `annox` binaries to the release.
   binaries:

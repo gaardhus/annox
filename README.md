@@ -38,7 +38,7 @@ just hooks               # install the git hooks (needs prek and just)
 just check               # run the checks CI runs
 ```
 
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat: …`, `fix(nvim): …`). A commit-msg hook and CI check them with [committed](https://github.com/crate-ci/committed) (see `committed.toml`). Releases are automated: merging to `main` opens a release PR that bumps versions and updates `CHANGELOG.md`, and merging that PR tags `vX.Y.Z` and attaches `annox` binaries to the GitHub release.
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat: …`, `fix(nvim): …`). A commit-msg hook and CI check them with [committed](https://github.com/crate-ci/committed) (see `committed.toml`), and PR titles too, since PRs are squash-merged. Releases are automated: every push to `main` updates a release PR that bumps the version and `CHANGELOG.md` with [git-cliff](https://git-cliff.org) (see `cliff.toml`), and merging that PR tags `vX.Y.Z` and attaches `annox` binaries to the GitHub release. The binary, the crates, and the editor plugin share that one version; the spec is versioned separately.
 
 The server implements:
 

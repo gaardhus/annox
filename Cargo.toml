@@ -3,5 +3,8 @@ members = ["crates/annox-core", "crates/annox-lsp", "crates/annox-sync"]
 resolver = "2"
 
 [workspace.package]
+# The one version of annox; releases bump it (see .github/workflows/release.yml).
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
+publish = false
