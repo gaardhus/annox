@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # release-plz looks up the PR each commit came from.
+      pull-requests: read
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
