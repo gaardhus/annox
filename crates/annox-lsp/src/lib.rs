@@ -666,7 +666,7 @@ impl Server<'_> {
         let url = serde_json::from_str::<Value>(&marker).ok().and_then(|m| m["sync"]["url"].as_str().map(str::to_owned));
         let replica = url.and_then(|url| {
             let Some(credential) = annox_sync::credentials::lookup(&url) else {
-                self.log(format!("annox: {url} has no entry in the credentials file; not syncing"));
+                self.warn(format!("annox: {url} has no entry in the credentials file; not syncing"));
                 return None;
             };
             let config = ReplicaConfig { root: ws.root.clone(), url, token: credential.token, author: self.author(&ws) };
@@ -677,6 +677,10 @@ impl Server<'_> {
 
     fn log(&self, message: String) {
         self.send(Notification::new("window/logMessage".into(), json!({ "type": 3, "message": message })));
+    }
+
+    fn warn(&self, message: String) {
+        self.send(Notification::new("window/logMessage".into(), json!({ "type": 2, "message": message })));
     }
 
     fn on_sync(&mut self, event: FromReplica) {
