@@ -30,28 +30,28 @@ Changes others make to `.annox/`, such as a `git pull`, show up within a second 
 
 ## Commands
 
-| Command | Does |
-|---|---|
-| `:Annox init` | Create an annox workspace for this project and attach the server. |
-| `:Annox comment` | Comment on the cursor position, or on the selection when run from visual mode (`:'<,'>Annox comment`). |
-| `:Annox suggest` | Suggest a replacement for the selection. The prompt is pre-filled with the current text. |
-| `:Annox edit` | Edit the suggested text of the suggestion under the cursor, or the text of a comment, in a floating window. Esc (in normal mode) saves and closes, `:w` saves, `:q!` discards. |
-| `:Annox suggesting` | Turn suggestion mode on or off for the buffer (see below). |
-| `:Annox reply` | Reply to the thread under the cursor. |
-| `:Annox thread` | Show the thread under the cursor in a floating window. |
-| `:Annox accept` / `reject` | Accept or reject the suggestion under the cursor. Accepting edits the buffer, and you can undo as usual. |
-| `:'<,'>Annox accept` / `:Annox! accept` | Accept every suggestion touching the selection, or in the whole buffer, as one edit that a single undo reverts. If some suggestions moved because the text around them changed, you're asked once whether to accept them too. Stale or overlapping suggestions are skipped and reported. |
-| `:'<,'>Annox reject` / `:Annox! reject` | Reject every suggestion touching the selection, or in the whole buffer, after one confirmation. Rejected suggestions can be reopened one by one. |
-| `:Annox resolve` / `reopen` | Resolve or reopen a thread. |
-| `:'<,'>Annox resolve` / `:Annox! resolve` | Resolve every comment thread touching the selection, or in the whole buffer, after one confirmation. |
-| `:Annox orphans` | Pick from annotations whose text could no longer be found. |
-| `:Annox reattach` | Attach an orphaned comment to the selection. |
-| `:Annox retarget` | Point a stale suggestion at the selection, and review its replacement. |
-| `:Annox draft` | Like `comment`, but local-only: stored in the git-ignored `.annox/local/` and shown with ✎. |
-| `:Annox publish` | Publish the draft under the cursor. `:Annox! publish` publishes every draft in the buffer. |
-| `:Annox conflicts` | Resolve a conflicting field by picking one of the competing values or writing a merged version. Run it again for any other conflicting fields. If an accepted suggestion loses, you're offered to revert its edit. |
-| `:Annox history` | Show every event of the annotation under the cursor. |
-| `:Annox list` | Put the buffer's annotations in the quickfix list. |
+| Command                                   | Does                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:Annox init`                             | Create an annox workspace for this project and attach the server.                                                                                                                                                                                                                        |
+| `:Annox comment`                          | Comment on the cursor position, or on the selection when run from visual mode (`:'<,'>Annox comment`).                                                                                                                                                                                   |
+| `:Annox suggest`                          | Suggest a replacement for the selection. The prompt is pre-filled with the current text.                                                                                                                                                                                                 |
+| `:Annox edit`                             | Edit the suggested text of the suggestion under the cursor, or the text of a comment, in a floating window. Esc (in normal mode) saves and closes, `:w` saves, `:q!` discards.                                                                                                           |
+| `:Annox suggesting`                       | Turn suggestion mode on or off for the buffer (see below).                                                                                                                                                                                                                               |
+| `:Annox reply`                            | Reply to the thread under the cursor.                                                                                                                                                                                                                                                    |
+| `:Annox thread`                           | Show the thread under the cursor in a floating window.                                                                                                                                                                                                                                   |
+| `:Annox accept` / `reject`                | Accept or reject the suggestion under the cursor. Accepting edits the buffer, and you can undo as usual.                                                                                                                                                                                 |
+| `:'<,'>Annox accept` / `:Annox! accept`   | Accept every suggestion touching the selection, or in the whole buffer, as one edit that a single undo reverts. If some suggestions moved because the text around them changed, you're asked once whether to accept them too. Stale or overlapping suggestions are skipped and reported. |
+| `:'<,'>Annox reject` / `:Annox! reject`   | Reject every suggestion touching the selection, or in the whole buffer, after one confirmation. Rejected suggestions can be reopened one by one.                                                                                                                                         |
+| `:Annox resolve` / `reopen`               | Resolve or reopen a thread.                                                                                                                                                                                                                                                              |
+| `:'<,'>Annox resolve` / `:Annox! resolve` | Resolve every comment thread touching the selection, or in the whole buffer, after one confirmation.                                                                                                                                                                                     |
+| `:Annox orphans`                          | Pick from annotations whose text could no longer be found.                                                                                                                                                                                                                               |
+| `:Annox reattach`                         | Attach an orphaned comment to the selection.                                                                                                                                                                                                                                             |
+| `:Annox retarget`                         | Point a stale suggestion at the selection, and review its replacement.                                                                                                                                                                                                                   |
+| `:Annox draft`                            | Like `comment`, but local-only: stored in the git-ignored `.annox/local/` and shown with ✎.                                                                                                                                                                                              |
+| `:Annox publish`                          | Publish the draft under the cursor. `:Annox! publish` publishes every draft in the buffer.                                                                                                                                                                                               |
+| `:Annox conflicts`                        | Resolve a conflicting field by picking one of the competing values or writing a merged version. Run it again for any other conflicting fields. If an accepted suggestion loses, you're offered to revert its edit.                                                                       |
+| `:Annox history`                          | Show every event of the annotation under the cursor.                                                                                                                                                                                                                                     |
+| `:Annox list`                             | Put the buffer's annotations in the quickfix list.                                                                                                                                                                                                                                       |
 
 Suggested keymaps:
 
