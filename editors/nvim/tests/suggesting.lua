@@ -210,6 +210,19 @@ end)
 check(#prompts == 1 and prompts[1] == "Reject 2 suggestions?", "one prompt: " .. vim.inspect(prompts))
 check(text() == "he slow very nice brown cat.", "rejecting leaves the text")
 
+-- Bulk resolve works the same way for comment threads.
+annox.comment({ range = line_range(3, 7), body = "Slow?" })
+annox.comment({ range = line_range(24, 27), body = "Which cat?" })
+wait("two comments", function()
+  return #annox.state[buf].annotations == 2
+end)
+prompts = {}
+vim.cmd("Annox! resolve")
+wait("comments resolved", function()
+  return #annox.state[buf].annotations == 0
+end)
+check(#prompts == 1 and prompts[1] == "Resolve 2 comments?", "one prompt: " .. vim.inspect(prompts))
+
 -- Orphaned annotations are announced above the text, not silently dropped.
 annox.comment({ range = { start = { line = 0, character = 4 }, ["end"] = { line = 0, character = 9 } }, body = "Fast?" })
 wait("comment", function()

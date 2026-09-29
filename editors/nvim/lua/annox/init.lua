@@ -479,15 +479,14 @@ local function is_kind(kind, status)
   end
 end
 
-M.resolve = status_action("resolved", is_kind("comment", "open"))
 M.reopen = status_action("open", function(a)
   return a.status ~= "open"
 end)
 
---- The open suggestions shown in the buffer: those touching the last visual
---- selection with `visual`, and all of them otherwise. Nil if no server is
---- attached.
-local function open_suggestions(bufnr, visual)
+--- The open annotations of `kind` shown in the buffer: those touching the
+--- last visual selection with `visual`, and all of them otherwise. Nil if no
+--- server is attached.
+local function open_in_buffer(bufnr, kind, visual)
   local client = client_for(bufnr)
   if not client then
     return request(bufnr)
@@ -495,7 +494,7 @@ local function open_suggestions(bufnr, visual)
   local sel = visual and visual_range(bufnr, client.offset_encoding)
   return buffer_annotations(bufnr, function(a)
     local r = a.resolution and a.resolution.range
-    return a.kind == "suggestion"
+    return a.kind == kind
       and a.status == "open"
       and r ~= nil
       and (not sel or (before(r.start, sel["end"]) and before(sel.start, r["end"])))
@@ -578,7 +577,7 @@ function M.accept(opts)
   opts = opts or {}
   local bufnr = vim.api.nvim_get_current_buf()
   if opts.visual or opts.all then
-    local suggestions = open_suggestions(bufnr, opts.visual)
+    local suggestions = open_in_buffer(bufnr, "suggestion", opts.visual)
     return suggestions and accept_all(bufnr, suggestions, opts.confirmed)
   end
   with_annotation(opts, is_kind("suggestion", "open"), function(id)
@@ -586,35 +585,22 @@ function M.accept(opts)
   end)
 end
 
-local reject_one = status_action("rejected", is_kind("suggestion", "open"))
-
---- Rejects the suggestion under the cursor. With `visual`, rejects every open
---- suggestion touching the last visual selection, and with `all`, every open
---- suggestion in the buffer, after asking once unless `confirmed`. Rejecting
---- doesn't touch the text, so each is its own `status` event, and each can be
---- reopened. opts: { annotation?, visual?, all?, confirmed? }
-function M.reject(opts)
-  opts = opts or {}
-  local bufnr = vim.api.nvim_get_current_buf()
-  if not (opts.visual or opts.all) then
-    return reject_one(opts)
+--- Sets `status` on every annotation in `items`, one `status` event each,
+--- after asking once for more than one unless `confirmed`. `verb` and `noun`
+--- word the prompt and the report, e.g. "Reject" and "suggestion".
+local function set_status_all(bufnr, items, status, verb, noun, confirmed)
+  if #items == 0 then
+    return vim.notify(string.format("annox: no %ss to %s", noun, verb:lower()), vim.log.levels.INFO)
   end
-  local suggestions = open_suggestions(bufnr, opts.visual)
-  if not suggestions then
-    return
-  end
-  if #suggestions == 0 then
-    return vim.notify("annox: no suggestions to reject", vim.log.levels.INFO)
-  end
-  local function reject_all()
-    local client, pending, rejected = client_for(bufnr), #suggestions, 0
-    for _, a in ipairs(suggestions) do
-      client:request("annox/setStatus", { annotation = a.id, status = "rejected" }, function(err)
-        rejected = rejected + (err and 0 or 1)
+  local function run()
+    local client, pending, done = client_for(bufnr), #items, 0
+    for _, a in ipairs(items) do
+      client:request("annox/setStatus", { annotation = a.id, status = status }, function(err)
+        done = done + (err and 0 or 1)
         pending = pending - 1
         if pending == 0 then
-          local failed = #suggestions - rejected
-          local message = string.format("annox: rejected %d", rejected)
+          local failed = #items - done
+          local message = string.format("annox: %s %d", status, done)
           if failed > 0 then
             message = message .. string.format("; %d failed", failed)
           end
@@ -623,16 +609,38 @@ function M.reject(opts)
       end, bufnr)
     end
   end
-  if #suggestions == 1 or opts.confirmed then
-    return reject_all()
+  if #items == 1 or confirmed then
+    return run()
   end
-  local yes = string.format("Reject all %d", #suggestions)
-  vim.ui.select({ yes, "Cancel" }, { prompt = string.format("Reject %d suggestions?", #suggestions) }, function(choice)
+  local yes = string.format("%s all %d", verb, #items)
+  vim.ui.select({ yes, "Cancel" }, { prompt = string.format("%s %d %ss?", verb, #items, noun) }, function(choice)
     if choice == yes then
-      reject_all()
+      run()
     end
   end)
 end
+
+--- A status action on the annotation under the cursor that, with `visual` or
+--- `all`, applies to every open annotation of `kind` touching the last visual
+--- selection or in the buffer. These don't touch the text, so each is its own
+--- `status` event and can be reopened. opts: { annotation?, visual?, all?, confirmed? }
+local function bulk_status_action(kind, status, verb)
+  local one = status_action(status, is_kind(kind, "open"))
+  return function(opts)
+    opts = opts or {}
+    if not (opts.visual or opts.all) then
+      return one(opts)
+    end
+    local bufnr = vim.api.nvim_get_current_buf()
+    local items = open_in_buffer(bufnr, kind, opts.visual)
+    if items then
+      set_status_all(bufnr, items, status, verb, kind, opts.confirmed)
+    end
+  end
+end
+
+M.reject = bulk_status_action("suggestion", "rejected", "Reject")
+M.resolve = bulk_status_action("comment", "resolved", "Resolve")
 
 local function thread_lines(a)
   local lines = {}
@@ -1300,7 +1308,7 @@ local subcommands = {
   suggesting = function() M.suggest_mode() end,
   edit = function() M.edit() end,
   reply = function() M.reply() end,
-  resolve = function() M.resolve() end,
+  resolve = function(o) M.resolve({ visual = o.range > 0, all = o.bang }) end,
   reopen = function() M.reopen() end,
   accept = function(o) M.accept({ visual = o.range > 0, all = o.bang }) end,
   reject = function(o) M.reject({ visual = o.range > 0, all = o.bang }) end,
