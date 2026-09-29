@@ -341,6 +341,31 @@ pub fn derive_document(
     })
 }
 
+/// The events of annotation `id` in display order: topological along `after`
+/// links, ties by ascending id (§2.5.5).
+pub fn ordered_events(events: &[Event], id: &str) -> Vec<Event> {
+    let own = events.iter().filter(|e| e.annotation.as_deref() == Some(id));
+    let Some(log) = Log::build(own, id) else { return vec![] };
+    let mut remaining: BTreeMap<&str, usize> =
+        log.events.iter().map(|(k, e)| (*k, e.after.len())).collect();
+    let mut ready: BTreeSet<&str> = remaining.iter().filter(|(_, n)| **n == 0).map(|(k, _)| *k).collect();
+    let mut out = Vec::new();
+    while let Some(next) = ready.pop_first() {
+        remaining.remove(next);
+        out.push(log.events[next].clone());
+        for (k, e) in &log.events {
+            if e.after.iter().any(|a| a == next) {
+                let n = remaining.get_mut(k).expect("child not yet emitted");
+                *n -= 1;
+                if *n == 0 {
+                    ready.insert(k);
+                }
+            }
+        }
+    }
+    out
+}
+
 /// The heads of document record `id`, for the `after` of a new event.
 pub fn document_heads(events: &[Event], id: &str) -> Vec<String> {
     let own = events.iter().filter(|e| e.document.as_deref() == Some(id));

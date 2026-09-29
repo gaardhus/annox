@@ -97,6 +97,158 @@ pub fn create_annotation(
     Ok(event)
 }
 
+/// The folder of document `doc` in `area`, named after its current path, or
+/// `fallback` if the document has no known path.
+fn folder_for(index: &Index, doc: &str, area: Area, fallback: &str) -> String {
+    match index.documents.get(doc).and_then(|d| d.path.as_deref()) {
+        Some(path) => format!("{}{path}~{doc}", area_prefix(area)),
+        None => fallback.to_owned(),
+    }
+}
+
+fn not_found(what: &str) -> io::Error {
+    io::Error::new(io::ErrorKind::NotFound, format!("unknown {what}"))
+}
+
+/// Creates a reply to root `parent` (§2.4). The reply is local if asked, or
+/// if its parent is local (§5.11).
+pub fn create_reply(
+    ws: &Workspace,
+    index: &Index,
+    parent: &str,
+    body: &str,
+    local: bool,
+    author: &Value,
+) -> io::Result<Event> {
+    let (_, parent_loc) = index.events.get(parent).ok_or_else(|| not_found("annotation"))?;
+    let area = if local || parent_loc.area == Area::Local { Area::Local } else { Area::Shared };
+    let doc = index.canonical(&parent_loc.document);
+    let id = crate::new_id();
+    let event = Event {
+        id: id.clone(),
+        annotation: Some(id),
+        document: None,
+        after: vec![],
+        kind: "create".into(),
+        author: author.clone(),
+        time: Event::now(),
+        fields: Map::from_iter([
+            ("kind".into(), json!("reply")),
+            ("parent".into(), json!(parent)),
+            ("body".into(), json!(body)),
+        ]),
+    };
+    ws.write_event(&folder_for(index, doc, area, &parent_loc.folder), &event)?;
+    Ok(event)
+}
+
+fn move_file(ws: &Workspace, from: &str, to_folder: &str) -> io::Result<()> {
+    let annox = ws.root.join(".annox");
+    let file = std::path::Path::new(from).file_name().ok_or_else(|| not_found("file"))?;
+    let dir = annox.join(to_folder);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::rename(ws.root.join(from), dir.join(file))
+}
+
+/// Publishes local annotations and their local replies (§5.11). Returns the
+/// ids that were moved to the shared area.
+pub fn publish(ws: &Workspace, index: &Index, ids: &[String], author: &Value) -> io::Result<Vec<String>> {
+    let is_local = |id: &str| index.events.get(id).is_some_and(|(_, loc)| loc.area == Area::Local);
+    let mut set: Vec<String> = ids.iter().filter(|id| is_local(id)).cloned().collect();
+    for (e, loc) in index.events.values() {
+        let parent = e.field("parent").and_then(Value::as_str);
+        if e.kind == "create" && loc.area == Area::Local && parent.is_some_and(|p| set.iter().any(|s| s == p)) {
+            set.push(e.id.clone());
+        }
+    }
+    // Where each local document's annotations go when published.
+    let mut targets: std::collections::BTreeMap<String, String> = Default::default();
+    for id in &set {
+        let doc = index.canonical(&index.events[id].1.document).to_owned();
+        if targets.contains_key(&doc) {
+            continue;
+        }
+        let path = index.documents.get(&doc).and_then(|d| d.path.clone()).ok_or_else(|| not_found("document"))?;
+        let target = if index.areas.get(&doc) == Some(&Area::Shared) {
+            doc.clone()
+        } else if let Some(shared) =
+            index.documents_at(&path).into_iter().find(|d| index.areas.get(d) == Some(&Area::Shared))
+        {
+            // A shared record appeared meanwhile: merge the local one into it (§5.8).
+            let events: Vec<Event> = index.document_events[&doc].iter().map(|(e, _)| e.clone()).collect();
+            let merged = Event {
+                id: crate::new_id(),
+                annotation: None,
+                document: Some(doc.clone()),
+                after: replay::document_heads(&events, &doc),
+                kind: "merged".into(),
+                author: author.clone(),
+                time: Event::now(),
+                fields: Map::from_iter([("into".into(), json!(shared))]),
+            };
+            ws.write_event(&format!("local/docs/{path}~{doc}/document"), &merged)?;
+            shared
+        } else {
+            // Publish the local record itself.
+            for (_, file) in &index.document_events[&doc] {
+                move_file(ws, file, &format!("docs/{path}~{doc}/document"))?;
+            }
+            doc.clone()
+        };
+        targets.insert(doc, target);
+    }
+    for id in &set {
+        let doc = index.canonical(&index.events[id].1.document);
+        let target = &targets[doc];
+        let folder = folder_for(index, target, Area::Shared, &format!("docs/{target}"));
+        for (e, loc) in index.events.values() {
+            if e.annotation.as_deref() == Some(id.as_str()) && loc.area == Area::Local {
+                move_file(ws, &format!(".annox/{}/{}.json", loc.folder, e.id), &folder)?;
+            }
+        }
+    }
+    Ok(set)
+}
+
+/// Moves every document at `from` to `to` (§5.6): a `move` event per record,
+/// then its folders are renamed to match. Returns the number of records moved.
+pub fn move_document(ws: &Workspace, index: &Index, from: &str, to: &str, author: &Value) -> io::Result<usize> {
+    let docs = index.documents_at(from);
+    for doc in &docs {
+        let area = index.areas.get(doc).copied().unwrap_or(Area::Shared);
+        let events: Vec<Event> = index.document_events[doc].iter().map(|(e, _)| e.clone()).collect();
+        let event = Event {
+            id: crate::new_id(),
+            annotation: None,
+            document: Some(doc.clone()),
+            after: replay::document_heads(&events, doc),
+            kind: "move".into(),
+            author: author.clone(),
+            time: Event::now(),
+            fields: Map::from_iter([("path".into(), json!(to))]),
+        };
+        ws.write_event(&format!("{}{to}~{doc}/document", area_prefix(area)), &event)?;
+        // Tidy: move files from folders with other names (§5.6 step 2).
+        for folder in &index.folders[doc] {
+            let folder_area = if folder.starts_with("local/") { Area::Local } else { Area::Shared };
+            let new_folder = format!("{}{to}~{doc}", area_prefix(folder_area));
+            if *folder == new_folder {
+                continue;
+            }
+            for (e, _) in index.events.values().filter(|(_, l)| l.folder == *folder) {
+                move_file(ws, &format!(".annox/{folder}/{}.json", e.id), &new_folder)?;
+            }
+            for (_, file) in index.document_events[doc].iter().filter(|(_, f)| f.starts_with(&format!(".annox/{folder}/"))) {
+                move_file(ws, file, &format!("{new_folder}/document"))?;
+            }
+            let old = ws.root.join(".annox").join(folder);
+            let _ = std::fs::remove_dir(old.join("document"));
+            let _ = std::fs::remove_dir(old);
+        }
+    }
+    Ok(docs.len())
+}
+
 /// Appends an event of type `kind` with `fields` to annotation `annotation`.
 /// `after` is set to the annotation's current heads, and the file goes into
 /// the canonical document's folder in the annotation's area (§5.7.2).

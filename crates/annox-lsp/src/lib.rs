@@ -1,21 +1,23 @@
-//! The annox language server (spec §6), first milestone: diagnostics,
-//! hover, and code actions for plain LSP clients (§6.5), with accept
-//! applied through `workspace/applyEdit` (§6.6.2).
+//! The annox language server (spec §6): standard LSP features for plain
+//! clients (§6.5), and `annox/*` extension methods for annox-aware ones
+//! (§6.6).
 
+mod methods;
 pub mod position;
+mod views;
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 use annox_core::anchor::{self, Anchor, Resolution, State};
 use annox_core::ops;
-use annox_core::storage::{Index, Workspace};
+use annox_core::storage::{Area, Index, Loaded, Workspace};
 use annox_core::suggestion;
 use annox_core::text::Text;
 use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
 use lsp_types::notification::{
-    DidChangeTextDocument, DidChangeWatchedFiles, DidCloseTextDocument, DidOpenTextDocument, DidSaveTextDocument,
-    Notification as _, PublishDiagnostics,
+    DidChangeTextDocument, DidChangeWatchedFiles, DidCloseTextDocument, DidOpenTextDocument, DidRenameFiles,
+    DidSaveTextDocument, Notification as _, PublishDiagnostics,
 };
 use lsp_types::request::{ApplyWorkspaceEdit, CodeActionRequest, ExecuteCommand, HoverRequest, Request as _};
 use lsp_types::{
@@ -23,7 +25,7 @@ use lsp_types::{
     CodeActionProviderCapability, Command, Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams, ExecuteCommandOptions,
     ExecuteCommandParams, Hover, HoverContents, HoverParams, HoverProviderCapability, InitializeParams,
-    MarkupContent, MarkupKind, NumberOrString, PublishDiagnosticsParams, ServerCapabilities,
+    MarkupContent, MarkupKind, NumberOrString, PublishDiagnosticsParams, RenameFilesParams, ServerCapabilities,
     TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions,
     TextEdit, Url, WorkspaceEdit,
 };
@@ -40,8 +42,19 @@ const COMMANDS: [&str; 4] = ["annox.accept", "annox.reject", "annox.resolve", "a
 const UNKNOWN_ANNOTATION: i32 = 1001;
 const STALE_SUGGESTION: i32 = 1002;
 const INVALID_OPERATION: i32 = 1003;
+const NOT_CONFLICTED: i32 = 1004;
 const NO_WORKSPACE: i32 = 1005;
 const EDIT_NOT_APPLIED: i32 = 1007;
+const NEEDS_REVIEW: i32 = 1008;
+const OVERLAP: i32 = 1009;
+const INVALID_PARAMS: i32 = -32602;
+const INTERNAL_ERROR: i32 = -32603;
+
+type Failure = (i32, String);
+
+fn fail<T>(code: i32, message: impl Into<String>) -> Result<T, Failure> {
+    Err((code, message.into()))
+}
 
 /// Runs the server on `connection` until shutdown.
 pub fn run(connection: &Connection) -> anyhow::Result<()> {
@@ -67,6 +80,7 @@ pub fn run(connection: &Connection) -> anyhow::Result<()> {
     let encoding = Encoding::negotiate(
         params.capabilities.general.as_ref().and_then(|g| g.position_encodings.as_deref()),
     );
+    let annox_client = params.capabilities.experimental.as_ref().is_some_and(|e| e.get("annox").is_some());
     let options = params.initialization_options.as_ref().and_then(|o| o.get("annox")).cloned().unwrap_or_default();
     connection.initialize_finish(
         id,
@@ -78,6 +92,7 @@ pub fn run(connection: &Connection) -> anyhow::Result<()> {
     let mut server = Server {
         connection,
         encoding,
+        annox_client,
         author: options.get("author").cloned(),
         diagnostics: options.get("diagnostics").and_then(Value::as_bool).unwrap_or(true),
         open: HashMap::new(),
@@ -87,31 +102,46 @@ pub fn run(connection: &Connection) -> anyhow::Result<()> {
     server.main_loop()
 }
 
-struct OpenDoc {
+pub(crate) struct OpenDoc {
     text: Text,
     crlf: bool,
+    /// What the client asked `annox/annotations` to include (§6.6.3).
+    include_closed: bool,
+    include_deleted: bool,
 }
 
-/// An accept waiting for the client's `workspace/applyEdit` response.
-struct PendingAccept {
+/// Work that waits for the client's `workspace/applyEdit` response.
+pub(crate) enum Work {
+    /// Accept one suggestion (§6.6.2).
+    Accept { annotation: String },
+    /// Bulk accept: `results` in request order, `chosen` are applied.
+    AcceptAll { chosen: Vec<String>, results: Vec<Value> },
+    /// Resolve a status conflict to `status`, reverting the edit (§4.3.3).
+    Revert { annotation: String, status: String },
+}
+
+pub(crate) struct Pending {
     command: RequestId,
-    annotation: String,
     uri: Url,
     applied_version: String,
+    work: Work,
+    /// Reply with the AnnotationView (extension method) or null (command).
+    respond_view: bool,
 }
 
-struct Server<'a> {
+pub(crate) struct Server<'a> {
     connection: &'a Connection,
     encoding: Encoding,
+    annox_client: bool,
     author: Option<Value>,
     diagnostics: bool,
     open: HashMap<Url, OpenDoc>,
     next_id: i32,
-    pending: HashMap<RequestId, PendingAccept>,
+    pending: HashMap<RequestId, Pending>,
 }
 
 /// A root annotation of a document, resolved against its current text.
-struct Item {
+pub(crate) struct Item {
     id: String,
     state: Value,
     target: Anchor,
@@ -127,8 +157,12 @@ impl Item {
         self.state["status"].as_str().unwrap_or_default()
     }
 
+    fn deleted(&self) -> bool {
+        self.state["deleted"] != json!(false)
+    }
+
     fn is_open(&self) -> bool {
-        self.status() == "open" && self.state["deleted"] == json!(false)
+        self.status() == "open" && !self.deleted()
     }
 
     fn applicable(&self) -> bool {
@@ -141,15 +175,30 @@ impl Item {
 }
 
 /// Everything known about one document.
-struct Analysis {
+pub(crate) struct Analysis {
     ws: Workspace,
+    rel: String,
     index: Index,
+    loaded: Loaded,
     text: Text,
     items: Vec<Item>,
+    /// Reply states by parent id, in display order (§2.5.5).
     replies: BTreeMap<String, Vec<Value>>,
 }
 
-type Failure = (i32, String);
+impl Analysis {
+    fn item(&self, id: &str) -> Option<&Item> {
+        self.items.iter().find(|i| i.id == id)
+    }
+
+    fn reply(&self, id: &str) -> Option<&Value> {
+        self.replies.values().flatten().find(|r| r["id"] == id)
+    }
+
+    fn area(&self, id: &str) -> Area {
+        self.index.events.get(id).map_or(Area::Shared, |(_, loc)| loc.area)
+    }
+}
 
 impl Server<'_> {
     fn main_loop(&mut self) -> anyhow::Result<()> {
@@ -181,24 +230,22 @@ impl Server<'_> {
 
     fn on_request(&mut self, req: Request) {
         let id = req.id.clone();
+        let params = req.params;
         match req.method.as_str() {
             HoverRequest::METHOD => {
-                let result = serde_json::from_value::<HoverParams>(req.params)
-                    .map(|p| json!(self.hover(p)))
-                    .map_err(|e| (-32602, e.to_string()));
+                let result = parse::<HoverParams>(params).map(|p| json!(self.hover(p)));
                 self.reply(id, result);
             }
             CodeActionRequest::METHOD => {
-                let result = serde_json::from_value::<CodeActionParams>(req.params)
-                    .map(|p| json!(self.code_actions(p)))
-                    .map_err(|e| (-32602, e.to_string()));
+                let result = parse::<CodeActionParams>(params).map(|p| json!(self.code_actions(p)));
                 self.reply(id, result);
             }
-            ExecuteCommand::METHOD => match serde_json::from_value::<ExecuteCommandParams>(req.params) {
+            ExecuteCommand::METHOD => match parse::<ExecuteCommandParams>(params) {
                 Ok(p) => self.execute(id, p),
-                Err(e) => self.reply(id, Err((-32602, e.to_string()))),
+                Err(e) => self.reply(id, Err(e)),
             },
-            _ => self.reply(id, Err((-32601, format!("unhandled method {}", req.method)))),
+            method if method.starts_with("annox/") => self.extension(id, method.to_owned(), params),
+            _ => self.reply(id, fail(-32601, format!("unhandled method {}", req.method))),
         }
     }
 
@@ -208,7 +255,7 @@ impl Server<'_> {
                 if let Ok(p) = serde_json::from_value::<DidOpenTextDocumentParams>(n.params) {
                     let uri = p.text_document.uri;
                     self.set_text(uri.clone(), &p.text_document.text);
-                    self.publish(&uri);
+                    self.refresh(&uri);
                 }
             }
             DidChangeTextDocument::METHOD => {
@@ -216,22 +263,32 @@ impl Server<'_> {
                     if let Some(change) = p.content_changes.into_iter().last() {
                         let uri = p.text_document.uri;
                         self.set_text(uri.clone(), &change.text);
-                        self.publish(&uri);
+                        self.refresh(&uri);
                     }
                 }
             }
             DidSaveTextDocument::METHOD => {
                 if let Ok(p) = serde_json::from_value::<DidSaveTextDocumentParams>(n.params) {
-                    self.publish(&p.text_document.uri);
+                    self.refresh(&p.text_document.uri);
                 }
             }
             DidCloseTextDocument::METHOD => {
                 if let Ok(p) = serde_json::from_value::<DidCloseTextDocumentParams>(n.params) {
                     self.open.remove(&p.text_document.uri);
-                    self.send_diagnostics(p.text_document.uri, vec![]);
+                    if self.diagnostics {
+                        self.send_diagnostics(p.text_document.uri, vec![]);
+                    }
                 }
             }
-            DidChangeWatchedFiles::METHOD => self.publish_all(),
+            DidChangeWatchedFiles::METHOD => self.refresh_all(),
+            DidRenameFiles::METHOD => {
+                if let Ok(p) = serde_json::from_value::<RenameFilesParams>(n.params) {
+                    self.on_rename(p);
+                }
+            }
+            // Presence is forwarded to a sync hub (§7.8), which this server
+            // doesn't connect to yet.
+            "annox/setPresence" => {}
             _ => {}
         }
     }
@@ -243,24 +300,63 @@ impl Server<'_> {
             .ok()
             .and_then(|v| serde_json::from_value::<ApplyWorkspaceEditResponse>(v).ok())
             .is_some_and(|r| r.applied);
-        if !applied {
-            self.reply(pending.command, Err((EDIT_NOT_APPLIED, "the client did not apply the edit".into())));
-            return;
+        let result = self.finish(&pending, applied);
+        self.reply(pending.command, result);
+        self.refresh_all();
+    }
+
+    /// Records the outcome of an applied (or refused) edit (§6.6.2 step 3).
+    fn finish(&self, pending: &Pending, applied: bool) -> Result<Value, Failure> {
+        let status_fields = |status: &str| {
+            let mut fields = Map::from_iter([("status".into(), json!(status))]);
+            if status == "accepted" {
+                fields.insert("appliedVersion".into(), json!(pending.applied_version));
+            }
+            fields
+        };
+        let a = self.analyze(&pending.uri).ok_or((NO_WORKSPACE, "no annox workspace".to_owned()))?;
+        match &pending.work {
+            Work::AcceptAll { chosen, results } => {
+                let mut results = results.clone();
+                for r in results.iter_mut() {
+                    let id = r["annotation"].as_str().unwrap_or_default().to_owned();
+                    if !chosen.contains(&id) {
+                        continue;
+                    }
+                    *r = if !applied {
+                        views::result_error(&id, EDIT_NOT_APPLIED, "the client did not apply the edit")
+                    } else {
+                        match self.write_event(&a, &id, "status", status_fields("accepted")) {
+                            Ok(()) => json!({ "annotation": id, "accepted": true }),
+                            Err((code, msg)) => views::result_error(&id, code, &msg),
+                        }
+                    };
+                }
+                Ok(json!({ "results": results }))
+            }
+            Work::Accept { annotation } | Work::Revert { annotation, .. } => {
+                if !applied {
+                    return fail(EDIT_NOT_APPLIED, "the client did not apply the edit");
+                }
+                let status = match &pending.work {
+                    Work::Revert { status, .. } => status.as_str(),
+                    _ => "accepted",
+                };
+                self.write_event(&a, annotation, "status", status_fields(status))?;
+                if pending.respond_view {
+                    self.view_of(&pending.uri, annotation)
+                } else {
+                    Ok(Value::Null)
+                }
+            }
         }
-        // Only now is the acceptance recorded (§6.6.2 step 3).
-        let result = self.analyze(&pending.uri).ok_or((NO_WORKSPACE, "no annox workspace".into())).and_then(|a| {
-            let fields = Map::from_iter([
-                ("status".into(), json!("accepted")),
-                ("appliedVersion".into(), json!(pending.applied_version)),
-            ]);
-            self.write_event(&a, &pending.annotation, "status", fields)
-        });
-        self.reply(pending.command, result.map(|_| Value::Null));
-        self.publish_all();
     }
 
     fn set_text(&mut self, uri: Url, raw: &str) {
-        self.open.insert(uri, OpenDoc { text: Text::from_raw(raw), crlf: raw.contains("\r\n") });
+        let (include_closed, include_deleted) =
+            self.open.get(&uri).map_or((false, false), |d| (d.include_closed, d.include_deleted));
+        let doc = OpenDoc { text: Text::from_raw(raw), crlf: raw.contains("\r\n"), include_closed, include_deleted };
+        self.open.insert(uri, doc);
     }
 
     /// Loads, replays, and resolves the annotations of `uri` (§5.7.1, §3.7).
@@ -270,7 +366,7 @@ impl Server<'_> {
         let rel = ws.relative(&path)?;
         let text = match self.open.get(uri) {
             Some(doc) => doc.text.clone(),
-            None => Text::from_raw(&std::fs::read_to_string(&path).ok()?),
+            None => Text::from_raw(&std::fs::read_to_string(&path).unwrap_or_default()),
         };
         let index = Index::read(&ws);
         let loaded = index.load(&rel);
@@ -278,17 +374,23 @@ impl Server<'_> {
         let mut replies: BTreeMap<String, Vec<Value>> = BTreeMap::new();
         for (id, state) in loaded.derive() {
             if state["kind"] == "reply" {
-                if state["deleted"] == json!(false) {
-                    let parent = state["parent"].as_str().unwrap_or_default().to_owned();
-                    replies.entry(parent).or_default().push(state);
-                }
+                let parent = state["parent"].as_str().unwrap_or_default().to_owned();
+                replies.entry(parent).or_default().push(state);
                 continue;
             }
             let Ok(target) = serde_json::from_value::<Anchor>(state["target"].clone()) else { continue };
             let resolution = anchor::resolve(&text, &target);
             items.push(Item { id, state, target, resolution });
         }
-        Some(Analysis { ws, index, text, items, replies })
+        Some(Analysis { ws, rel, index, loaded, text, items, replies })
+    }
+
+    /// Finds the open document that holds annotation `id` (a root or reply).
+    fn find(&self, id: &str) -> Option<(Url, Analysis)> {
+        self.open.keys().find_map(|uri| {
+            let a = self.analyze(uri)?;
+            (a.item(id).is_some() || a.reply(id).is_some()).then(|| (uri.clone(), a))
+        })
     }
 
     fn author(&self, ws: &Workspace) -> Value {
@@ -317,23 +419,73 @@ impl Server<'_> {
     fn write_event(&self, a: &Analysis, annotation: &str, kind: &str, fields: Map<String, Value>) -> Result<(), Failure> {
         ops::append_event(&a.ws, &a.index, annotation, kind, fields, &self.author(&a.ws))
             .map(|_| ())
-            .map_err(|e| (-32603, e.to_string()))
+            .map_err(|e| (INTERNAL_ERROR, e.to_string()))
     }
 
-    // Diagnostics (§6.5.1).
+    /// The AnnotationView of `id` after reloading `uri` (§6.6.1).
+    fn view_of(&self, uri: &Url, id: &str) -> Result<Value, Failure> {
+        let a = self.analyze(uri).ok_or((NO_WORKSPACE, "no annox workspace".to_owned()))?;
+        views::view_by_id(&a, id, self.encoding).ok_or((UNKNOWN_ANNOTATION, format!("unknown annotation {id}")))
+    }
 
-    fn publish_all(&self) {
+    /// Sends a `WorkspaceEdit` replacing `[start, end)` of `uri` with `new_text`,
+    /// and parks `work` until the client answers.
+    fn apply_edit(&mut self, command: RequestId, uri: Url, edits: Vec<(usize, usize, String)>, work: Work, respond_view: bool) {
+        let Some(a) = self.analyze(&uri) else {
+            return self.reply(command, fail(NO_WORKSPACE, "no annox workspace"));
+        };
+        let crlf = self.open.get(&uri).is_some_and(|d| d.crlf);
+        let lines = LineIndex::new(&a.text, self.encoding);
+        // Apply back to front to compute the resulting version.
+        let mut sorted = edits.clone();
+        sorted.sort_by_key(|(s, _, _)| std::cmp::Reverse(*s));
+        let mut result = a.text.clone();
+        for (s, e, t) in &sorted {
+            result = result.splice(*s, *e, t);
+        }
+        let text_edits = edits
+            .into_iter()
+            .map(|(s, e, t)| TextEdit {
+                range: lines.range(s, e),
+                new_text: if crlf { t.replace('\n', "\r\n") } else { t },
+            })
+            .collect();
+        let edit = WorkspaceEdit { changes: Some(HashMap::from([(uri.clone(), text_edits)])), ..Default::default() };
+        self.next_id += 1;
+        let request_id = RequestId::from(format!("annox-apply-{}", self.next_id));
+        let pending = Pending { command, uri, applied_version: result.version, work, respond_view };
+        self.pending.insert(request_id.clone(), pending);
+        let params = ApplyWorkspaceEditParams { label: Some("annox".into()), edit };
+        self.send(Request::new(request_id, ApplyWorkspaceEdit::METHOD.into(), params));
+    }
+
+    // Pushing state: diagnostics (§6.5.1) and annox/didChangeAnnotations (§6.6.3).
+
+    fn refresh_all(&self) {
         for uri in self.open.keys() {
-            self.publish(uri);
+            self.refresh(uri);
         }
     }
 
-    fn publish(&self, uri: &Url) {
-        if !self.diagnostics {
+    fn refresh(&self, uri: &Url) {
+        if !self.diagnostics && !self.annox_client {
             return;
         }
-        let diagnostics = self.analyze(uri).map(|a| self.diagnostics_for(&a)).unwrap_or_default();
-        self.send_diagnostics(uri.clone(), diagnostics);
+        let a = self.analyze(uri);
+        if self.diagnostics {
+            let diagnostics = a.as_ref().map(|a| self.diagnostics_for(a)).unwrap_or_default();
+            self.send_diagnostics(uri.clone(), diagnostics);
+        }
+        if self.annox_client {
+            if let (Some(a), Some(doc)) = (a, self.open.get(uri)) {
+                let params = json!({
+                    "textDocument": { "uri": uri },
+                    "annotations": views::views(&a, self.encoding, doc.include_closed, doc.include_deleted),
+                    "document": views::document_info(&a),
+                });
+                self.send(Notification::new("annox/didChangeAnnotations".into(), params));
+            }
+        }
     }
 
     fn send_diagnostics(&self, uri: Url, diagnostics: Vec<Diagnostic>) {
@@ -397,7 +549,7 @@ impl Server<'_> {
         let hits: Vec<&Item> = a
             .items
             .iter()
-            .filter(|i| i.state["deleted"] == json!(false))
+            .filter(|i| !i.deleted())
             .filter(|i| i.resolution.range.is_some_and(|(s, e)| s <= offset && offset <= e))
             .collect();
         let first = hits.first()?.resolution.range?;
@@ -417,7 +569,7 @@ impl Server<'_> {
         let mut actions = Vec::new();
         for item in &a.items {
             let Some((s, e)) = item.resolution.range else { continue };
-            if s > to || e < from || item.state["deleted"] != json!(false) {
+            if s > to || e < from || item.deleted() {
                 continue;
             }
             for (command, title) in offered_commands(item) {
@@ -438,59 +590,58 @@ impl Server<'_> {
     fn execute(&mut self, id: RequestId, p: ExecuteCommandParams) {
         let annotation = p.arguments.first().and_then(|a| a.get("annotation")).and_then(Value::as_str);
         let Some(annotation) = annotation.map(str::to_owned) else {
-            return self.reply(id, Err((-32602, "missing annotation argument".into())));
+            return self.reply(id, fail(INVALID_PARAMS, "missing annotation argument"));
         };
-        let found = self.open.keys().find_map(|uri| {
-            let a = self.analyze(uri)?;
-            let pos = a.items.iter().position(|i| i.id == annotation)?;
-            Some((uri.clone(), a, pos))
-        });
-        let Some((uri, a, pos)) = found else {
-            return self.reply(id, Err((UNKNOWN_ANNOTATION, format!("unknown annotation {annotation}"))));
+        let Some((uri, a)) = self.find(&annotation) else {
+            return self.reply(id, fail(UNKNOWN_ANNOTATION, format!("unknown annotation {annotation}")));
         };
-        let item = &a.items[pos];
+        let Some(item) = a.item(&annotation) else {
+            return self.reply(id, fail(INVALID_OPERATION, "commands apply to comments and suggestions"));
+        };
         if !offered_commands(item).iter().any(|(c, _)| *c == p.command) {
-            return self.reply(id, Err((INVALID_OPERATION, format!("{} does not apply to this annotation", p.command))));
+            return self.reply(id, fail(INVALID_OPERATION, format!("{} does not apply to this annotation", p.command)));
         }
         let status = match p.command.as_str() {
-            "annox.accept" => return self.start_accept(id, uri, &a, pos),
+            "annox.accept" => return self.accept(id, uri, &a, &annotation, false),
             "annox.reject" => "rejected",
             "annox.resolve" => "resolved",
             _ => "open",
         };
         let result = self.write_event(&a, &annotation, "status", Map::from_iter([("status".into(), json!(status))]));
         self.reply(id, result.map(|_| Value::Null));
-        self.publish_all();
+        self.refresh_all();
     }
 
-    /// Sends the suggestion's edit with `workspace/applyEdit`; the status
-    /// event is written when the client confirms (§6.6.2).
-    fn start_accept(&mut self, command: RequestId, uri: Url, a: &Analysis, pos: usize) {
-        let item = &a.items[pos];
-        let replacement = item.state["edit"]["replacement"].as_str().unwrap_or_default();
-        let applied = match suggestion::apply(&a.text, &item.target, replacement) {
-            Ok(applied) => applied,
-            Err(_) => return self.reply(command, Err((STALE_SUGGESTION, "the suggestion is stale".into()))),
+    /// Applies a suggestion through `workspace/applyEdit`; the status event
+    /// is written when the client confirms (§6.6.2).
+    fn accept(&mut self, command: RequestId, uri: Url, a: &Analysis, annotation: &str, respond_view: bool) {
+        let Some(item) = a.item(annotation).filter(|i| i.kind() == "suggestion" && i.is_open()) else {
+            return self.reply(command, fail(INVALID_OPERATION, "only open suggestions can be accepted"));
         };
-        let lines = LineIndex::new(&a.text, self.encoding);
-        let crlf = self.open.get(&uri).is_some_and(|d| d.crlf);
-        let new_text = if crlf { replacement.replace('\n', "\r\n") } else { replacement.to_owned() };
-        let edit = WorkspaceEdit {
-            changes: Some(HashMap::from([(
-                uri.clone(),
-                vec![TextEdit { range: lines.range(applied.start, applied.end), new_text }],
-            )])),
-            ..Default::default()
-        };
-        self.next_id += 1;
-        let request_id = RequestId::from(format!("annox-apply-{}", self.next_id));
-        self.pending.insert(
-            request_id.clone(),
-            PendingAccept { command, annotation: item.id.clone(), uri, applied_version: applied.text.version },
-        );
-        let params = ApplyWorkspaceEditParams { label: Some("Accept suggestion".into()), edit };
-        self.send(Request::new(request_id, ApplyWorkspaceEdit::METHOD.into(), params));
+        let replacement = item.state["edit"]["replacement"].as_str().unwrap_or_default().to_owned();
+        match suggestion::apply(&a.text, &item.target, &replacement) {
+            Ok(applied) => {
+                let work = Work::Accept { annotation: annotation.to_owned() };
+                self.apply_edit(command, uri, vec![(applied.start, applied.end, replacement)], work, respond_view);
+            }
+            Err(_) => self.reply(command, fail(STALE_SUGGESTION, "the suggestion is stale")),
+        }
     }
+
+    fn on_rename(&self, p: RenameFilesParams) {
+        for file in p.files {
+            let (Ok(old), Ok(new)) = (Url::parse(&file.old_uri), Url::parse(&file.new_uri)) else { continue };
+            let (Ok(old_path), Ok(new_path)) = (old.to_file_path(), new.to_file_path()) else { continue };
+            let Some(ws) = Workspace::find(&new_path) else { continue };
+            let (Some(from), Some(to)) = (ws.relative(&old_path), ws.relative(&new_path)) else { continue };
+            let _ = ops::move_document(&ws, &Index::read(&ws), &from, &to, &self.author(&ws));
+        }
+        self.refresh_all();
+    }
+}
+
+fn parse<T: serde::de::DeserializeOwned>(params: Value) -> Result<T, Failure> {
+    serde_json::from_value(params).map_err(|e| (INVALID_PARAMS, e.to_string()))
 }
 
 /// The commands offered for an annotation (§6.5.3).
@@ -533,7 +684,7 @@ fn thread_markdown(item: &Item, replies: Option<&Vec<Value>>) -> String {
         Some(body) => parts.push(format!("{header}\n\n{body}")),
         None => parts.push(header),
     }
-    for reply in replies.into_iter().flatten() {
+    for reply in replies.into_iter().flatten().filter(|r| r["deleted"] == json!(false)) {
         parts.push(format!("{}\n\n{}", author_line(reply), reply["body"].as_str().unwrap_or_default()));
     }
     parts.join("\n\n")
