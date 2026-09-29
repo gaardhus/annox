@@ -32,7 +32,7 @@ fn setup() -> Fixture {
             "diagnostics": false,
         } },
     }));
-    let uri = format!("file://{}", file.display());
+    let uri = lsp_types::Url::from_file_path(&file).unwrap().to_string();
     client.notify(
         "textDocument/didOpen",
         json!({ "textDocument": { "uri": uri, "languageId": "latex", "version": 1, "text": DOC } }),
@@ -252,7 +252,7 @@ fn move_document_keeps_annotations() {
     );
     let new_path = f.ws.root.join("final.tex");
     std::fs::rename(f.ws.root.join("paper.tex"), &new_path).unwrap();
-    let new_uri = format!("file://{}", new_path.display());
+    let new_uri = lsp_types::Url::from_file_path(&new_path).unwrap().to_string();
     let moved = f.client.call("annox/moveDocument", json!({ "from": uri, "to": new_uri }));
     assert_eq!(moved["moved"], 1);
     f.client.notify(

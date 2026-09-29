@@ -72,7 +72,7 @@ fn main() {
     send(Request::new(RequestId::from(1), "initialize".into(), json!({ "capabilities": {} })).into());
     wait(&|m| matches!(m, Message::Response(_)));
     send(Notification::new("initialized".into(), json!({})).into());
-    let uri = format!("file://{}", dir.join("doc.txt").display());
+    let uri = lsp_types::Url::from_file_path(dir.join("doc.txt")).unwrap().to_string();
 
     let start = Instant::now();
     send(

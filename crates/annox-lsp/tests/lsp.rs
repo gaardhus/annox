@@ -86,7 +86,7 @@ fn diagnostics_hover_and_accept() {
     let (server_conn, client_conn) = Connection::memory();
     let server = std::thread::spawn(move || annox_lsp::run(&server_conn).unwrap());
     let mut client = Client { conn: client_conn, next: 0 };
-    let uri = format!("file://{}", file.display());
+    let uri = lsp_types::Url::from_file_path(&file).unwrap().to_string();
 
     let init = client.request(
         "initialize",

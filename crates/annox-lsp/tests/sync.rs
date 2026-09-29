@@ -17,7 +17,7 @@ fn workspace(dir: &std::path::Path, url: &str) -> String {
     std::fs::write(dir.join(".annox/annox.json"), json!({ "format": 1, "sync": { "url": url } }).to_string()).unwrap();
     let file = dir.join("notes.txt");
     std::fs::write(&file, DOC).unwrap();
-    format!("file://{}", file.display())
+    lsp_types::Url::from_file_path(&file).unwrap().to_string()
 }
 
 fn client(uri: &str, name: &str) -> Client {

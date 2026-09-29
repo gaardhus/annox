@@ -24,7 +24,7 @@ fn outside_changes_are_pushed_without_a_save() {
     let ws = Workspace::init(dir.path()).unwrap();
     let file = dir.path().join("notes.txt");
     std::fs::write(&file, DOC).unwrap();
-    let uri = format!("file://{}", file.display());
+    let uri = lsp_types::Url::from_file_path(&file).unwrap().to_string();
     // No didChangeWatchedFiles support: the server polls.
     let (client, _) = Client::start(json!({
         "capabilities": { "experimental": { "annox": { "version": "0.1" } } },
@@ -70,8 +70,8 @@ fn creating_the_first_annotation_offers_a_workspace() {
     let file = dir.path().join("sub").join("notes.txt");
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
     std::fs::write(&file, DOC).unwrap();
-    let uri = format!("file://{}", file.display());
-    let root_uri = format!("file://{}", dir.path().display());
+    let uri = lsp_types::Url::from_file_path(&file).unwrap().to_string();
+    let root_uri = lsp_types::Url::from_file_path(dir.path()).unwrap().to_string();
     let (mut client, _) = Client::start(json!({
         "capabilities": {},
         "workspaceFolders": [{ "uri": root_uri, "name": "root" }],
