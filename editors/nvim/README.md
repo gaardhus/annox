@@ -16,6 +16,8 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim), pointing at this directory
       cmd = { "/path/to/annox/target/release/annox", "lsp" },
       -- author = { id = "mailto:you@example.org", name = "You" },  -- defaults to your git identity
       -- presence = false,  -- stop sharing your cursor with collaborators on a sync hub
+      -- inline_suggestions = true,  -- always draw suggestions inline, not only in suggestion mode
+      -- suggest_undo_key = false,  -- keep `u` as plain undo in suggestion mode
     })
   end,
 }
@@ -32,6 +34,7 @@ Changes others make to `.annox/`, such as a `git pull`, show up within a second 
 | `:Annox init` | Create an annox workspace for this project and attach the server. |
 | `:Annox comment` | Comment on the cursor position, or on the selection when run from visual mode (`:'<,'>Annox comment`). |
 | `:Annox suggest` | Suggest a replacement for the selection. The prompt is pre-filled with the current text. |
+| `:Annox suggesting` | Turn suggestion mode on or off for the buffer (see below). |
 | `:Annox reply` | Reply to the thread under the cursor. |
 | `:Annox thread` | Show the thread under the cursor in a floating window. |
 | `:Annox accept` / `reject` | Accept or reject the suggestion under the cursor. Accepting edits the buffer, and you can undo as usual. |
@@ -55,9 +58,21 @@ vim.keymap.set("n", "<leader>ar", "<cmd>Annox reply<cr>")
 vim.keymap.set("n", "<leader>aa", "<cmd>Annox accept<cr>")
 ```
 
+## Suggestion mode
+
+`:Annox suggesting` turns the buffer into suggestion mode, like "Suggesting" in online editors. You edit as usual, and each time you leave insert mode or finish a normal-mode change such as `dw`, your edits become suggestions and the buffer goes back to its original text. The file never contains suggested text, so saving is always safe.
+
+- Suggestions are drawn inline: deleted text struck through, inserted text after it in green.
+- Typing next to a suggestion you made in this session extends it. Delete a word and type its replacement right there, and you get one suggestion.
+- `u` undoes your last suggestion, instead of undoing buffer changes. Set `suggest_undo_key` to change or disable this.
+- Accepting a suggestion still edits the buffer.
+- Suggestions are shared right away. Suggestion mode has no private-draft variant.
+
+For a statusline, `require("annox").is_suggesting()` tells whether the current buffer is in suggestion mode.
+
 When the workspace syncs through a hub, collaborators' cursors appear as `▏Name` tags, and your own cursor is shared unless `presence = false`.
 
-Highlight groups, most linked to diagnostic groups by default: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, and `AnnoxPresenceRange`.
+Highlight groups, most linked to diagnostic groups by default: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, `AnnoxPresenceRange`, and, for inline suggestions, `AnnoxDeletion` and `AnnoxInsertion`.
 
 ## Tests
 
@@ -65,4 +80,5 @@ Highlight groups, most linked to diagnostic groups by default: `AnnoxComment`, `
 cargo build -p annox-lsp
 ANNOX_BIN=$PWD/target/debug/annox nvim --headless --clean -l editors/nvim/tests/e2e.lua
 ANNOX_BIN=$PWD/target/debug/annox nvim --headless --clean -l editors/nvim/tests/init.lua
+ANNOX_BIN=$PWD/target/debug/annox nvim --headless --clean -l editors/nvim/tests/suggesting.lua
 ```

@@ -241,3 +241,9 @@ Measured with the reference implementation (`cargo run --release -p annox-core -
 - **Server:** keystrokes cost nothing, because resolution is debounced by 150 ms. One refresh then takes about 80 ms for 1,000 annotations, and hover takes 0.3 ms.
 
 **Why:** the spec's algorithms needed no changes. The first implementation's slowness came from naive character-by-character search, rebuilding the collapsed text for every anchor, a quadratic replay, and re-reading storage on every keystroke. §6.4 now recommends caching as well as debouncing.
+
+## D41. Suggestion mode is client behavior, built on `retarget` (2026-09-29)
+
+A mode in which typing makes suggestions is described in a non-normative §4.6. Edits are turned into suggestions when the user pauses, and the document keeps its text. A change touching one of the user's suggestions from the same session extends it with a `retarget` event. §4.2.1 now only requires marking re-targets made by someone other than the author.
+
+**Why:** it matches online editors, and needs no new events or protocol methods. Keeping the buffer's text unchanged, rather than holding the proposed text until the user saves, means the file can never end up containing suggested text, and anchors stay exact. `retarget` already changes the anchor and the replacement together, which is exactly what extending a suggestion does. Showing "re-targeted by" for an author's own edits would mark nearly every suggestion made this way.

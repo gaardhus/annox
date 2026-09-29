@@ -71,7 +71,7 @@ Applicability only matters while the suggestion is `open`. Clients SHOULD show s
 
 A stale suggestion becomes applicable again only when a user **re-targets** it. That means updating the anchor and reviewing `replacement` in the same action, recorded as a `retarget` event (§2.4).
 
-Any user MAY re-target a suggestion, not only its author. That way a stale suggestion can be rescued, and its thread kept, when its author is unavailable. Clients MUST show who re-targeted it alongside the original author, e.g. "suggested by Ada, re-targeted by Bob" (`retargetedBy`, §2.5.6).
+Any user MAY re-target a suggestion, not only its author. That way a stale suggestion can be rescued, and its thread kept, when its author is unavailable. When the re-targeting author isn't the suggestion's author, clients MUST show who re-targeted it alongside the original author, e.g. "suggested by Ada, re-targeted by Bob" (`retargetedBy`, §2.5.6). Authors re-target their own suggestions routinely in suggestion mode (§4.6), and clients MAY leave those unmarked.
 
 ## 4.3 Applying
 
@@ -145,3 +145,13 @@ As shown in Section 3, we show that the bound is tight for all $n \geq 1$.
 
 Test vectors are in [`tests/suggestions.json`](tests/suggestions.json).
 
+## 4.6 Suggestion mode (non-normative)
+
+Online editors offer a mode in which typing makes suggestions instead of changing the document. A client can offer the same with the events above, and without protocol support. This section describes the recommended behavior, so that suggestions made this way look the same in every client.
+
+- **The document keeps its text.** The client keeps the text from before the edit as a base. When the user pauses (for example on leaving insert mode), it compares the buffer with the base, turns each changed stretch into a suggestion, and puts the base text back. Suggested text is drawn in place, with deleted text struck through and inserted text after it, but never written to the file. Saving, a crash, or another tool therefore can't turn a suggestion into an edit.
+- **One suggestion per changed stretch.** A change that touches a suggestion the user made in the same session extends it instead of creating a new one: its range grows to cover both, and the replacement is composed. Since the anchor and the replacement change together, this is a `retarget` event (§4.2.1). Typing a sentence in several bursts thus yields one suggestion, and deleting a word next to an insertion yields one replacement.
+- **Undo works on suggestions.** Undoing deletes the last suggestion created, or re-targets the last extended one back to its previous range and replacement.
+- **Other edits pass through.** Edits that aren't the user's typing, such as accepting a suggestion (§4.3) or reloading the file, become the new base instead of new suggestions.
+
+Suggestion mode needs a client that can draw text that isn't in the buffer. Plain LSP editors (§6.5) can't offer it.

@@ -19,6 +19,12 @@ M.config = {
   --- Share your document and cursor with others through a sync hub (§7.8).
   --- Others' cursors are always shown.
   presence = true,
+  --- Draw suggestions inline, as struck-through and inserted text, even
+  --- outside suggestion mode.
+  inline_suggestions = false,
+  --- Key that undoes your last suggestion while in suggestion mode, or false
+  --- to leave undo alone.
+  suggest_undo_key = "u",
 }
 
 local presence_ns = vim.api.nvim_create_namespace("annox_presence")
@@ -40,10 +46,13 @@ local function set_highlights()
     AnnoxSign = "DiagnosticSignInfo",
     AnnoxPresence = "DiagnosticVirtualTextHint",
     AnnoxPresenceRange = "Visual",
+    AnnoxInsertion = "Added",
   }
   for group, link in pairs(links) do
     vim.api.nvim_set_hl(0, group, { default = true, link = link })
   end
+  local removed = vim.api.nvim_get_hl(0, { name = "Removed", link = false })
+  vim.api.nvim_set_hl(0, "AnnoxDeletion", { default = true, strikethrough = true, fg = removed.fg })
 end
 
 local function client_for(bufnr)
@@ -58,7 +67,7 @@ local function byte_col(bufnr, pos, encoding)
 end
 
 local function first_line(text)
-  return text and text:match("^[^\n]*") or nil
+  return type(text) == "string" and text:match("^[^\n]*") or nil
 end
 
 local function highlight_group(a)
@@ -70,6 +79,15 @@ local function highlight_group(a)
     return a.applicable and "AnnoxSuggestion" or "AnnoxStale"
   end
   return "AnnoxComment"
+end
+
+--- Suggestion mode state per buffer (see "Suggestion mode" below).
+M.suggesting = {}
+
+--- Whether suggestions in `bufnr` are drawn as struck-through and inserted
+--- text instead of underlined.
+local function inline(bufnr, a)
+  return a.kind == "suggestion" and a.applicable and (M.config.inline_suggestions or M.suggesting[bufnr] ~= nil)
 end
 
 --- Draws the annotations of `bufnr` as extmarks.
@@ -93,15 +111,31 @@ function M.render(bufnr)
         sign_hl_group = "AnnoxSign",
         priority = 150,
       }
-      if sl == el and sc == ec then
-        mark.virt_text = { { "◆", group } }
-        mark.virt_text_pos = "inline"
-      else
-        mark.end_row, mark.end_col, mark.hl_group = el, ec, group
-      end
-      pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, sl, sc, mark)
       local label = a.kind == "suggestion" and ("→ " .. (a.edit and a.edit.replacement or ""))
         or first_line(a.body) or a.label
+      if inline(bufnr, a) then
+        -- Deleted text struck through, followed by the inserted text.
+        if sl ~= el or sc ~= ec then
+          mark.end_row, mark.end_col, mark.hl_group = el, ec, "AnnoxDeletion"
+        end
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, sl, sc, mark)
+        local replacement = a.edit and a.edit.replacement or ""
+        if replacement ~= "" then
+          pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, el, ec, {
+            virt_text = { { (replacement:gsub("\n", "↵")), "AnnoxInsertion" } },
+            virt_text_pos = "inline",
+            right_gravity = false,
+          })
+        end
+        label = first_line(a.body)
+      elseif sl == el and sc == ec then
+        mark.virt_text = { { "◆", group } }
+        mark.virt_text_pos = "inline"
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, sl, sc, mark)
+      else
+        mark.end_row, mark.end_col, mark.hl_group = el, ec, group
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, sl, sc, mark)
+      end
       if M.config.virtual_text and label then
         local replies = #(a.replies or {})
         local text = replies > 0 and string.format("%s (+%d)", label, replies) or label
@@ -188,6 +222,17 @@ local function on_annotations(_, result)
     return
   end
   M.state[bufnr] = { annotations = result.annotations, document = result.document }
+  local s = M.suggesting[bufnr]
+  if s then
+    -- Keep only suggestions that can still be extended.
+    local fresh = {}
+    for _, a in ipairs(result.annotations) do
+      if s.views[a.id] then
+        fresh[a.id] = a
+      end
+    end
+    s.views = fresh
+  end
   M.render(bufnr)
 end
 
@@ -402,6 +447,10 @@ local function thread_lines(a)
   if a.kind == "suggestion" then
     local stale = a.applicable and "" or " (stale)"
     table.insert(lines, string.format("**Suggestion%s:** → `%s`", stale, a.edit and a.edit.replacement or ""))
+    local by = a.retargetedBy and a.retargetedBy.author
+    if by and by.id ~= (a.author or {}).id then
+      table.insert(lines, string.format("_re-targeted by %s_", by.name or by.id))
+    end
     table.insert(lines, "")
   end
   if next(a.conflicts or {}) then
@@ -625,6 +674,305 @@ function M.history(opts)
   end)
 end
 
+--- Suggestion mode ---------------------------------------------------------
+---
+--- While it is on, edits to the buffer become suggestions (§4.6). Whenever
+--- the user pauses (leaving insert mode, or after a normal-mode change), the
+--- buffer is compared with its text from before the edit. Each changed
+--- stretch becomes a new suggestion, or extends one made in this session that
+--- it touches (a `retarget` event), and the buffer goes back to its original
+--- text. The file therefore never contains suggested text.
+---
+--- State per buffer: { base = lines, views = { [id] = AnnotationView },
+--- queue = { op… }, busy = boolean, undo = { entry… } }.
+
+--- The document text of `lines`, as the server sees it.
+local function text_of(lines)
+  return table.concat(lines, "\n") .. "\n"
+end
+
+--- 0-based byte offset of the start of each line, plus one past the end.
+local function line_starts(lines)
+  local starts, pos = {}, 0
+  for i, l in ipairs(lines) do
+    starts[i] = pos
+    pos = pos + #l + 1
+  end
+  starts[#lines + 1] = pos
+  return starts
+end
+
+local function is_continuation(byte)
+  return byte ~= nil and byte >= 0x80 and byte < 0xC0
+end
+
+--- The changes from `base` to `lines`: { a0, a1, replacement, restore }, with
+--- `[a0, a1)` a byte range of the base text, and `restore` the line range of
+--- `lines` to put back and the base lines to put there.
+local function changes(base, lines)
+  local a, b = text_of(base), text_of(lines)
+  local sa, sb = line_starts(base), line_starts(lines)
+  local out = {}
+  for _, h in ipairs(vim.text.diff(a, b, { result_type = "indices" })) do
+    local la, ca, lb, cb = unpack(h)
+    local fa, fb = ca == 0 and la + 1 or la, cb == 0 and lb + 1 or lb
+    local a0, a1, b0, b1 = sa[fa], sa[fa + ca], sb[fb], sb[fb + cb]
+    -- Trim what the old and new text share, keeping whole characters.
+    while a0 < a1 and b0 < b1 and a:byte(a0 + 1) == b:byte(b0 + 1) do
+      a0, b0 = a0 + 1, b0 + 1
+    end
+    while a0 > sa[fa] and is_continuation(a:byte(a0 + 1)) do
+      a0, b0 = a0 - 1, b0 - 1
+    end
+    while a1 > a0 and b1 > b0 and a:byte(a1) == b:byte(b1) do
+      a1, b1 = a1 - 1, b1 - 1
+    end
+    while is_continuation(a:byte(a1 + 1)) do
+      a1, b1 = a1 + 1, b1 + 1
+    end
+    table.insert(out, {
+      a0 = a0,
+      a1 = a1,
+      replacement = b:sub(b0 + 1, b1),
+      restore = { fb - 1, fb - 1 + cb, vim.list_slice(base, fa, fa + ca - 1) },
+    })
+  end
+  return out
+end
+
+--- The LSP position of byte offset `off` in the text of `lines`.
+local function offset_position(lines, starts, off, enc)
+  local row = #lines + 1
+  for i = 1, #lines do
+    if starts[i + 1] > off then
+      row = i
+      break
+    end
+  end
+  if row > #lines then
+    return { line = #lines, character = 0 }
+  end
+  return { line = row - 1, character = vim.str_utfindex(lines[row], enc, off - starts[row], false) }
+end
+
+--- The byte offset of LSP position `pos` in the text of `lines`.
+local function position_offset(lines, starts, pos, enc)
+  local line = lines[pos.line + 1]
+  if not line then
+    return starts[#lines + 1]
+  end
+  local ok, col = pcall(vim.str_byteindex, line, enc, pos.character, false)
+  return starts[pos.line + 1] + (ok and col or #line)
+end
+
+--- A suggestion made in this session that the change `[a0, a1)` touches.
+local function extendable(s, a0, a1, starts, enc)
+  for id, v in pairs(s.views) do
+    local r = v.resolution and v.resolution.range
+    if r and v.status == "open" and v.applicable then
+      local r0 = position_offset(s.base, starts, r.start, enc)
+      local r1 = position_offset(s.base, starts, r["end"], enc)
+      if a1 >= r0 and a0 <= r1 then
+        return id, v, r0, r1
+      end
+    end
+  end
+end
+
+--- Sends the next queued operation, one at a time so that each change can
+--- extend the suggestion the previous one created.
+local function pump(bufnr)
+  local s, client = M.suggesting[bufnr], client_for(bufnr)
+  if not s or s.busy or #s.queue == 0 or not client then
+    return
+  end
+  local op = table.remove(s.queue, 1)
+  local enc = client.offset_encoding
+  local starts = line_starts(s.base)
+  local method, params, undo
+  if op.undo then
+    local u = op.undo
+    if u.range then
+      method, params = "annox/retarget", { annotation = u.id, range = u.range, replacement = u.replacement }
+    else
+      method, params = "annox/delete", { annotation = u.id }
+    end
+  else
+    local a0, a1, replacement = op.a0, op.a1, op.replacement
+    local id, v, r0, r1 = extendable(s, a0, a1, starts, enc)
+    if id then
+      -- Compose with the existing suggestion. Ties go after it, so typing at
+      -- the end of an insertion continues it.
+      local current = v.edit.replacement
+      if a0 >= r1 then
+        replacement = current .. replacement
+      elseif a1 <= r0 then
+        replacement = replacement .. current
+      elseif a0 >= r0 then
+        replacement = current .. replacement
+      else
+        replacement = replacement .. current
+      end
+      a0, a1 = math.min(a0, r0), math.max(a1, r1)
+      if a0 == r0 and a1 == r1 and replacement == current then
+        return pump(bufnr)
+      end
+      undo = { id = id, range = v.resolution.range, replacement = current }
+    end
+    local range = {
+      start = offset_position(s.base, starts, a0, enc),
+      ["end"] = offset_position(s.base, starts, a1, enc),
+    }
+    if id then
+      method, params = "annox/retarget", { annotation = id, range = range, replacement = replacement }
+    else
+      method, params = "annox/create", {
+        textDocument = { uri = vim.uri_from_bufnr(bufnr) },
+        kind = "suggestion",
+        range = range,
+        replacement = replacement,
+      }
+    end
+  end
+  s.busy = true
+  client:request(method, params, function(err, result)
+    s.busy = false
+    if err then
+      vim.notify(string.format("annox: %s failed: %s", method, err.message), vim.log.levels.ERROR)
+    elseif op.undo then
+      s.views[op.undo.id] = op.undo.range and result or nil
+    else
+      s.views[result.id] = result
+      table.insert(s.undo, undo or { id = result.id })
+    end
+    pump(bufnr)
+  end, bufnr)
+end
+
+--- Turns the buffer's edits into suggestions and puts its text back.
+local function capture(bufnr)
+  local s = M.suggesting[bufnr]
+  if not s or vim.api.nvim_get_mode().mode:find("^i") then
+    return
+  end
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  local found = changes(s.base, lines)
+  if #found == 0 then
+    return
+  end
+  -- Join the restore to the edit, so plain undo can't bring the edit back.
+  pcall(vim.cmd.undojoin)
+  for i = #found, 1, -1 do
+    local r = found[i].restore
+    vim.api.nvim_buf_set_lines(bufnr, r[1], r[2], false, r[3])
+  end
+  local last = found[#found]
+  if bufnr == vim.api.nvim_get_current_buf() then
+    local pos = offset_position(s.base, line_starts(s.base), last.a1, "utf-8")
+    local row = math.min(pos.line, #s.base - 1)
+    pcall(vim.api.nvim_win_set_cursor, 0, { row + 1, pos.line > row and #s.base[row + 1] or pos.character })
+  end
+  for _, c in ipairs(found) do
+    if c.a0 ~= c.a1 or c.replacement ~= "" then
+      table.insert(s.queue, c)
+    end
+  end
+  pump(bufnr)
+end
+
+--- Makes the buffer's current text the base, after a change that is not a
+--- suggestion (an accepted suggestion, or reloading the file).
+local function rebase(bufnr)
+  local s = M.suggesting[bufnr]
+  if s then
+    s.base = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    s.queue = {}
+  end
+end
+
+--- Undoes your last suggestion in suggestion mode: deletes it, or puts back
+--- what it was before it was extended.
+function M.undo_suggestion(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  local s = M.suggesting[bufnr]
+  local entry = s and table.remove(s.undo)
+  if not entry then
+    return vim.notify("annox: no suggestion to undo", vim.log.levels.INFO)
+  end
+  table.insert(s.queue, { undo = entry })
+  pump(bufnr)
+end
+
+--- Whether suggestion mode is on in `bufnr`, e.g. for a statusline.
+function M.is_suggesting(bufnr)
+  return M.suggesting[bufnr or vim.api.nvim_get_current_buf()] ~= nil
+end
+
+--- Turns suggestion mode on or off for the current buffer.
+--- opts: { enable? (default: toggle) }
+function M.suggest_mode(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  local enable = opts.enable
+  if enable == nil then
+    enable = M.suggesting[bufnr] == nil
+  end
+  local group = vim.api.nvim_create_augroup("annox_suggesting_" .. bufnr, { clear = true })
+  local key = M.config.suggest_undo_key
+  if not enable then
+    if M.suggesting[bufnr] then
+      capture(bufnr)
+      M.suggesting[bufnr] = nil
+      if key then
+        pcall(vim.keymap.del, "n", key, { buffer = bufnr })
+      end
+      vim.notify("annox: suggestion mode off", vim.log.levels.INFO)
+    end
+    return M.render(bufnr)
+  end
+  if not client_for(bufnr) then
+    return request(bufnr)
+  end
+  M.suggesting[bufnr] = {
+    base = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false),
+    views = {},
+    queue = {},
+    busy = false,
+    undo = {},
+  }
+  vim.api.nvim_create_autocmd({ "InsertLeave", "TextChanged" }, {
+    group = group,
+    buffer = bufnr,
+    callback = function()
+      capture(bufnr)
+    end,
+  })
+  vim.api.nvim_create_autocmd("BufReadPost", {
+    group = group,
+    buffer = bufnr,
+    callback = function()
+      rebase(bufnr)
+    end,
+  })
+  if key then
+    vim.keymap.set("n", key, function()
+      M.undo_suggestion(bufnr)
+    end, { buffer = bufnr, desc = "annox: undo last suggestion" })
+  end
+  vim.notify("annox: suggestion mode on", vim.log.levels.INFO)
+  M.render(bufnr)
+end
+
+--- Applies server edits (accepting a suggestion) without turning them into
+--- new suggestions.
+local function on_apply_edit(err, result, ctx)
+  local response = vim.lsp.handlers["workspace/applyEdit"](err, result, ctx)
+  for bufnr in pairs(M.suggesting) do
+    rebase(bufnr)
+  end
+  return response
+end
+
 --- Creates an annox workspace (§5.3), by default at the buffer's git root or
 --- the working directory, and attaches the server to its open buffers.
 --- opts: { root?, confirm? (default true) }
@@ -662,6 +1010,7 @@ local subcommands = {
   conflicts = function() M.resolve_conflict() end,
   history = function() M.history() end,
   suggest = function(o) M.suggest({ visual = o.range > 0 }) end,
+  suggesting = function() M.suggest_mode() end,
   reply = function() M.reply() end,
   resolve = function() M.resolve() end,
   reopen = function() M.reopen() end,
@@ -689,6 +1038,7 @@ function M.setup(opts)
     handlers = {
       ["annox/didChangeAnnotations"] = on_annotations,
       ["annox/didChangePresence"] = M.on_presence,
+      ["workspace/applyEdit"] = on_apply_edit,
     },
   })
   vim.lsp.enable("annox")

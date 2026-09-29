@@ -61,5 +61,5 @@ The server syncs only with hubs listed there. Remote hubs must use `wss://`, and
 
 ## Editor support
 
-- **Neovim:** [`editors/nvim/`](editors/nvim/README.md) is a plugin covering the full workflow: highlights, comments and suggestions, threads, accept and reject, local drafts, re-targeting, conflict resolution, and history.
+- **Neovim:** [`editors/nvim/`](editors/nvim/README.md) is a plugin covering the full workflow: highlights, comments and suggestions, threads, accept and reject, suggestion mode, local drafts, re-targeting, conflict resolution, and history.
 - **Any other LSP editor:** point it at `annox lsp` for the plain-LSP features.
