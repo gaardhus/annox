@@ -197,6 +197,3 @@ Failed requests use JSON-RPC errors with these codes. They are outside the range
 - A **Server** MUST implement §6.1–§6.6 and meet the Client semantics of §1.5 for everything it writes. Its core MUST pass all test vectors.
 - An annox-aware editor plugin that exposes every Client action (§1.5) through the extension methods conforms as a **Client** when used with a conforming Server.
 - A plain LSP client used with a Server gets diagnostics, hover, and the commands of §6.5. That doesn't amount to a Client, and it doesn't fully meet the Viewer requirements either, because conflicts are only flagged, not shown in detail.
-
-## Open questions
-
