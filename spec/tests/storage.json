@@ -1,6 +1,6 @@
 {
   "description": "Storage test vectors for annox spec §5. Each case gives a workspace's files (path relative to the workspace root → content) and a document path. Load it (§5.7.1) and compare with `expected`: `documents` maps every document id to its derived `path`, `mergedInto`, and `conflicts` (§5.5.1); `at` lists documents at the path (R); `loaded` the documents whose annotations are loaded (S); `folders` the folders read (relative to .annox/, so shared folders start with docs/ and local ones with local/docs/); `events` the annotation event ids read; `annotations` the annotation ids. All lists are sorted.",
-  "specVersion": "0.0",
+  "specVersion": "0.1",
   "cases": [
     {
       "name": "single-document",

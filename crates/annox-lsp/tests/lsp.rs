@@ -85,7 +85,7 @@ fn diagnostics_hover_and_accept() {
     );
     let result = client.response(&init).unwrap();
     assert_eq!(result["capabilities"]["positionEncoding"], "utf-8");
-    assert_eq!(result["capabilities"]["experimental"]["annox"]["version"], "0.0");
+    assert_eq!(result["capabilities"]["experimental"]["annox"]["version"], "0.1");
     client.notify("initialized", json!({}));
 
     client.notify(

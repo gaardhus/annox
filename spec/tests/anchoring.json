@@ -1,6 +1,6 @@
 {
   "description": "Anchor resolution test vectors for annox spec §3. For each case: normalize `document` (§3.2), resolve `anchor` against it (§3.7), and compare with `expected`. Offsets are code points; `start`/`end` are null when orphaned.",
-  "specVersion": "0.0",
+  "specVersion": "0.1",
   "cases": [
     {
       "name": "version-match",

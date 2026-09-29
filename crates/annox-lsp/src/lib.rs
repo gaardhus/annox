@@ -39,7 +39,7 @@ use serde_json::{json, Map, Value};
 use crate::position::{Encoding, LineIndex};
 
 /// Spec version implemented (§6.2).
-pub const SPEC_VERSION: &str = "0.0";
+pub const SPEC_VERSION: &str = "0.1";
 
 const COMMANDS: [&str; 4] = ["annox.accept", "annox.reject", "annox.resolve", "annox.reopen"];
 

@@ -684,7 +684,7 @@ function M.setup(opts)
         on_dir(root)
       end
     end,
-    capabilities = { experimental = { annox = { version = "0.0" } } },
+    capabilities = { experimental = { annox = { version = "0.1" } } },
     init_options = { annox = { diagnostics = false, author = M.config.author } },
     handlers = {
       ["annox/didChangeAnnotations"] = on_annotations,

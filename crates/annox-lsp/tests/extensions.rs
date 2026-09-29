@@ -26,7 +26,7 @@ fn setup() -> Fixture {
     let file = dir.path().join("paper.tex");
     std::fs::write(&file, DOC).unwrap();
     let (client, _) = Client::start(json!({
-        "capabilities": { "experimental": { "annox": { "version": "0.0" } } },
+        "capabilities": { "experimental": { "annox": { "version": "0.1" } } },
         "initializationOptions": { "annox": {
             "author": { "id": "mailto:ada@example.org", "name": "Ada" },
             "diagnostics": false,

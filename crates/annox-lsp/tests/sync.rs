@@ -22,7 +22,7 @@ fn workspace(dir: &std::path::Path, url: &str) -> String {
 
 fn client(uri: &str, name: &str) -> Client {
     let (client, _) = Client::start(json!({
-        "capabilities": { "experimental": { "annox": { "version": "0.0" } } },
+        "capabilities": { "experimental": { "annox": { "version": "0.1" } } },
         "initializationOptions": { "annox": {
             "diagnostics": false,
             "author": { "id": format!("mailto:{name}@example.org"), "name": name },

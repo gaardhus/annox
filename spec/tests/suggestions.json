@@ -1,6 +1,6 @@
 {
   "description": "Suggestion applicability and application test vectors for annox spec §4. For each case: normalize `document` (§3.2), resolve the suggestion's anchor (§3.7), derive applicability (§4.2), and if applicable compute the result (§4.3 step 2). `result` is normalized text, or null when stale.",
-  "specVersion": "0.0",
+  "specVersion": "0.1",
   "cases": [
     {
       "name": "replace-at-base",

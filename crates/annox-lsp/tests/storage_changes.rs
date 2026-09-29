@@ -27,7 +27,7 @@ fn outside_changes_are_pushed_without_a_save() {
     let uri = format!("file://{}", file.display());
     // No didChangeWatchedFiles support: the server polls.
     let (client, _) = Client::start(json!({
-        "capabilities": { "experimental": { "annox": { "version": "0.0" } } },
+        "capabilities": { "experimental": { "annox": { "version": "0.1" } } },
         "initializationOptions": { "annox": { "diagnostics": false } },
     }));
     open(&client, &uri);

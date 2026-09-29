@@ -20,7 +20,7 @@ An annox-aware client declares itself in `initialize` under `capabilities.experi
 ```json
 "capabilities": {
   "experimental": {
-    "annox": { "version": "0.0" }
+    "annox": { "version": "0.1" }
   }
 }
 ```
@@ -175,7 +175,7 @@ The client applies the edit to its buffer, so the user can undo it and save as u
 | Method | Params |
 |---|---|
 | `annox/didChangeAnnotations` | `{ textDocument, annotations: AnnotationView[], document: DocumentInfo }` |
-| `annox/didChangePresence` | `{ peers: { author, textDocument?, range? }[] }`: others' presence from the sync hub (§7.8), with documents as URIs and ranges as LSP `Range`s. Sent whenever it changes. |
+| `annox/didChangePresence` | `{ peers: { author, textDocument?: { uri }, range?: Range }[] }`: others' presence from the sync hub (§7.8), mapped onto this copy of the workspace. Sent whenever it changes. |
 
 The server sends `annox/didChangeAnnotations` for an open document whenever its annotations or their resolution change, for whatever reason: a request, an edit to the buffer, a change in storage, or a rename. It carries the full current list for the document, so clients just replace their state. Closed threads and deleted annotations are included only if the client asked for them in its most recent `annox/annotations` request for that document.
 
