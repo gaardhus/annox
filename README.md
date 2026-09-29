@@ -38,6 +38,8 @@ curl -fsSL https://raw.githubusercontent.com/gaardhus/annox/main/install.sh | sh
 curl -fsSL https://raw.githubusercontent.com/gaardhus/annox/main/install.sh | sh -s -- --skill
 ```
 
+Later, `annox update` installs the newest release over the binary you run it from, and also updates the skill if it's installed. Pass `--version vX.Y.Z` to pick a release.
+
 To build from source and work on annox:
 
 ```sh
