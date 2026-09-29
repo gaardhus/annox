@@ -122,7 +122,18 @@ fn relocated_suggestions_need_confirmation() {
 fn rejects_unknown_options() {
     let dir = setup(DOC);
     let err = error(dir.path(), &["comment", "paper.md", "--quote", "teh", "--bdy", "x"]);
-    assert!(err.contains("unknown option --bdy"), "{err}");
+    assert!(err.contains("unexpected argument '--bdy'") && err.contains("'--body'"), "{err}");
+}
+
+#[test]
+fn values_may_start_with_a_hyphen() {
+    let dir = setup("- item one\n- item two\n");
+    let s = id(&annox(
+        dir.path(),
+        &["suggest", "paper.md", "--quote", "- item two", "--replace", "- item 2", "--body", "-"],
+    ));
+    let list = annox(dir.path(), &["list"]);
+    assert_eq!((&list[0]["id"], &list[0]["replacement"]), (&s.into(), &"- item 2".into()));
 }
 
 #[test]
