@@ -92,7 +92,7 @@ LSP has no standard way to ask the user for free text, so writing comments, repl
 
 ### 6.6.1 Wire types
 
-**AnnotationView** is the derived annotation (§2.5.6), plus how it resolves in the current document:
+**AnnotationView** is the derived annotation (§2.5.6) without `target`, with `conflicts` expanded as described below, and with how it resolves in the current document added:
 
 ```json
 {
@@ -104,6 +104,7 @@ LSP has no standard way to ask the user for free text, so writing comments, repl
   "label": null,
   "status": "open",
   "edit": { "replacement": "we show that" },
+  "retargetedBy": null,
   "deleted": false,
   "resolution": {
     "state": "relocated",
@@ -122,7 +123,7 @@ LSP has no standard way to ask the user for free text, so writing comments, repl
 - `applicable` is present only for open suggestions (§4.2).
 - `local` is true for local-only annotations (§5.11).
 - `replies` holds the thread's reply AnnotationViews, in the order of §2.5.5. Replies have no `resolution`.
-- `conflicts` maps each conflicted field to its competing values, so the client can show them:
+- `conflicts` maps each conflicted field to a list of **ConflictEntry** objects (the competing events, with their values), instead of the bare event ids used in §2.5.6, so the client can show them:
 
 ```json
 "conflicts": {
@@ -133,7 +134,7 @@ LSP has no standard way to ask the user for free text, so writing comments, repl
 }
 ```
 
-A document-level conflict (a conflicted `path`, §5.5.1) is reported through `annox/didChangeAnnotations` (§6.6.3).
+A ConflictEntry is `{ event, author, time, value }`. For a delete conflict (§2.5.3), `value` is the event's type (`"delete"`, `"edit"`, …). A document-level conflict (a conflicted `path`, §5.5.1) is reported in `DocumentInfo` (§6.6.2).
 
 ### 6.6.2 Requests (client → server)
 
@@ -157,7 +158,7 @@ Every request that changes something writes the corresponding events (§2.4), th
 | `annox/history` | `{ annotation }` | Returns the annotation's events in the order of §2.5.5, for history views. Changes nothing. |
 | `annox/setPresence` | `{ textDocument?, selection?: Range }` (notification) | The user's current document and cursor, forwarded to the sync hub as presence (§7.8). Clients send it as the focus or cursor changes, and not at all if the user turned presence off. LSP has no cursor notifications, so plain LSP clients share no presence. |
 
-`DocumentInfo` is `{ documents: Id[], conflicts: { path?: [...] }, duplicates: boolean }`, covering the document records at the path (§5.7.1).
+`DocumentInfo` is `{ documents: Id[], conflicts: { path?: ConflictEntry[] }, duplicates: boolean }`, covering the document records at the path (§5.7.1). The `value` of a path ConflictEntry is the competing path.
 
 **Applying edits.** For `annox/accept`, and for `annox/resolveConflict` with `revert`, the server:
 
@@ -176,7 +177,7 @@ The client applies the edit to its buffer, so the user can undo it and save as u
 | `annox/didChangeAnnotations` | `{ textDocument, annotations: AnnotationView[], document: DocumentInfo }` |
 | `annox/didChangePresence` | `{ peers: { author, textDocument?, range? }[] }`: others' presence from the sync hub (§7.8), with documents as URIs and ranges as LSP `Range`s. Sent whenever it changes. |
 
-The server sends this for an open document whenever its annotations or their resolution change, for whatever reason: a request, an edit to the buffer, a change in storage, or a rename. It carries the full current list for the document, so clients just replace their state. Closed threads and deleted annotations are included only if the client asked for them in its most recent `annox/annotations` request for that document.
+The server sends `annox/didChangeAnnotations` for an open document whenever its annotations or their resolution change, for whatever reason: a request, an edit to the buffer, a change in storage, or a rename. It carries the full current list for the document, so clients just replace their state. Closed threads and deleted annotations are included only if the client asked for them in its most recent `annox/annotations` request for that document.
 
 ### 6.6.4 Errors
 

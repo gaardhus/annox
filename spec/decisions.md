@@ -219,3 +219,9 @@ Step 4 has a point variant that searches collapsed prefix plus suffix. When the 
 The hub relays who is connected, their open document, and their cursor. Nothing is stored. Users can turn it off, and a replica that has turned it off sends nothing. Partial sync and hub federation are deferred. See §7.8.
 
 **Why:** it gives a Google-Docs-like live experience, and keeping it out of the event model means no storage or history implications. Being on by default matches what users of collaborative editors expect. The opt-out is required.
+
+## D38. Shared records are never merged into local ones; unknown merge targets are ignored (2026-09-29)
+
+When duplicate document records span the local and shared areas, the survivor is the smallest shared id. Readers ignore a `mergedInto` value that names a document they don't know. See §5.5.1 and §5.8.
+
+**Why:** found in the full review. Merging a shared record into a local one wrote a redirect that no one else could follow, which hid every shared annotation on that file from other users. The reader-side rule is a safety net, in case a buggy writer does it anyway.

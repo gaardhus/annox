@@ -56,7 +56,7 @@ Every event, whether it belongs to an annotation (§2.3) or a document (§5.5.1)
 
 - The name is `<event id>.json`, where the id is the event's `id` in canonical lowercase form.
 - The content is one JSON object (RFC 8259): the event, encoded as UTF-8 without a byte order mark. Writers SHOULD pretty-print it with a trailing newline, so that diffs are readable.
-- Event files are immutable. A tool MUST NOT modify an event file after writing it. It MAY move the file between folders of the same document (§5.6, §5.7).
+- Event files are immutable. A tool MUST NOT modify an event file after writing it. It MAY move the file only as this section allows: between folders of the same document in the same area (§5.6), from a merged duplicate to its survivor (§5.8), or from the local area to the shared one when publishing (§5.11).
 - Writers MUST write atomically: first write to a temporary file in the same directory whose name doesn't end in `.json` (e.g. `.<event id>.json.tmp`), then rename it into place.
 
 Readers MUST ignore files whose names are not `<UUID>.json`. That includes temporary files, editor backups, and OS metadata files. If two files hold events with the same `id`, they are the same event. Readers use one of them and MAY report a mismatch if their contents differ. A file whose content isn't valid JSON, or whose `id` doesn't match its filename, MUST be ignored and SHOULD be reported.
@@ -73,7 +73,7 @@ A document record is an event log, like an annotation. Its events use the envelo
 |---|---|---|
 | `document` | `path` | Creates the document record at `path`. Its `id` is the document id, and `document` equals `id`. `after` is empty. |
 | `move` | `path` | The document now lives at `path`. |
-| `merged` | `into` (Id) | This record is a duplicate of document `into` (§5.8). `into` MUST be smaller than this document's id. |
+| `merged` | `into` (Id) | This record is a duplicate of document `into` (§5.8). `into` MUST be smaller than this document's id, and MUST NOT be a local record if this record is shared. |
 
 Document events are replayed by the rules of §2.5, with these fields:
 
@@ -85,13 +85,15 @@ Document events are replayed by the rules of §2.5, with these fields:
 
 A conflicted `path` (two concurrent `move` heads) is surfaced and resolved like any other conflict (§2.5.3, §2.5.4). The resolving event is a `move` whose `after` lists both heads. Until then, the provisional value is used.
 
+A `merged` event is invalid, and changes nothing (§2.4), if its `into` isn't smaller than the document's id. A reader also ignores a `mergedInto` value that names a document it doesn't know, for example a local record on someone else's machine. The record then stays at its own path, so its annotations are never hidden behind an invisible redirect.
+
 A document whose `mergedInto` is set is **merged**. Its `path` is ignored. Its **canonical document** is found by following `mergedInto` until reaching a document that isn't merged. Because `into` is always smaller, this can't loop. A document that isn't merged is its own canonical document.
 
 The **current path** of a document is its `path` value. A document that isn't merged is **at** its current path.
 
 ### 5.5.2 Document folders
 
-A **document folder** is a directory under `.annox/docs/` whose name ends in `~<document id>`. Its location mirrors a path: the folder for document *d* at path `ch2/intro.md` is `.annox/docs/ch2/intro.md~<d>/`.
+A **document folder** is a directory under `.annox/docs/` (the **shared area**) or `.annox/local/docs/` (the **local area**, §5.11) whose name ends in `~<document id>`. Its location mirrors a path: the shared folder for document *d* at path `ch2/intro.md` is `.annox/docs/ch2/intro.md~<d>/`.
 
 - The folder's `document/` subdirectory holds document events (§5.5.1) for *d*.
 - The event files directly inside the folder are annotation events.
@@ -129,7 +131,7 @@ If *R* has more than one document, the file has **duplicate records** (§5.8). R
 ### 5.7.2 Writing events
 
 - **New annotation on *P*.** If *R* is empty, the Client first creates a document record: a `document` event with `path` *P*, written to `.annox/docs/<P>~<id>/document/`. If *R* has one document, it is used. If *R* has several, the one with the smallest id is used, and the Client SHOULD merge the others (§5.8).
-- **Later events of an annotation** are written to a folder of the canonical document of the folder holding the annotation's `create` event. Writers SHOULD use the folder named after the document's current path, creating it if needed.
+- **Later events of an annotation** are written to a folder of the canonical document of the folder holding the annotation's `create` event, in the same area as the `create` event (§5.11). Writers SHOULD use the folder named after the document's current path, creating it if needed.
 - Writers MUST NOT store events of one annotation under different canonical documents. Moving an annotation to another document is not supported in v1.
 
 ### 5.7.3 Missing documents
@@ -140,8 +142,8 @@ If no file exists at a document's current path, its annotations are kept. Viewer
 
 Duplicate records happen when two branches each start annotating the same new file and both create a document record. Readers load them together (§5.7.1). A Client that finds duplicates at a path SHOULD merge them:
 
-1. Let *s* be the duplicate with the smallest id.
-2. For every other duplicate *d*: move *d*'s annotation event files into *s*'s folder, then write a `merged` event with `into: s` to *d*'s log.
+1. Let *s* be the duplicate with the smallest id among the **shared** records, or among all of them if every record is local. A shared record is never merged into a local one, because others could never see the survivor.
+2. For every other duplicate *d*: move *d*'s annotation event files into *s*'s folders, keeping each file in its area. Shared files go to *s*'s shared folder, and local files to *s*'s local folder. Then write a `merged` event with `into: s` to *d*'s log.
 
 *d*'s folder, now holding only `document/`, stays in place. If an event from a branch without the merge later lands in *d*'s folder, it is still loaded through the redirect, and it can be tidied into *s*'s folder. Choosing the smallest id means two Clients merging concurrently choose the same survivor.
 
@@ -160,8 +162,8 @@ Duplicate records happen when two branches each start annotating the same new fi
 - **One area per annotation.** All events of an annotation MUST be in the same area, either shared or local. Otherwise a shared event could list a local event in `after`, and other copies would see it as dangling (§2.5.1).
 - **Replies.** A local reply to a shared root is allowed. A shared reply MUST NOT have a local parent, because others couldn't see the thread.
 - **Document records.** A local annotation on a document that has a shared document record uses that record's id. Its folder is `local/docs/<path>~<id>/`, with no `document/` subfolder. If there is no shared record, the Client creates a local one under `local/docs/`.
-- **Publishing** an annotation makes it shared. The Client moves all of the annotation's event files from its local folder to the shared folder of the same document. It SHOULD publish the annotation's local replies at the same time. If the document record is local, the Client publishes that too, by moving its `document/` events. If a shared record for the same path appeared in the meantime, the two are duplicates and are merged as described in §5.8.
-- **Display.** Clients MUST visibly distinguish local annotations from shared ones, and MUST offer a way to publish them. Viewers MAY omit local annotations.
+- **Publishing** an annotation makes it shared. The Client moves all of the annotation's event files from its local folder to the shared folder of the same document. It SHOULD publish the annotation's local replies at the same time. If the document record is local, the Client publishes that too, by moving its `document/` events. If a shared record for the same path appeared in the meantime, the two are duplicates and are merged as described in §5.8, with the shared record as the survivor.
+- **Display.** Loading always includes the local area (§5.7.1). Clients MUST visibly distinguish local annotations from shared ones, and MUST offer a way to publish them. Viewers MAY hide local annotations from what they display.
 
 A rename (§5.6) writes `move` events to every document record at the old path, in whichever area each record lives.
 

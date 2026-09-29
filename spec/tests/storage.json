@@ -682,6 +682,90 @@
           "01926d3a-0002-7000-8000-000000000000"
         ]
       }
+    },
+    {
+      "name": "merged-into-unknown",
+      "description": "A shared record merged into a document this reader doesn't know (e.g. someone's local record): the redirect is ignored and the record stays at its path.",
+      "files": {
+        ".annox/annox.json": "{ \"format\": 1 }\n",
+        ".annox/.gitignore": "cache/\n",
+        ".annox/docs/intro.md~01926d3a-0200-7000-8000-000000000000/document/01926d3a-0200-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0200-7000-8000-000000000000\",\n  \"document\": \"01926d3a-0200-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"document\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T15:00:00Z\",\n  \"path\": \"intro.md\"\n}\n",
+        ".annox/docs/intro.md~01926d3a-0200-7000-8000-000000000000/document/01926d3a-0201-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0201-7000-8000-000000000000\",\n  \"document\": \"01926d3a-0200-7000-8000-000000000000\",\n  \"after\": [\n    \"01926d3a-0200-7000-8000-000000000000\"\n  ],\n  \"type\": \"merged\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T15:00:00Z\",\n  \"into\": \"01926d3a-0100-7000-8000-000000000000\"\n}\n",
+        ".annox/docs/intro.md~01926d3a-0200-7000-8000-000000000000/01926d3a-0002-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0002-7000-8000-000000000000\",\n  \"annotation\": \"01926d3a-0002-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"create\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T14:00:00Z\",\n  \"kind\": \"comment\",\n  \"target\": {\n    \"path\": \"x\",\n    \"version\": \"sha256:066f0dd650a93335b6f09283c11769b9053c87a602e57091fc354aa6eb992fdd\",\n    \"selectors\": {\n      \"position\": {\n        \"start\": 6,\n        \"end\": 11\n      },\n      \"quote\": {\n        \"exact\": \"world\",\n        \"prefix\": \"Hello \",\n        \"suffix\": \", this is a document.\\n\"\n      }\n    }\n  }\n}\n"
+      },
+      "path": "intro.md",
+      "expected": {
+        "documents": {
+          "01926d3a-0200-7000-8000-000000000000": {
+            "path": "intro.md",
+            "mergedInto": null,
+            "conflicts": {}
+          }
+        },
+        "at": [
+          "01926d3a-0200-7000-8000-000000000000"
+        ],
+        "loaded": [
+          "01926d3a-0200-7000-8000-000000000000"
+        ],
+        "folders": [
+          "docs/intro.md~01926d3a-0200-7000-8000-000000000000"
+        ],
+        "events": [
+          "01926d3a-0002-7000-8000-000000000000"
+        ],
+        "annotations": [
+          "01926d3a-0002-7000-8000-000000000000"
+        ]
+      }
+    },
+    {
+      "name": "merged-into-larger",
+      "description": "A merged event whose target id is not smaller is invalid and ignored.",
+      "files": {
+        ".annox/annox.json": "{ \"format\": 1 }\n",
+        ".annox/.gitignore": "cache/\n",
+        ".annox/docs/intro.md~01926d3a-0100-7000-8000-000000000000/document/01926d3a-0100-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0100-7000-8000-000000000000\",\n  \"document\": \"01926d3a-0100-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"document\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T15:00:00Z\",\n  \"path\": \"intro.md\"\n}\n",
+        ".annox/docs/intro.md~01926d3a-0100-7000-8000-000000000000/document/01926d3a-0101-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0101-7000-8000-000000000000\",\n  \"document\": \"01926d3a-0100-7000-8000-000000000000\",\n  \"after\": [\n    \"01926d3a-0100-7000-8000-000000000000\"\n  ],\n  \"type\": \"merged\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T15:00:00Z\",\n  \"into\": \"01926d3a-0200-7000-8000-000000000000\"\n}\n",
+        ".annox/docs/intro.md~01926d3a-0100-7000-8000-000000000000/01926d3a-0001-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0001-7000-8000-000000000000\",\n  \"annotation\": \"01926d3a-0001-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"create\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T14:00:00Z\",\n  \"kind\": \"comment\",\n  \"target\": {\n    \"path\": \"x\",\n    \"version\": \"sha256:066f0dd650a93335b6f09283c11769b9053c87a602e57091fc354aa6eb992fdd\",\n    \"selectors\": {\n      \"position\": {\n        \"start\": 6,\n        \"end\": 11\n      },\n      \"quote\": {\n        \"exact\": \"world\",\n        \"prefix\": \"Hello \",\n        \"suffix\": \", this is a document.\\n\"\n      }\n    }\n  }\n}\n",
+        ".annox/docs/intro.md~01926d3a-0200-7000-8000-000000000000/document/01926d3a-0200-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0200-7000-8000-000000000000\",\n  \"document\": \"01926d3a-0200-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"document\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T15:00:00Z\",\n  \"path\": \"intro.md\"\n}\n",
+        ".annox/docs/intro.md~01926d3a-0200-7000-8000-000000000000/01926d3a-0002-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0002-7000-8000-000000000000\",\n  \"annotation\": \"01926d3a-0002-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"create\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T14:00:00Z\",\n  \"kind\": \"comment\",\n  \"target\": {\n    \"path\": \"x\",\n    \"version\": \"sha256:066f0dd650a93335b6f09283c11769b9053c87a602e57091fc354aa6eb992fdd\",\n    \"selectors\": {\n      \"position\": {\n        \"start\": 6,\n        \"end\": 11\n      },\n      \"quote\": {\n        \"exact\": \"world\",\n        \"prefix\": \"Hello \",\n        \"suffix\": \", this is a document.\\n\"\n      }\n    }\n  }\n}\n"
+      },
+      "path": "intro.md",
+      "expected": {
+        "documents": {
+          "01926d3a-0100-7000-8000-000000000000": {
+            "path": "intro.md",
+            "mergedInto": null,
+            "conflicts": {}
+          },
+          "01926d3a-0200-7000-8000-000000000000": {
+            "path": "intro.md",
+            "mergedInto": null,
+            "conflicts": {}
+          }
+        },
+        "at": [
+          "01926d3a-0100-7000-8000-000000000000",
+          "01926d3a-0200-7000-8000-000000000000"
+        ],
+        "loaded": [
+          "01926d3a-0100-7000-8000-000000000000",
+          "01926d3a-0200-7000-8000-000000000000"
+        ],
+        "folders": [
+          "docs/intro.md~01926d3a-0100-7000-8000-000000000000",
+          "docs/intro.md~01926d3a-0200-7000-8000-000000000000"
+        ],
+        "events": [
+          "01926d3a-0001-7000-8000-000000000000",
+          "01926d3a-0002-7000-8000-000000000000"
+        ],
+        "annotations": [
+          "01926d3a-0001-7000-8000-000000000000",
+          "01926d3a-0002-7000-8000-000000000000"
+        ]
+      }
     }
   ]
 }
