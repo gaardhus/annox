@@ -67,8 +67,29 @@ local function keys(k)
   vim.api.nvim_exec_autocmds("TextChanged", { buffer = buf })
 end
 
+local events = {}
+vim.api.nvim_create_autocmd("User", {
+  pattern = "AnnoxSuggesting",
+  callback = function(e)
+    table.insert(events, e.data.enabled)
+  end,
+})
+local function winhl()
+  return vim.wo.winhighlight
+end
+vim.wo.winhighlight = "Normal:Normal"
+
 annox.suggest_mode()
 check(annox.is_suggesting(buf), "suggestion mode on")
+check(vim.b[buf].annox_suggesting == true and annox.statusline() == "SUGGESTING", "statusline state on")
+check(#events == 1 and events[1] == true, "event on: " .. vim.inspect(events))
+check(winhl():find("CursorLineNr:AnnoxSuggestingCursorLineNr", 1, true) and winhl():find("^Normal:Normal,"), "tint on: " .. winhl())
+-- The tint belongs to the buffer, not the window.
+vim.cmd.enew()
+check(winhl() == "Normal:Normal", "no tint on another buffer: " .. winhl())
+check(annox.statusline() == "", "no label on another buffer")
+vim.cmd.buffer(buf)
+check(winhl():find("AnnoxSuggesting", 1, true), "tint back: " .. winhl())
 
 -- Typing inserts nothing into the buffer: it becomes a suggestion.
 vim.api.nvim_win_set_cursor(0, { 1, 10 })
@@ -155,6 +176,9 @@ expect("no suggestions after accepting", {})
 
 annox.suggest_mode()
 check(not annox.is_suggesting(buf), "suggestion mode off")
+check(vim.b[buf].annox_suggesting == false and annox.statusline() == "", "statusline state off")
+check(#events == 2 and events[2] == false, "event off: " .. vim.inspect(events))
+check(winhl() == "Normal:Normal", "tint off: " .. winhl())
 check(vim.fn.maparg("u", "n", false, true).buffer ~= 1, "undo key restored")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
 keys("x")

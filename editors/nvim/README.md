@@ -18,6 +18,7 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim), pointing at this directory
       -- presence = false,  -- stop sharing your cursor with collaborators on a sync hub
       -- inline_suggestions = true,  -- always draw suggestions inline, not only in suggestion mode
       -- suggest_undo_key = false,  -- keep `u` as plain undo in suggestion mode
+      -- suggest_tint = false,  -- don't tint line numbers and cursor line in suggestion mode
     })
   end,
 }
@@ -75,11 +76,25 @@ vim.keymap.set("x", "<leader>aa", ":Annox accept<cr>")
 - Accepting a suggestion still edits the buffer.
 - Suggestions are shared right away. Suggestion mode has no private-draft variant.
 
-For a statusline, `require("annox").is_suggesting()` tells whether the current buffer is in suggestion mode, and `require("annox").orphan_count()` how many annotations could not be located. The latter are also announced in a line above the text.
+While suggestion mode is on, the buffer's line numbers and cursor line are tinted green (`AnnoxSuggestingLineNr`, `AnnoxSuggestingCursorLineNr`, `AnnoxSuggestingCursorLine`, set through `'winhighlight'`). Set `suggest_tint = false` to turn this off.
+
+For a statusline, `require("annox").statusline()` returns `"SUGGESTING"` in suggestion mode and `""` otherwise, and `require("annox").is_suggesting()` returns the same as a boolean. The buffer variable `b:annox_suggesting` holds it too, and toggling fires `User AnnoxSuggesting` with `data = { buf, enabled }`. With lualine:
+
+```lua
+lualine_x = { { require("annox").statusline, color = "Added" } }
+```
+
+With a plain `'statusline'`:
+
+```vim
+set statusline+=%{get(b:,'annox_suggesting',0)?'SUGGESTING\ ':''}
+```
+
+`require("annox").orphan_count()` tells how many annotations could not be located. They are also announced in a line above the text.
 
 When the workspace syncs through a hub, collaborators' cursors appear as `▏Name` tags, and your own cursor is shared unless `presence = false`.
 
-Highlight groups: `AnnoxComment`, `AnnoxSuggestion`, and `AnnoxLocal` tint the background of annotated text in the matching diagnostic color, and `AnnoxStale` and `AnnoxConflict` undercurl it. The full list: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, `AnnoxPresenceRange`, for inline suggestions, `AnnoxDeletion` and `AnnoxInsertion`, and `AnnoxOrphans` for the notice about annotations that could not be located.
+Highlight groups: `AnnoxComment`, `AnnoxSuggestion`, and `AnnoxLocal` tint the background of annotated text in the matching diagnostic color, and `AnnoxStale` and `AnnoxConflict` undercurl it. The full list: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, `AnnoxPresenceRange`, for inline suggestions, `AnnoxDeletion` and `AnnoxInsertion`, `AnnoxOrphans` for the notice about annotations that could not be located, and `AnnoxSuggestingLineNr`, `AnnoxSuggestingCursorLineNr` and `AnnoxSuggestingCursorLine` for the suggestion mode tint.
 
 ## Tests
 

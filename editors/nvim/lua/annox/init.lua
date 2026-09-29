@@ -25,6 +25,8 @@ M.config = {
   --- Key that undoes your last suggestion while in suggestion mode, or false
   --- to leave undo alone.
   suggest_undo_key = "u",
+  --- Tint the line numbers and cursor line of windows in suggestion mode.
+  suggest_tint = true,
 }
 
 local presence_ns = vim.api.nvim_create_namespace("annox_presence")
@@ -75,6 +77,16 @@ local function set_highlights()
   end
   local removed = vim.api.nvim_get_hl(0, { name = "Removed", link = false })
   vim.api.nvim_set_hl(0, "AnnoxDeletion", { default = true, strikethrough = true, fg = removed.fg })
+  -- Suggestion mode tints the number column and cursor line toward "Added".
+  local added = vim.api.nvim_get_hl(0, { name = "Added", link = false }).fg
+  vim.api.nvim_set_hl(0, "AnnoxSuggestingCursorLineNr", { default = true, link = "Added" })
+  if vim.o.termguicolors and added then
+    vim.api.nvim_set_hl(0, "AnnoxSuggestingLineNr", { default = true, fg = tint(added, 0.5) })
+    vim.api.nvim_set_hl(0, "AnnoxSuggestingCursorLine", { default = true, bg = tint(added, 0.1) })
+  else
+    vim.api.nvim_set_hl(0, "AnnoxSuggestingLineNr", { default = true, link = "Added" })
+    vim.api.nvim_set_hl(0, "AnnoxSuggestingCursorLine", { default = true, link = "CursorLine" })
+  end
 end
 
 local function client_for(bufnr)
@@ -1203,6 +1215,44 @@ function M.is_suggesting(bufnr)
   return M.suggesting[bufnr or vim.api.nvim_get_current_buf()] ~= nil
 end
 
+--- A statusline label for suggestion mode in `bufnr`, or "" when it's off.
+function M.statusline(bufnr)
+  return M.is_suggesting(bufnr) and "SUGGESTING" or ""
+end
+
+local tint_groups = { "LineNr", "CursorLineNr", "CursorLine" }
+
+--- Adds or removes the suggestion mode tint in `win`'s 'winhighlight',
+--- keeping any other entries.
+local function sync_tint(win)
+  local on = M.config.suggest_tint and M.suggesting[vim.api.nvim_win_get_buf(win)] ~= nil
+  local old = vim.api.nvim_get_option_value("winhighlight", { win = win })
+  local entries = vim.tbl_filter(function(e)
+    return not e:find(":AnnoxSuggesting", 1, true)
+  end, vim.split(old, ",", { trimempty = true }))
+  if on then
+    for _, g in ipairs(tint_groups) do
+      table.insert(entries, g .. ":AnnoxSuggesting" .. g)
+    end
+  end
+  local new = table.concat(entries, ",")
+  if new ~= old then
+    vim.api.nvim_set_option_value("winhighlight", new, { win = win, scope = "local" })
+  end
+end
+
+--- Shows that suggestion mode changed in `bufnr`: the tint, `b:annox_suggesting`,
+--- the `User AnnoxSuggesting` event and the statusline.
+local function mode_changed(bufnr)
+  local on = M.suggesting[bufnr] ~= nil
+  vim.b[bufnr].annox_suggesting = on
+  for _, win in ipairs(vim.fn.win_findbuf(bufnr)) do
+    sync_tint(win)
+  end
+  vim.api.nvim_exec_autocmds("User", { pattern = "AnnoxSuggesting", modeline = false, data = { buf = bufnr, enabled = on } })
+  vim.cmd.redrawstatus({ bang = true })
+end
+
 --- Turns suggestion mode on or off for the current buffer.
 --- opts: { enable? (default: toggle) }
 function M.suggest_mode(opts)
@@ -1221,6 +1271,7 @@ function M.suggest_mode(opts)
       if key then
         pcall(vim.keymap.del, "n", key, { buffer = bufnr })
       end
+      mode_changed(bufnr)
       vim.notify("annox: suggestion mode off", vim.log.levels.INFO)
     end
     return M.render(bufnr)
@@ -1254,6 +1305,7 @@ function M.suggest_mode(opts)
       M.undo_suggestion(bufnr)
     end, { buffer = bufnr, desc = "annox: undo last suggestion" })
   end
+  mode_changed(bufnr)
   vim.notify("annox: suggestion mode on", vim.log.levels.INFO)
   M.render(bufnr)
 end
@@ -1341,6 +1393,13 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "BufEnter" }, {
     group = vim.api.nvim_create_augroup("annox_presence", { clear = true }),
     callback = send_presence,
+  })
+  -- A window keeps its 'winhighlight' when it switches buffers; re-sync it.
+  vim.api.nvim_create_autocmd({ "BufWinEnter", "WinEnter" }, {
+    group = vim.api.nvim_create_augroup("annox_suggesting_tint", { clear = true }),
+    callback = function()
+      sync_tint(vim.api.nvim_get_current_win())
+    end,
   })
   vim.api.nvim_create_user_command("Annox", function(o)
     local fn = subcommands[o.fargs[1]]
