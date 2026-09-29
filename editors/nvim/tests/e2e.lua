@@ -91,5 +91,97 @@ wait("comment to resolve", function()
   return #annotations() == 0
 end)
 
+local function find(pred)
+  for _, a in ipairs(annotations()) do
+    if pred(a) then
+      return a
+    end
+  end
+end
+
+-- A local draft, then published (§5.11).
+annox.comment({ range = range(0, 1, 8), body = "draft note", ["local"] = true })
+wait("draft", function()
+  return find(function(a)
+    return a["local"]
+  end) ~= nil
+end)
+local draft = find(function(a)
+  return a["local"]
+end)
+check(#vim.fn.glob(root .. "/.annox/local/docs/**/" .. draft.id .. ".json", false, true) == 1, "draft file is local")
+annox.publish({ all = true })
+wait("publish", function()
+  local a = find(function(x)
+    return x.id == draft.id
+  end)
+  return a and not a["local"]
+end)
+
+-- A suggestion goes stale when its text changes, then is re-targeted (§4.2.1).
+annox.suggest({ range = range(1, 27, 36), replacement = "this bound" })
+wait("second suggestion", function()
+  return find(function(a)
+    return a.kind == "suggestion"
+  end) ~= nil
+end)
+local stale = find(function(a)
+  return a.kind == "suggestion"
+end)
+vim.api.nvim_buf_set_lines(buf, 1, 2, false, { "In Section 3, we show that a bound is tight." })
+wait("suggestion to go stale", function()
+  local a = find(function(x)
+    return x.id == stale.id
+  end)
+  return a and a.applicable == false
+end)
+annox.retarget({ annotation = stale.id, range = range(1, 27, 34), replacement = "this bound" })
+wait("re-targeted suggestion to apply again", function()
+  local a = find(function(x)
+    return x.id == stale.id
+  end)
+  return a and a.applicable == true
+end)
+
+-- Two concurrent edits written to disk, as if merged from two branches.
+local create_file = vim.fn.glob(root .. "/.annox/docs/**/" .. draft.id .. ".json", false, true)[1]
+for i, body in ipairs({ "mine", "theirs" }) do
+  local id = string.format("019a0000-0000-7000-8000-00000000000%d", i)
+  local event = {
+    id = id,
+    annotation = draft.id,
+    after = { draft.id },
+    type = "edit",
+    author = { id = "mailto:bob@example.org", name = "Bob" },
+    time = "2026-09-29T10:00:00Z",
+    body = body,
+  }
+  vim.fn.writefile({ vim.json.encode(event) }, vim.fs.dirname(create_file) .. "/" .. id .. ".json")
+end
+vim.cmd.write()
+wait("conflict to be pushed", function()
+  local a = find(function(x)
+    return x.id == draft.id
+  end)
+  return a and a.conflicts.body ~= nil
+end)
+annox.resolve_conflict({ annotation = draft.id, field = "body", value = "merged" })
+wait("conflict to resolve", function()
+  local a = find(function(x)
+    return x.id == draft.id
+  end)
+  return a and next(a.conflicts) == nil and a.body == "merged"
+end)
+
+annox.history({ annotation = draft.id })
+wait("history float", function()
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_config(w).relative ~= "" then
+      local text = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(w), 0, -1, false), "\n")
+      return text:find("merged", 1, true) ~= nil and text:find("Bob", 1, true) ~= nil
+    end
+  end
+end)
+
 print("annox nvim e2e: OK")
 vim.cmd.qall({ bang = true })

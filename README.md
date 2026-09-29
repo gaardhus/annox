@@ -27,5 +27,5 @@ Edits always go through `workspace/applyEdit`, and the status event is written o
 
 ## Editor support
 
-- **Neovim:** [`editors/nvim/`](editors/nvim/README.md) is a plugin with highlights, comment and suggestion commands, threads, accept and reject, and orphan listing.
+- **Neovim:** [`editors/nvim/`](editors/nvim/README.md) is a plugin covering the full workflow: highlights, comments and suggestions, threads, accept and reject, local drafts, re-targeting, conflict resolution, and history.
 - **Any other LSP editor:** point it at `annox lsp` for the plain-LSP features.

@@ -27,6 +27,7 @@ local function set_highlights()
     AnnoxSuggestion = "DiagnosticUnderlineHint",
     AnnoxStale = "DiagnosticUnderlineWarn",
     AnnoxConflict = "DiagnosticUnderlineError",
+    AnnoxLocal = "DiagnosticUnderlineOk",
     AnnoxVirtualText = "Comment",
     AnnoxSign = "DiagnosticSignInfo",
   }
@@ -53,6 +54,8 @@ end
 local function highlight_group(a)
   if next(a.conflicts or {}) then
     return "AnnoxConflict"
+  elseif a["local"] then
+    return "AnnoxLocal"
   elseif a.kind == "suggestion" then
     return a.applicable and "AnnoxSuggestion" or "AnnoxStale"
   end
@@ -76,7 +79,7 @@ function M.render(bufnr)
       local sl, el = r.start.line, math.min(r["end"].line, line_count - 1)
       local sc, ec = byte_col(bufnr, r.start, enc), byte_col(bufnr, r["end"], enc)
       local mark = {
-        sign_text = a.kind == "suggestion" and "±" or "»",
+        sign_text = a["local"] and "✎" or a.kind == "suggestion" and "±" or "»",
         sign_hl_group = "AnnoxSign",
         priority = 150,
       }
@@ -92,6 +95,9 @@ function M.render(bufnr)
       if M.config.virtual_text and label then
         local replies = #(a.replies or {})
         local text = replies > 0 and string.format("%s (+%d)", label, replies) or label
+        if a["local"] then
+          text = "[draft] " .. text
+        end
         pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, sl, 0, {
           virt_text = { { "  " .. text, "AnnoxVirtualText" } },
           virt_text_pos = "eol",
@@ -383,8 +389,175 @@ function M.list()
   vim.cmd.copen()
 end
 
+local function buffer_annotations(bufnr, keep)
+  return vim.tbl_filter(keep, (M.state[bufnr] or {}).annotations or {})
+end
+
+--- Calls `fn(annotation)` with `opts.annotation`'s view, the only candidate,
+--- or the one the user picks.
+local function pick(opts, candidates, prompt, fn)
+  if opts.annotation then
+    for _, a in ipairs(candidates) do
+      if a.id == opts.annotation then
+        return fn(a)
+      end
+    end
+    return vim.notify("annox: that annotation doesn't apply here", vim.log.levels.WARN)
+  end
+  if #candidates == 0 then
+    return vim.notify("annox: nothing to " .. prompt:lower(), vim.log.levels.INFO)
+  elseif #candidates == 1 then
+    return fn(candidates[1])
+  end
+  vim.ui.select(candidates, { prompt = prompt, format_item = describe }, function(a)
+    if a then
+      fn(a)
+    end
+  end)
+end
+
+--- Publishes local drafts (§5.11): the one under the cursor, or all of the
+--- buffer's drafts with `opts.all`. opts: { annotation?, all? }
+function M.publish(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  local function is_local(a)
+    return a["local"]
+  end
+  if opts.all then
+    local ids = vim.tbl_map(function(a)
+      return a.id
+    end, buffer_annotations(bufnr, is_local))
+    if #ids == 0 then
+      return vim.notify("annox: no drafts to publish", vim.log.levels.INFO)
+    end
+    return request(bufnr, "annox/publish", { annotations = ids })
+  end
+  with_annotation(opts, is_local, function(id)
+    request(bufnr, "annox/publish", { annotations = { id } })
+  end)
+end
+
+--- Points a stale suggestion at the selection (§4.2.1).
+--- opts: { annotation?, range?, visual?, replacement? }
+function M.retarget(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  if not client_for(bufnr) then
+    return request(bufnr)
+  end
+  local range = target_range(bufnr, opts)
+  local stale = buffer_annotations(bufnr, function(a)
+    return a.kind == "suggestion" and a.status == "open" and not a.applicable
+  end)
+  pick(opts, stale, "Re-target", function(a)
+    with_input(opts.replacement, "Replace with: ", a.edit and a.edit.replacement, function(replacement)
+      request(bufnr, "annox/retarget", { annotation = a.id, range = range, replacement = replacement })
+    end)
+  end)
+end
+
+--- Re-attaches an orphaned comment to the selection (§3.7.4).
+--- opts: { annotation?, range?, visual? }
+function M.reattach(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  if not client_for(bufnr) then
+    return request(bufnr)
+  end
+  local range = target_range(bufnr, opts)
+  local orphans = buffer_annotations(bufnr, function(a)
+    return a.kind == "comment" and a.resolution and a.resolution.state == "orphaned"
+  end)
+  pick(opts, orphans, "Re-attach", function(a)
+    request(bufnr, "annox/reattach", { annotation = a.id, range = range })
+  end)
+end
+
+local function entry_label(field, e)
+  local who = e.author and (e.author.name or e.author.id) or "unknown"
+  local value = field == "target" and "(anchor)" or vim.inspect(e.value)
+  return string.format("%s — %s", value, who)
+end
+
+--- Resolves the conflicts of an annotation (§2.5.4), one field at a time.
+--- opts: { annotation?, field?, value?, revert? }
+function M.resolve_conflict(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  local conflicted = buffer_annotations(bufnr, function(a)
+    return next(a.conflicts or {}) ~= nil
+  end)
+  local function send(id, field, value, revert)
+    request(bufnr, "annox/resolveConflict", { annotation = id, field = field, value = value, revert = revert })
+  end
+  pick(opts, conflicted, "Resolve conflict", function(a)
+    if opts.field then
+      return send(a.id, opts.field, opts.value, opts.revert)
+    end
+    local field, entries = next(a.conflicts)
+    local choices = vim.deepcopy(entries)
+    if field == "body" or field == "label" then
+      table.insert(choices, { custom = true })
+    end
+    vim.ui.select(choices, {
+      prompt = "Conflicting " .. field,
+      format_item = function(e)
+        return e.custom and "Write a merged version…" or entry_label(field, e)
+      end,
+    }, function(choice)
+      if not choice then
+        return
+      elseif choice.custom then
+        return with_input(nil, "Merged " .. field .. ": ", a[field], function(text)
+          send(a.id, field, text)
+        end)
+      end
+      local value = choice.value
+      if field == "deleted" then
+        value = choice.value == "delete"
+      end
+      local has_accepted = vim.iter(entries):any(function(e)
+        return e.value == "accepted"
+      end)
+      if field == "status" and has_accepted and value ~= "accepted" then
+        local options = { "Revert the accepted edit", "Keep the document as it is" }
+        return vim.ui.select(options, { prompt = "The document already contains this suggestion" }, function(c)
+          if c then
+            send(a.id, field, value, c == options[1])
+          end
+        end)
+      end
+      send(a.id, field, value)
+    end)
+  end)
+end
+
+--- Shows the history of the annotation under the cursor (§2.5.5).
+function M.history(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  with_annotation(opts, nil, function(id)
+    request(bufnr, "annox/history", { annotation = id }, function(events)
+      local lines = {}
+      for _, e in ipairs(events) do
+        local who = e.author and (e.author.name or e.author.id) or "unknown"
+        local detail = e.body or e.status or (e.edit and e.edit.replacement) or ""
+        table.insert(lines, string.format("%s  %-8s %s  %s", e.time, e.type, who, first_line(tostring(detail))))
+      end
+      vim.lsp.util.open_floating_preview(lines, "text", { border = "rounded", focus_id = "annox-history" })
+    end)
+  end)
+end
+
 local subcommands = {
   comment = function(o) M.comment({ visual = o.range > 0 }) end,
+  draft = function(o) M.comment({ visual = o.range > 0, ["local"] = true }) end,
+  publish = function(o) M.publish({ all = o.bang }) end,
+  retarget = function(o) M.retarget({ visual = o.range > 0 }) end,
+  reattach = function(o) M.reattach({ visual = o.range > 0 }) end,
+  conflicts = function() M.resolve_conflict() end,
+  history = function() M.history() end,
   suggest = function(o) M.suggest({ visual = o.range > 0 }) end,
   reply = function() M.reply() end,
   resolve = function() M.resolve() end,
@@ -422,6 +595,7 @@ function M.setup(opts)
   end, {
     nargs = 1,
     range = true,
+    bang = true,
     complete = function()
       return vim.tbl_keys(subcommands)
     end,

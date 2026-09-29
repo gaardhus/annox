@@ -37,6 +37,12 @@ mkdir .annox && echo '{ "format": 1 }' > .annox/annox.json && printf 'cache/\nlo
 | `:Annox accept` / `reject` | Accept or reject the suggestion under the cursor. Accepting edits the buffer, and you can undo as usual. |
 | `:Annox resolve` / `reopen` | Resolve or reopen a thread. |
 | `:Annox orphans` | Pick from annotations whose text could no longer be found. |
+| `:Annox reattach` | Attach an orphaned comment to the selection. |
+| `:Annox retarget` | Point a stale suggestion at the selection, and review its replacement. |
+| `:Annox draft` | Like `comment`, but local-only: stored in the git-ignored `.annox/local/` and shown with ✎. |
+| `:Annox publish` | Publish the draft under the cursor. `:Annox! publish` publishes every draft in the buffer. |
+| `:Annox conflicts` | Resolve a conflicting field by picking one of the competing values or writing a merged version. Run it again for any other conflicting fields. If an accepted suggestion loses, you're offered to revert its edit. |
+| `:Annox history` | Show every event of the annotation under the cursor. |
 | `:Annox list` | Put the buffer's annotations in the quickfix list. |
 
 Suggested keymaps:
@@ -49,9 +55,7 @@ vim.keymap.set("n", "<leader>ar", "<cmd>Annox reply<cr>")
 vim.keymap.set("n", "<leader>aa", "<cmd>Annox accept<cr>")
 ```
 
-Highlight groups, all linked to diagnostic groups by default: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxVirtualText`, and `AnnoxSign`.
-
-Not yet supported: local drafts and publishing, re-targeting stale suggestions, and resolving conflicts. The server supports all of them, and conflicts are already highlighted.
+Highlight groups, all linked to diagnostic groups by default: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, and `AnnoxSign`.
 
 ## Tests
 
