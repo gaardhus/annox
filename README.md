@@ -37,6 +37,37 @@ The server implements:
 
 Edits always go through `workspace/applyEdit`, and the status event is written only once the editor confirms. The server picks up outside changes to `.annox/`, such as a `git pull`. It uses the editor's file watching where available, and otherwise checks every second. It offers to create a workspace when you add the first annotation outside one.
 
+## Command line
+
+The `annox` binary also reads and writes annotations directly, printing JSON. It's meant for scripts and AI agents: text is targeted by quoting it, not by offsets, and an ambiguous quote is an error that lists where it occurs.
+
+```sh
+annox list [FILE] [--all]
+annox comment paper.md --quote "the bound is tight" --body "Cite Lemma 4?"
+annox suggest paper.md --quote "teh" --replace "the" --body "typo"
+annox reply ID --body "Fixed."
+annox status ID resolved
+annox accept ID
+```
+
+Write commands use `--author`/`--name`, or `ANNOX_AUTHOR`/`ANNOX_AUTHOR_NAME`, and fall back to git's identity. Give an agent its own id, for example `ANNOX_AUTHOR=urn:agent:claude`, so its annotations are distinguishable from yours. A running `annox lsp` picks up the changes, so they appear in the editor. Run `annox help` for every command.
+
+### Agents
+
+[`skills/annox/`](skills/annox/SKILL.md) is a skill that teaches an agent the CLI and how to use it well: suggest instead of editing text you own, and answer comments in their threads. For Claude Code, link it into your skills:
+
+```sh
+ln -s "$PWD/skills/annox" ~/.claude/skills/annox
+```
+
+For agents that can't run shell commands, `annox mcp` serves the same commands as MCP tools over stdio:
+
+```sh
+claude mcp add annox -- annox mcp --author urn:agent:claude --name Claude
+```
+
+It works on the directory it's started in, or the one given with `--root`.
+
 ## Live sync
 
 To share annotations live instead of only through git, run a hub and point the workspace at it:

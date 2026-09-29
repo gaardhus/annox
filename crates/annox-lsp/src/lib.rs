@@ -2,6 +2,8 @@
 //! clients (§6.5), and `annox/*` extension methods for annox-aware ones
 //! (§6.6).
 
+pub mod cli;
+pub mod mcp;
 mod methods;
 pub mod position;
 mod views;
@@ -56,6 +58,27 @@ const INVALID_PARAMS: i32 = -32602;
 const INTERNAL_ERROR: i32 = -32603;
 
 type Failure = (i32, String);
+
+/// The identity to write events under when none is configured: git's, if
+/// `root` is in a git repository (§2.7).
+pub fn default_author(root: &Path) -> Value {
+    let git = |key: &str| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["config", key])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
+            .filter(|s| !s.is_empty())
+    };
+    match (git("user.email"), git("user.name")) {
+        (Some(email), name) => json!({ "id": format!("mailto:{email}"), "name": name }),
+        (None, Some(name)) => json!({ "id": "urn:annox:anonymous", "name": name }),
+        (None, None) => json!({ "id": "urn:annox:anonymous" }),
+    }
+}
 
 fn fail<T>(code: i32, message: impl Into<String>) -> Result<T, Failure> {
     Err((code, message.into()))
@@ -567,26 +590,7 @@ impl Server<'_> {
     }
 
     fn author(&self, ws: &Workspace) -> Value {
-        if let Some(a) = &self.author {
-            return a.clone();
-        }
-        // Default to the git identity (§2.7).
-        let git = |key: &str| {
-            std::process::Command::new("git")
-                .arg("-C")
-                .arg(&ws.root)
-                .args(["config", key])
-                .output()
-                .ok()
-                .filter(|o| o.status.success())
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
-                .filter(|s| !s.is_empty())
-        };
-        match (git("user.email"), git("user.name")) {
-            (Some(email), name) => json!({ "id": format!("mailto:{email}"), "name": name }),
-            (None, Some(name)) => json!({ "id": "urn:annox:anonymous", "name": name }),
-            (None, None) => json!({ "id": "urn:annox:anonymous" }),
-        }
+        self.author.clone().unwrap_or_else(|| default_author(&ws.root))
     }
 
     fn write_event(&self, a: &Analysis, annotation: &str, kind: &str, fields: Map<String, Value>) -> Result<(), Failure> {

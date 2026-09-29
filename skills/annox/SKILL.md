@@ -1,0 +1,69 @@
+---
+name: annox
+description: Read and write annox annotations — review comments and suggested edits stored in a project's `.annox/` directory. Use when a project has an `.annox/` directory and the user asks you to review, proofread, or give feedback on a document, to address or answer review comments, or to propose edits for them to accept rather than editing the file directly. Also use when the user mentions annox, annotations, suggestions, or review threads on a file.
+---
+
+# annox
+
+annox stores comments and suggested edits beside the files they're about, in `.annox/`. The user reviews them in their editor: they see your comments in context, and accept or reject each suggestion. Use it whenever the user should decide on a change, not you.
+
+Use the `annox` CLI through the shell. Every command prints JSON. If the `annox` MCP server is connected, its tools (`list_annotations`, `comment`, `suggest`, …) do the same things with the same arguments; use whichever is available.
+
+## Identity
+
+Write as yourself, not as the user, so your annotations are distinguishable from theirs. Set this once per shell command, or export it:
+
+```sh
+export ANNOX_AUTHOR=urn:agent:claude ANNOX_AUTHOR_NAME=Claude
+```
+
+The MCP server may already be started with an identity; then you don't need to set one.
+
+## Reading
+
+```sh
+annox list                  # open annotations in every document
+annox list paper.md         # one file
+annox list --all            # also resolved, accepted, rejected, withdrawn, deleted
+```
+
+Each entry has `id`, `path`, `kind` (`comment` or `suggestion`), `status`, `author`, `body`, `quote` (the text it's attached to, as it reads now), `line`, `resolution`, and `replies`. Suggestions also have `replacement` and `applicable`.
+
+- `resolution: "orphaned"` means the quoted text is gone from the file. Fix it with `reattach` or `retarget` (below), or tell the user.
+- `applicable: false` means the suggestion can't be applied as is. Use `retarget` to fix it.
+
+## Writing
+
+You target text by **quoting it exactly** as it appears in the file, including punctuation and markup. No line numbers or offsets.
+
+```sh
+annox comment paper.md --quote "the bound is tight" --body "Is this proved? Cite Lemma 4."
+annox suggest paper.md --quote "teh bound" --replace "the bound" --body "Typo."
+annox reply ID --body "Done in §3."
+annox status ID resolved            # comments: open | resolved
+annox status ID withdrawn           # suggestions: open | rejected | withdrawn
+annox edit ID --body "…"            # change your own comment
+annox retarget ID --quote "new text" --replace "…"   # move a suggestion to new text
+annox reattach ID --quote "new text"                 # move a comment to new text
+annox delete ID / annox restore ID
+```
+
+- If the quote occurs more than once, the command fails and lists the lines. Quote a longer passage so it's unique. Use `--occurrence N` (1-based) only when longer text wouldn't be unique either.
+- Quotes may span lines. Use real newlines, not `\n`.
+- `--body` is Markdown.
+- `--local` keeps an annotation private to this machine, as a draft. Use it only if the user asks.
+
+## How to work
+
+- **Suggest, don't edit, when the user owns the text.** For prose, papers, and docs under review, make suggestions instead of editing the file. Edit the file directly only if the user asks you to.
+- **Keep each suggestion small and self-contained.** Make one suggestion per logical change, quoting only the text that changes plus enough around it to be unique. Then the user can accept some and reject others. Don't rewrite a whole paragraph to fix one word.
+- **Say why** in `--body` whenever the reason isn't obvious from the change.
+- **Use comments for questions and for problems you can't fix yourself.** Use suggestions for concrete replacement text.
+- **Answer review comments in their thread.** When the user asks you to address comments, run `annox list`, then handle each one. Either make the change (as a suggestion, or as a direct edit if asked) and `reply` saying what you did, or `reply` explaining why not. Resolve a comment (`annox status ID resolved`) only when you've fully addressed it and it's addressed to you.
+- **Don't accept suggestions unless the user asks you to.** `annox accept ID` writes the change into the file and is final. If it says the suggestion was relocated, check the text at the reported line before passing `--confirmed`.
+- **Don't change other people's annotations.** Don't edit, withdraw, or delete them. Reply instead.
+- **Suggestions you make go stale if you then edit the same text yourself.** Finish your direct edits first, or retarget your suggestions afterwards.
+
+## Setup
+
+If a command says the file isn't in an annox workspace, ask the user before running `annox init` at the project root. It creates `.annox/`, which is meant to be committed.
