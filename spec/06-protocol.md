@@ -71,7 +71,7 @@ Unless disabled, the server publishes a diagnostic for every open root annotatio
 
 ### 6.5.2 Hover
 
-Hovering over an annotated range returns the thread as Markdown: the root's author, time, and body, then each reply. For suggestions, the proposed change comes first.
+Hovering over an annotated range returns the thread as Markdown: the root's author, time, and body, then each reply. For suggestions, the proposed change comes first. Where ranges overlap, every thread at the position is returned. Like diagnostics, hover covers only open annotations: resolved threads and closed suggestions are not shown.
 
 ### 6.5.3 Code actions and commands
 

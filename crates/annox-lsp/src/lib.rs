@@ -843,7 +843,7 @@ impl Server<'_> {
         let hits: Vec<&Item> = a
             .items
             .iter()
-            .filter(|i| !i.deleted())
+            .filter(|i| i.is_open())
             .filter(|i| i.resolution.range.is_some_and(|(s, e)| s <= offset && offset <= e))
             .collect();
         let first = hits.first()?.resolution.range?;

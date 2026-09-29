@@ -150,12 +150,24 @@ fn diagnostics_hover_and_accept() {
     let status_event = loaded.events.iter().find(|e| e.kind == "status" && e.annotation.as_deref() == Some(&comment.id));
     assert_eq!(status_event.unwrap().author["name"], "Bob");
 
+    // Hover shows only open threads (§6.5.2).
+    let hover_comment = |client: &mut Client| {
+        let id = client.request(
+            "textDocument/hover",
+            json!({ "textDocument": { "uri": uri }, "position": { "line": 1, "character": 5 } }),
+        );
+        client.response(&id).unwrap()
+    };
+    assert_eq!(hover_comment(&mut client), Value::Null);
+
     // Reopen the thread, then replace the buffer: the comment is orphaned.
     let reopen = client.request(
         "workspace/executeCommand",
         json!({ "command": "annox.reopen", "arguments": [{ "annotation": comment.id }] }),
     );
     assert_eq!(client.response(&reopen).unwrap(), Value::Null);
+    let hover = hover_comment(&mut client);
+    assert!(hover["contents"]["value"].as_str().unwrap().contains("Which section?"), "{hover}");
     client.notify(
         "textDocument/didChange",
         json!({ "textDocument": { "uri": uri, "version": 2 }, "contentChanges": [{ "text": "unrelated\n" }] }),
