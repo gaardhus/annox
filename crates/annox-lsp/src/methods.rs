@@ -11,7 +11,7 @@ use serde_json::{json, Map, Value};
 
 use crate::position::LineIndex;
 use crate::{
-    fail, views, Analysis, Failure, Server, Work, INTERNAL_ERROR, INVALID_OPERATION,
+    fail, views, Analysis, Failure, PendingInit, Server, Work, CREATE_WORKSPACE, INTERNAL_ERROR, INVALID_OPERATION,
     INVALID_PARAMS, NEEDS_REVIEW, NOT_CONFLICTED, NO_WORKSPACE, OVERLAP, STALE_SUGGESTION, UNKNOWN_ANNOTATION,
 };
 
@@ -44,8 +44,8 @@ impl Server<'_> {
             "annox/accept" => return self.m_accept(id, &params),
             "annox/acceptAll" => return self.m_accept_all(id, &params),
             "annox/resolveConflict" => return self.m_resolve_conflict(id, &params),
+            "annox/create" => return self.m_create_or_init(id, params),
             "annox/annotations" => self.m_annotations(&params),
-            "annox/create" => self.m_create(&params),
             "annox/reply" => self.m_reply(&params),
             "annox/publish" => self.m_publish(&params),
             "annox/edit" => self.m_edit(&params),
@@ -97,6 +97,54 @@ impl Server<'_> {
             "annotations": views::views(&a, self.encoding, include_closed, include_deleted),
             "document": views::document_info(&a),
         }))
+    }
+
+    /// Creates an annotation, first offering to create a workspace if the
+    /// document isn't in one (§6.2).
+    fn m_create_or_init(&mut self, command: RequestId, params: Value) {
+        let uri = match uri_param(&params["textDocument"], "uri") {
+            Ok(uri) => uri,
+            Err(e) => return self.reply(command, Err(e)),
+        };
+        let path = uri.to_file_path().ok();
+        if self.analyze(&uri).is_some() || path.as_ref().is_none_or(|p| Workspace::find(p).is_some()) {
+            let result = self.m_create(&params);
+            self.reply(command, result);
+            return self.refresh_all();
+        }
+        let path = path.expect("checked above");
+        let root = self
+            .roots
+            .iter()
+            .filter(|r| path.starts_with(r))
+            .max_by_key(|r| r.components().count())
+            .cloned()
+            .or_else(|| path.parent().map(|p| p.to_path_buf()))
+            .unwrap_or_default();
+        let message = format!("{} is not in an annox workspace. Create one in {}?", path.display(), root.display());
+        let request = json!({
+            "type": 3,
+            "message": message,
+            "actions": [{ "title": CREATE_WORKSPACE }, { "title": "Cancel" }],
+        });
+        self.next_id += 1;
+        let id = RequestId::from(format!("annox-init-{}", self.next_id));
+        self.pending_init.insert(id.clone(), PendingInit { command, params, root });
+        self.send(lsp_server::Request::new(id, "window/showMessageRequest".into(), request));
+    }
+
+    /// Continues a create after the user answered the workspace prompt.
+    pub(crate) fn finish_init(&mut self, init: PendingInit, resp: lsp_server::Response) {
+        let chosen = resp.response_result.ok().and_then(|v| v["title"].as_str().map(str::to_owned));
+        if chosen.as_deref() != Some(CREATE_WORKSPACE) {
+            return self.reply(init.command, fail(NO_WORKSPACE, "no annox workspace was created"));
+        }
+        if let Err(e) = Workspace::init(&init.root) {
+            return self.reply(init.command, Err(io_failure(e)));
+        }
+        let result = self.m_create(&init.params);
+        self.reply(init.command, result);
+        self.refresh_all();
     }
 
     fn m_create(&self, params: &Value) -> Result<Value, Failure> {

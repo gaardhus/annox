@@ -20,16 +20,15 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim), pointing at this directory
 }
 ```
 
-The server attaches to files inside a directory that contains `.annox/`. To start annotating a project, create a workspace:
+The server attaches to files inside a directory that contains `.annox/`. To start annotating a project, run `:Annox init`. It creates the workspace at the git root, or the working directory if there's no git repository, after asking you to confirm.
 
-```sh
-mkdir .annox && echo '{ "format": 1 }' > .annox/annox.json && printf 'cache/\nlocal/\n' > .annox/.gitignore
-```
+Changes others make to `.annox/`, such as a `git pull`, show up within a second without reloading.
 
 ## Commands
 
 | Command | Does |
 |---|---|
+| `:Annox init` | Create an annox workspace for this project and attach the server. |
 | `:Annox comment` | Comment on the cursor position, or on the selection when run from visual mode (`:'<,'>Annox comment`). |
 | `:Annox suggest` | Suggest a replacement for the selection. The prompt is pre-filled with the current text. |
 | `:Annox reply` | Reply to the thread under the cursor. |
@@ -62,4 +61,5 @@ Highlight groups, all linked to diagnostic groups by default: `AnnoxComment`, `A
 ```sh
 cargo build -p annox-lsp
 ANNOX_BIN=$PWD/target/debug/annox nvim --headless --clean -l editors/nvim/tests/e2e.lua
+ANNOX_BIN=$PWD/target/debug/annox nvim --headless --clean -l editors/nvim/tests/init.lua
 ```

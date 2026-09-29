@@ -23,7 +23,7 @@ The server implements:
 - **For plain LSP editors (§6.5):** annotations as diagnostics, threads on hover, and code actions to accept or reject suggestions and to resolve or reopen threads.
 - **For annox-aware plugins (§6.6):** every `annox/*` extension method. That covers creating, replying, editing, publishing local drafts, setting status, accepting and bulk-accepting, re-targeting, re-attaching, deleting and restoring, resolving conflicts (including reverting an accepted edit), moving documents, and history. It pushes `annox/didChangeAnnotations` after every change.
 
-Edits always go through `workspace/applyEdit`, and the status event is written only once the editor confirms. Still missing: sync and presence (§7), watching `.annox/` for outside changes (the server reloads on open, change, and save), and creating a workspace from the editor (run it in a directory with `.annox/annox.json`).
+Edits always go through `workspace/applyEdit`, and the status event is written only once the editor confirms. The server picks up outside changes to `.annox/`, such as a `git pull`. It uses the editor's file watching where available, and otherwise checks every second. It offers to create a workspace when you add the first annotation outside one. Still missing: sync and presence (§7).
 
 ## Editor support
 

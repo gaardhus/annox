@@ -18,8 +18,10 @@ version = "0.1.0"
 dependencies = [
  "annox-core",
  "anyhow",
+ "crossbeam-channel",
  "lsp-server",
  "lsp-types",
+ "serde",
  "serde_json",
  "tempfile",
 ]

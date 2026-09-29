@@ -7,7 +7,8 @@ pub mod position;
 mod views;
 
 use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use annox_core::anchor::{self, Anchor, Resolution, State};
 use annox_core::ops;
@@ -81,6 +82,19 @@ pub fn run(connection: &Connection) -> anyhow::Result<()> {
         params.capabilities.general.as_ref().and_then(|g| g.position_encodings.as_deref()),
     );
     let annox_client = params.capabilities.experimental.as_ref().is_some_and(|e| e.get("annox").is_some());
+    let dynamic_watch = params
+        .capabilities
+        .workspace
+        .as_ref()
+        .and_then(|w| w.did_change_watched_files.as_ref())
+        .and_then(|d| d.dynamic_registration)
+        .unwrap_or(false);
+    let mut roots: Vec<PathBuf> =
+        params.workspace_folders.iter().flatten().filter_map(|f| f.uri.to_file_path().ok()).collect();
+    #[allow(deprecated)]
+    if let Some(root) = params.root_uri.as_ref().and_then(|u| u.to_file_path().ok()) {
+        roots.push(root);
+    }
     let options = params.initialization_options.as_ref().and_then(|o| o.get("annox")).cloned().unwrap_or_default();
     connection.initialize_finish(
         id,
@@ -98,7 +112,14 @@ pub fn run(connection: &Connection) -> anyhow::Result<()> {
         open: HashMap::new(),
         next_id: 0,
         pending: HashMap::new(),
+        pending_init: HashMap::new(),
+        roots,
+        poll: !dynamic_watch,
+        fingerprints: HashMap::new(),
     };
+    if dynamic_watch {
+        server.register_watcher();
+    }
     server.main_loop()
 }
 
@@ -129,6 +150,19 @@ pub(crate) struct Pending {
     respond_view: bool,
 }
 
+/// A create request waiting for the user to confirm creating a workspace
+/// (§6.2).
+pub(crate) struct PendingInit {
+    command: RequestId,
+    params: Value,
+    root: PathBuf,
+}
+
+/// How often storage is checked when the client can't watch files (§6.4).
+const POLL_INTERVAL: Duration = Duration::from_millis(1000);
+
+const CREATE_WORKSPACE: &str = "Create workspace";
+
 pub(crate) struct Server<'a> {
     connection: &'a Connection,
     encoding: Encoding,
@@ -138,6 +172,12 @@ pub(crate) struct Server<'a> {
     open: HashMap<Url, OpenDoc>,
     next_id: i32,
     pending: HashMap<RequestId, Pending>,
+    pending_init: HashMap<RequestId, PendingInit>,
+    /// Workspace folders from `initialize`, for placing new workspaces.
+    roots: Vec<PathBuf>,
+    /// Whether to poll `.annox/` because the client can't watch it (§6.4).
+    poll: bool,
+    fingerprints: HashMap<PathBuf, Vec<(String, u64, std::time::SystemTime)>>,
 }
 
 /// A root annotation of a document, resolved against its current text.
@@ -202,19 +242,58 @@ impl Analysis {
 
 impl Server<'_> {
     fn main_loop(&mut self) -> anyhow::Result<()> {
-        for msg in &self.connection.receiver {
-            match msg {
-                Message::Request(req) => {
-                    if self.connection.handle_shutdown(&req)? {
-                        return Ok(());
+        let ticker = if self.poll { crossbeam_channel::tick(POLL_INTERVAL) } else { crossbeam_channel::never() };
+        loop {
+            crossbeam_channel::select! {
+                recv(self.connection.receiver) -> msg => match msg {
+                    Ok(Message::Request(req)) => {
+                        if self.connection.handle_shutdown(&req)? {
+                            return Ok(());
+                        }
+                        self.on_request(req);
                     }
-                    self.on_request(req);
-                }
-                Message::Notification(n) => self.on_notification(n),
-                Message::Response(resp) => self.on_response(resp),
+                    Ok(Message::Notification(n)) => self.on_notification(n),
+                    Ok(Message::Response(resp)) => self.on_response(resp),
+                    Err(_) => return Ok(()),
+                },
+                recv(ticker) -> _ => self.poll_storage(),
             }
         }
-        Ok(())
+    }
+
+    /// Asks the client to report changes under `.annox/` (§6.4).
+    fn register_watcher(&mut self) {
+        let params = json!({ "registrations": [{
+            "id": "annox-storage",
+            "method": DidChangeWatchedFiles::METHOD,
+            "registerOptions": { "watchers": [{ "globPattern": "**/.annox/**" }] },
+        }] });
+        self.next_id += 1;
+        let id = RequestId::from(format!("annox-register-{}", self.next_id));
+        self.send(Request::new(id, "client/registerCapability".into(), params));
+    }
+
+    /// Checks `.annox/` of every open document's workspace for changes made by
+    /// others, for clients that can't watch files (§6.4).
+    fn poll_storage(&mut self) {
+        let roots: std::collections::BTreeSet<PathBuf> = self
+            .open
+            .keys()
+            .filter_map(|uri| uri.to_file_path().ok())
+            .filter_map(|p| Workspace::find(&p))
+            .map(|ws| ws.root)
+            .collect();
+        let mut changed = false;
+        for root in roots {
+            let print = fingerprint(&root);
+            if self.fingerprints.get(&root) != Some(&print) {
+                changed |= self.fingerprints.contains_key(&root);
+                self.fingerprints.insert(root, print);
+            }
+        }
+        if changed {
+            self.refresh_all();
+        }
     }
 
     fn send(&self, msg: impl Into<Message>) {
@@ -294,6 +373,9 @@ impl Server<'_> {
     }
 
     fn on_response(&mut self, resp: Response) {
+        if let Some(init) = self.pending_init.remove(&resp.id) {
+            return self.finish_init(init, resp);
+        }
         let Some(pending) = self.pending.remove(&resp.id) else { return };
         let applied = resp
             .response_result
@@ -643,6 +725,26 @@ impl Server<'_> {
         }
         self.refresh_all();
     }
+}
+
+/// Names, sizes, and modification times of the event files under `root`.
+fn fingerprint(root: &Path) -> Vec<(String, u64, std::time::SystemTime)> {
+    let mut out = Vec::new();
+    let mut stack = vec![root.join(".annox/docs"), root.join(".annox/local/docs")];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let Ok(meta) = entry.metadata() else { continue };
+            if meta.is_dir() {
+                stack.push(entry.path());
+            } else {
+                let modified = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+                out.push((entry.path().display().to_string(), meta.len(), modified));
+            }
+        }
+    }
+    out.sort();
+    out
 }
 
 fn parse<T: serde::de::DeserializeOwned>(params: Value) -> Result<T, Failure> {

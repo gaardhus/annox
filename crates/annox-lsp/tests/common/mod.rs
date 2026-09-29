@@ -72,15 +72,20 @@ impl Client {
         })
     }
 
-    /// Waits for a `workspace/applyEdit` request and answers it.
-    pub fn answer_apply_edit(&self, applied: bool) -> Value {
+    /// Waits for a server request `method`, answers it with `result`, and
+    /// returns its params.
+    pub fn answer(&self, method: &str, result: Value) -> Value {
         let req = self.recv_until(|m| match m {
-            Message::Request(r) if r.method == "workspace/applyEdit" => Some(r),
+            Message::Request(r) if r.method == method => Some(r),
             _ => None,
         });
-        let answer = serde_json::json!({ "applied": applied });
-        self.conn.sender.send(Response::new_ok(req.id, answer).into()).unwrap();
+        self.conn.sender.send(Response::new_ok(req.id, result).into()).unwrap();
         req.params
+    }
+
+    /// Waits for a `workspace/applyEdit` request and answers it.
+    pub fn answer_apply_edit(&self, applied: bool) -> Value {
+        self.answer("workspace/applyEdit", serde_json::json!({ "applied": applied }))
     }
 
     pub fn shutdown(mut self) {

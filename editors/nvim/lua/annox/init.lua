@@ -550,7 +550,35 @@ function M.history(opts)
   end)
 end
 
+--- Creates an annox workspace (§5.3), by default at the buffer's git root or
+--- the working directory, and attaches the server to its open buffers.
+--- opts: { root?, confirm? (default true) }
+function M.init(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  local root = opts.root or vim.fs.root(bufnr, { ".git" }) or vim.fn.getcwd()
+  local annox = vim.fs.joinpath(root, ".annox")
+  if vim.uv.fs_stat(vim.fs.joinpath(annox, "annox.json")) then
+    return vim.notify("annox: " .. root .. " is already an annox workspace", vim.log.levels.INFO)
+  end
+  if opts.confirm ~= false and vim.fn.confirm("Create an annox workspace in " .. root .. "?", "&Yes\n&No", 2) ~= 1 then
+    return
+  end
+  vim.fn.mkdir(annox, "p")
+  vim.fn.writefile({ '{ "format": 1 }' }, vim.fs.joinpath(annox, "annox.json"))
+  vim.fn.writefile({ "cache/", "local/" }, vim.fs.joinpath(annox, ".gitignore"))
+  -- vim.lsp.enable attaches on FileType; replay it for buffers in the workspace.
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    local name = vim.api.nvim_buf_get_name(b)
+    if vim.api.nvim_buf_is_loaded(b) and vim.startswith(name, root .. "/") then
+      vim.api.nvim_exec_autocmds("FileType", { buffer = b })
+    end
+  end
+  vim.notify("annox: created a workspace in " .. root, vim.log.levels.INFO)
+end
+
 local subcommands = {
+  init = function() M.init() end,
   comment = function(o) M.comment({ visual = o.range > 0 }) end,
   draft = function(o) M.comment({ visual = o.range > 0, ["local"] = true }) end,
   publish = function(o) M.publish({ all = o.bang }) end,
