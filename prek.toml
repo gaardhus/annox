@@ -1,5 +1,7 @@
 # Git hooks, run by prek (https://prek.j178.dev). Install with `just hooks`.
 default_install_hook_types = ["pre-commit", "commit-msg", "pre-push"]
+# Hooks without their own `stages` run only before a commit, not on the message.
+default_stages = ["pre-commit", "manual"]
 
 [[repos]]
 repo = "builtin"
