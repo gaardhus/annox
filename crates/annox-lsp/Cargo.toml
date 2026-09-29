@@ -1,0 +1,23 @@
+[package]
+name = "annox-lsp"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+annox-core = { version = "0.1.0", path = "../annox-core" }
+anyhow = "1.0.104"
+lsp-server = "0.10.0"
+lsp-types = "0.95"
+serde_json = "1.0.151"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lib]
+name = "annox_lsp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "annox"
+path = "src/main.rs"
