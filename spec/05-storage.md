@@ -96,6 +96,7 @@ A **document folder** is a directory under `.annox/docs/` whose name ends in `~<
 - The folder's `document/` subdirectory holds document events (§5.5.1) for *d*.
 - The event files directly inside the folder are annotation events.
 - The part of the name before `~` is cosmetic. It records the path when the folder was created. The id suffix alone decides which document a folder belongs to.
+- On case-insensitive filesystems, folders of different documents never collide, because their id suffixes differ. A case-only rename (`Paper.tex` → `paper.tex`) is an ordinary `move`.
 
 A document can have several folders, for example after a rename (§5.6) or when a branch without the rename is merged. Readers MUST combine all folders with the same document id.
 
@@ -168,5 +169,4 @@ Test vectors are in [`tests/storage.json`](tests/storage.json).
 
 ## Open questions
 
-- **Scale.** A heavily annotated workspace can hold thousands of event files, and v1 has no compaction (D29). Is a cache (§5.9) enough in practice?
-- **Case-insensitive filesystems.** Two documents whose paths differ only in case can't coexist on macOS or Windows. That limitation already applies to the documents themselves, but folder names inherit it.
+- **Scale (to validate with an implementation).** A heavily annotated workspace can hold thousands of event files, and v1 has no compaction (D29). Is a cache (§5.9) enough in practice?

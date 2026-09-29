@@ -201,3 +201,21 @@ Suggestions stay independent in v1. `annox/acceptAll` takes a list of ids, enfor
 Any user may re-target a suggestion. Clients must show who did it (`retargetedBy`) next to the original author. See §4.2.1.
 
 **Why:** stale suggestions from authors who are away can be rescued without losing their thread, and the attribution keeps it clear who changed what.
+
+## D35. Mentions are plain text (2026-09-29)
+
+`@name` in a body is ordinary text. v1 has no structured mentions. See §2.8.
+
+**Why:** no schema change and nothing to keep in sync. Structured mentions or a link convention can be added later without breaking anything.
+
+## D36. Point anchors relocate through collapsed whitespace; insertions relocated that way are stale (2026-09-29)
+
+Step 4 has a point variant that searches collapsed prefix plus suffix. When the point sat inside a whitespace run, it lands at the start of the matching run. Insertion suggestions relocated this way are stale, as with every step-4 relocation. See §3.7.2 and §4.2.
+
+**Why:** point comments survive paragraph re-wrapping, which is common in LaTeX and Markdown. Keeping insertions stale keeps §4.2's rule uniform, and avoids guessing where in the whitespace an insertion belongs. The suggestion is shown in place, ready to be re-targeted.
+
+## D37. Presence is ephemeral, shares document and cursor, and is on by default (2026-09-29)
+
+The hub relays who is connected, their open document, and their cursor. Nothing is stored. Users can turn it off, and a replica that has turned it off sends nothing. Partial sync and hub federation are deferred. See §7.8.
+
+**Why:** it gives a Google-Docs-like live experience, and keeping it out of the event model means no storage or history implications. Being on by default matches what users of collaborative editors expect. The opt-out is required.

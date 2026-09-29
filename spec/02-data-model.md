@@ -210,7 +210,7 @@ annox doesn't authenticate authors. Anyone who can write the files can write eve
 
 ## 2.8 Body format
 
-`body` is CommonMark. Clients that can't render Markdown SHOULD show the raw text, which is readable as is. Clients MUST NOT execute scripts found in a body, and SHOULD sanitize or strip raw HTML before rendering it.
+`body` is CommonMark. Clients that can't render Markdown SHOULD show the raw text, which is readable as is. Mentions such as `@ada` are plain text. v1 defines no structured mentions. Clients MUST NOT execute scripts found in a body, and SHOULD sanitize or strip raw HTML before rendering it.
 
 ## 2.9 Extensibility
 
@@ -218,6 +218,3 @@ annox doesn't authenticate authors. Anyone who can write the files can write eve
 - Fields added by tools that aren't part of this specification MUST be placed in an `ext` object, keyed by a reverse-domain name, e.g. `"ext": { "org.example.review": { "priority": 2 } }`.
 - New event types and kinds are added only by versions of this specification. Readers treat unrecognized ones as described in §2.4.
 
-## Open questions
-
-- **Mentions.** Is `@person` in a body just Markdown text, or a structured reference to an author id?

@@ -155,6 +155,7 @@ Every request that changes something writes the corresponding events (§2.4), th
 | `annox/resolveConflict` | `{ annotation, field, value, revert?: boolean }` | Writes the resolving event described in §2.5.4, with `after` covering all competing heads. `value` has the type of the field. For a status conflict involving `accepted`, `revert: true` asks the server to revert the edit (§4.3.3), applied as below. |
 | `annox/moveDocument` | `{ from: DocumentUri, to: DocumentUri }` | Re-attaches a missing document (§5.7.3): `move` events for the documents at `from`. |
 | `annox/history` | `{ annotation }` | Returns the annotation's events in the order of §2.5.5, for history views. Changes nothing. |
+| `annox/setPresence` | `{ textDocument?, selection?: Range }` (notification) | The user's current document and cursor, forwarded to the sync hub as presence (§7.8). Clients send it as the focus or cursor changes, and not at all if the user turned presence off. LSP has no cursor notifications, so plain LSP clients share no presence. |
 
 `DocumentInfo` is `{ documents: Id[], conflicts: { path?: [...] }, duplicates: boolean }`, covering the document records at the path (§5.7.1).
 
@@ -173,6 +174,7 @@ The client applies the edit to its buffer, so the user can undo it and save as u
 | Method | Params |
 |---|---|
 | `annox/didChangeAnnotations` | `{ textDocument, annotations: AnnotationView[], document: DocumentInfo }` |
+| `annox/didChangePresence` | `{ peers: { author, textDocument?, range? }[] }`: others' presence from the sync hub (§7.8), with documents as URIs and ranges as LSP `Range`s. Sent whenever it changes. |
 
 The server sends this for an open document whenever its annotations or their resolution change, for whatever reason: a request, an edit to the buffer, a change in storage, or a rename. It carries the full current list for the document, so clients just replace their state. Closed threads and deleted annotations are included only if the client asked for them in its most recent `annox/annotations` request for that document.
 

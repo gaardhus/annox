@@ -105,7 +105,32 @@ A hub MUST:
 
 A hub doesn't need to replay events, resolve anchors, or read documents. It stores and relays JSON.
 
-## 7.8 Errors
+## 7.8 Presence
+
+Presence shows who is connected to the hub, which document each person has open, and where their cursor is. It is **ephemeral**: presence isn't an event, it is never written to `.annox/`, and a hub MUST NOT keep it after the connection that sent it closes.
+
+### 7.8.1 Messages
+
+| Method | Direction | Params |
+|---|---|---|
+| `annoxSync/presence` | replica → hub (notification) | `{ author, document?: Id, range?: { start, end }, version?: string }` |
+| `annoxSync/didChangePresence` | hub → replica (notification) | `{ peers: Peer[] }` |
+
+- `document` is the document record the user has open (§5.5). It is absent when no annotated document is open.
+- `range` is the cursor or selection, in code-point offsets (§3.3) into the sender's normalized buffer. `version` is the version (§3.4) of that buffer.
+- A **Peer** is `{ connection, author, document?, range?, version? }`. `connection` is an opaque id that the hub assigns to each connection, so that two sessions of the same author can be told apart.
+- Replicas SHOULD debounce `annoxSync/presence`, and send it when the open document or the cursor changes.
+- The hub sends `didChangePresence` to every subscribed replica whenever the set of peers or a peer's presence changes. It always carries the full list of peers other than the recipient's own connection. A connection that closes is removed from the list.
+
+### 7.8.2 Displaying cursors
+
+The offsets in a peer's `range` refer to the peer's buffer, which may differ from the recipient's copy of the document. If `version` equals the version of the recipient's text, the range is exact. Otherwise, a replica SHOULD map it on a best-effort basis, for example by clamping it to the document, and MAY show only the document without a cursor.
+
+### 7.8.3 Privacy
+
+Presence is sent by default. Clients MUST let users turn it off, and SHOULD show that it's on. A replica with presence turned off MUST NOT send `annoxSync/presence`, but still receives others' presence. Like everything else in annox, `author` is not authenticated (§2.7). A hub MAY replace it with an identity from its own authentication.
+
+## 7.9 Errors
 
 | Code | Name | Meaning |
 |---|---|---|
@@ -117,6 +142,7 @@ A hub doesn't need to replay events, resolve anchors, or read documents. It stor
 
 ## Open questions
 
-- **Presence.** Should the hub relay who is online, or where their cursor is? That is ephemeral data outside the event model.
+The following are deferred until after v1. None of them affects the event or storage format.
+
 - **Partial sync.** Very large workspaces might want to sync some documents only. Every item already carries its `document`, so a filter could be added to `pull` and `hello`.
 - **Hub-to-hub.** Can two hubs federate, or does a workspace always have exactly one hub?

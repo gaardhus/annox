@@ -110,18 +110,20 @@ Implementations MUST produce the same result as the following steps, run in orde
 1. **Position check.** If `e ≤ len(D)`, `D[s:e] == q`, `D[s−len(p) : s] == p`, and `D[e : e+len(x)] == x`, the result is `[s, e)`, `exact`.
 2. **Context search.** Find every occurrence *i* of `p + q + x` in *D*. If there is at least one, let `c` be the nearest of the candidate starts `i + len(p)`. The result is `[c, c+len(q))`, `relocated`.
 3. **Quote search.** If `q` is not empty, find every occurrence of `q` in *D* and select by context, using `p` and `x`. If an occurrence `[c, c+len(q))` is selected, that is the result, `relocated`.
-4. **Whitespace-insensitive quote search.** If `W(q)` contains at least one non-whitespace code point, find every occurrence of `W(q)` in `W(D)` and select by context, using `W(p)` and `W(x)` scored against `W(D)`. If an occurrence `[i, j)` of `W(D)` is selected, map it back to *D* as `[a_i, b_{j−1})`. The result is that range, `relocated`.
+4. **Whitespace-insensitive search.**
+   - *Quote* (`q` not empty): if `W(q)` contains at least one non-whitespace code point, find every occurrence of `W(q)` in `W(D)` and select by context, using `W(p)` and `W(x)` scored against `W(D)`. If an occurrence `[i, j)` of `W(D)` is selected, map it back to *D* as `[a_i, b_{j−1})`. The result is that range, `relocated`.
+   - *Point* (`q` empty): let `P = W(p)` and `X = W(x)`. If `P` ends with a space and `X` starts with one, the point sat inside a single whitespace run. In that case the pattern is `P + X[1:]`, and each match places the point at the start of the run: `a_{i+len(P)−1}`. Otherwise the pattern is `P + X`, and each match places the point at `a_{i+len(P)}`, or at `len(D)` if that index is `len(W(D))`. If the pattern contains at least one non-whitespace code point and has at least one occurrence *i* in `W(D)`, take the nearest of the resulting points `c`. The result is `[c, c)`, `relocated`.
 5. Otherwise the result is `orphaned`.
 
 Notes:
 
-- For a point range (`q` empty), step 2 searches for `p + x`, and steps 3 and 4 are skipped.
+- For a point range (`q` empty), step 2 searches for `p + x`, step 3 is skipped, and step 4 uses its point variant.
 - In step 1, a slice that extends past either end of *D* never matches a non-empty `p` or `x`.
 - In step 0, if the stored anchor is internally inconsistent (`e > len(D)` or `D[s:e] ≠ q`), the anchor is malformed. Implementations MUST skip step 0 and continue with step 1.
 - Apart from the collapsing in step 4, all string comparisons compare code points exactly.
 - Step 4 only affects matching. The resulting range covers the document's real text, whitespace included, and that text may differ from `q` in its whitespace.
 
-> **Rationale.** Step 3 relocates a quote that appears more than once only if its surrounding text clearly picks one occurrence. Otherwise a comment on a common word such as "the" could silently jump to the wrong place. Step 4 rescues annotations in hard-wrapped Markdown or LaTeX after the paragraph is re-wrapped.
+> **Rationale.** Step 3 relocates a quote that appears more than once only if its surrounding text clearly picks one occurrence. Otherwise a comment on a common word such as "the" could silently jump to the wrong place. Step 4 rescues annotations, including point anchors, in hard-wrapped Markdown or LaTeX after the paragraph is re-wrapped.
 
 ### 3.7.3 Orphaned annotations
 
@@ -184,5 +186,4 @@ It also stores the new document's `version`.
 
 ## Open questions
 
-- **Reflowed point anchors.** Steps 3 and 4 don't apply to point ranges, so a point anchor whose context was re-wrapped is orphaned. Should step 2 get a whitespace-insensitive variant for point ranges?
-- **Performance.** Steps 3 and 4 on large documents with many anchors cost O(document × anchors). This is probably fine for v1, but it needs checking.
+- **Performance (to validate with an implementation).** Steps 3 and 4 on large documents with many anchors cost O(document × anchors). This is probably fine for v1, but it needs measuring.

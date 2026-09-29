@@ -195,6 +195,38 @@
       }
     },
     {
+      "name": "insert-reflow-stale",
+      "description": "Insertion whose context was re-wrapped: relocated by step 4 (point variant), so stale.",
+      "document": "We show that the bound holds for every\nconnected graph.\n",
+      "suggestion": {
+        "kind": "suggestion",
+        "target": {
+          "path": "doc.txt",
+          "version": "sha256:8622d856f5c01050f3458154962363664a971398c1eb66fbabf78d5872462f39",
+          "selectors": {
+            "position": {
+              "start": 54,
+              "end": 54
+            },
+            "quote": {
+              "exact": "",
+              "prefix": " holds for\nevery connected graph",
+              "suffix": ".\n"
+            }
+          }
+        },
+        "edit": {
+          "replacement": " [12]"
+        },
+        "status": "open"
+      },
+      "expected": {
+        "applicability": "stale",
+        "resolutionStep": 4,
+        "result": null
+      }
+    },
+    {
       "name": "overlap-first",
       "description": "First of two overlapping suggestions: applicable.",
       "document": "\\section{Results}\nIn Section 3, we prove that the bound is tight for all $n$.\n",

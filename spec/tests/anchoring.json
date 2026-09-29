@@ -303,6 +303,56 @@
       }
     },
     {
+      "name": "point-reflow",
+      "description": "Point anchor after \"graph\" in a re-wrapped paragraph: found by whitespace-insensitive context (step 4, point variant).",
+      "document": "We show that the bound holds for every\nconnected graph.\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:8622d856f5c01050f3458154962363664a971398c1eb66fbabf78d5872462f39",
+        "selectors": {
+          "position": {
+            "start": 54,
+            "end": 54
+          },
+          "quote": {
+            "exact": "",
+            "prefix": " holds for\nevery connected graph",
+            "suffix": ".\n"
+          }
+        }
+      },
+      "expected": {
+        "state": "relocated",
+        "start": 54,
+        "end": 54
+      }
+    },
+    {
+      "name": "point-reflow-merged",
+      "description": "Point anchor inside a whitespace run (prefix ends and suffix starts with whitespace): lands at the start of the matching run.",
+      "document": "alpha beta gamma delta\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:e720ce197d7cba6bf609c202579514f1858436315565e4afc78a865ba3236b7c",
+        "selectors": {
+          "position": {
+            "start": 11,
+            "end": 11
+          },
+          "quote": {
+            "exact": "",
+            "prefix": "alpha beta ",
+            "suffix": "\n gamma delta\n"
+          }
+        }
+      },
+      "expected": {
+        "state": "relocated",
+        "start": 10,
+        "end": 10
+      }
+    },
+    {
       "name": "malformed-anchor",
       "description": "Version matches but position does not cover the quote; step 0 is skipped and search relocates it.",
       "document": "\\section{Results}\nIn Section 3, we prove that the bound is tight for all $n$.\n",

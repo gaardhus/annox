@@ -58,7 +58,7 @@ Whether a suggestion can be applied is **derived** from the current document. It
 | `relocated` by step 4 | **stale** |
 | `orphaned` | **stale** |
 
-In steps 0–3, the resolved range contains exactly `quote.exact`, so the text the suggestion was written against is still intact. In step 4 the whitespace differs, so the suggestion author never saw the text it would now replace.
+In steps 0–3, the resolved range contains exactly `quote.exact`, so the text the suggestion was written against is still intact. In step 4 the whitespace differs, so the suggestion author never saw the text it would now replace. For insertions, which relocate by the point variant of step 4, the surrounding whitespace changed, and it's unclear exactly where in the whitespace the author meant to insert. They are stale for the same reason, and are shown at their relocated position so that they can be re-targeted easily.
 
 Applicability only matters while the suggestion is `open`. Clients SHOULD show stale suggestions differently from applicable ones, and MUST NOT offer to apply a stale suggestion (§4.3).
 
