@@ -2,7 +2,7 @@
 
 ## 0.1 — 2026-09-29
 
-The first complete draft. The reasons behind each design choice are recorded as D1–D43 in [decisions.md](decisions.md).
+The first complete draft. The reasons behind each design choice are recorded as D1–D44 in [decisions.md](decisions.md).
 
 ### What 0.1 specifies
 
@@ -11,7 +11,7 @@ The first complete draft. The reasons behind each design choice are recorded as 
 - **Suggestions (§4).** One range per suggestion. Whether it can be applied is derived from whether its text is still intact. Accepting applies the edit. The spec defines the lifecycle, re-targeting stale suggestions, and reverting a concurrent acceptance. A non-normative note describes suggestion mode, in which typing makes suggestions.
 - **Storage (§5).** `.annox/` sits at the workspace root, with one immutable file per event. Merges only ever add files, so git needs no special configuration. Documents have stable ids that survive renames, stragglers from other branches, and path reuse. A git-ignored local area holds private drafts.
 - **Protocol (§6).** The annox server is a language server: plain LSP editors get diagnostics, hover, and code actions, and `annox/*` extension methods give annox-aware plugins everything else. Edits are applied through `workspace/applyEdit`.
-- **Sync (§7).** A store-and-relay hub, a changefeed with cursors over JSON-RPC and WebSocket, authentication delegated to the connection, and ephemeral presence.
+- **Sync (§7).** A store-and-relay hub, a changefeed with cursors over JSON-RPC and WebSocket, authentication delegated to the connection, and ephemeral presence whose cursors are located by anchoring, so they stay on the right text when copies differ.
 - **Conformance (§1.5).** Four classes: Viewer, Client, Server, and Hub. There are 64 test vectors in [`tests/`](tests/) covering anchoring, suggestions, replay, and storage.
 
 ### Known limitations and deferred work

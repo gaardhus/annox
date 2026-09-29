@@ -106,6 +106,26 @@ fn annotations_and_presence_sync_between_servers() {
     assert_eq!(peers[0]["textDocument"]["uri"], uri_b);
     assert_eq!(peers[0]["range"]["start"]["character"], 6);
 
+    // Bob's copy diverges before Ada's cursor. The cursor stays on the same
+    // text instead of the same offset (§7.8.2).
+    bob.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": { "uri": uri_b, "version": 2 },
+            "contentChanges": [{ "text": format!("Oh, {DOC}") }],
+        }),
+    );
+    let cursor = json!({ "line": 0, "character": 6 });
+    ada.notify("annox/setPresence", json!({ "textDocument": { "uri": uri_a }, "selection": { "start": cursor, "end": cursor } }));
+    let peers = loop {
+        let p = bob.notification("annox/didChangePresence")["peers"].clone();
+        if p[0]["range"]["start"] != json!({ "line": 0, "character": 6 }) {
+            break p;
+        }
+    };
+    assert_eq!(peers[0]["range"]["start"], json!({ "line": 0, "character": 10 }));
+    assert_eq!(peers[0]["range"]["end"], json!({ "line": 0, "character": 10 }));
+
     ada.shutdown();
     bob.shutdown();
 }

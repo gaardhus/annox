@@ -715,9 +715,24 @@ impl Server<'_> {
             None => Text::from_raw(&std::fs::read_to_string(ws.root.join(&path)).unwrap_or_default()),
         };
         let (Some(start), Some(end)) = (peer["range"]["start"].as_u64(), peer["range"]["end"].as_u64()) else { return view };
-        let lines = LineIndex::new(&text, self.encoding);
-        let (start, end) = ((start as usize).min(text.len()), (end as usize).min(text.len()));
-        view["range"] = json!(lines.range(start.min(end), end));
+        let (start, end) = (start as usize, end as usize);
+        let range = match serde_json::from_value(peer["quote"].clone()) {
+            // Resolve the cursor as an anchor, so it stays on the same text
+            // when the peer's copy differs from this one.
+            Ok(quote) => {
+                let target = Anchor {
+                    path: path.clone(),
+                    version: peer["version"].as_str().unwrap_or_default().to_owned(),
+                    selectors: anchor::Selectors { position: anchor::PositionSelector { start, end }, quote },
+                };
+                anchor::resolve(&text, &target).range
+            }
+            // A peer without a quote: clamp its offsets to this copy.
+            Err(_) => Some((start.min(end).min(text.len()), end.min(text.len()))),
+        };
+        if let Some((start, end)) = range {
+            view["range"] = json!(LineIndex::new(&text, self.encoding).range(start, end));
+        }
         view
     }
 
@@ -736,7 +751,10 @@ impl Server<'_> {
         }
         if let Ok(range) = serde_json::from_value::<lsp_types::Range>(params["selection"].clone()) {
             let lines = LineIndex::new(&a.text, self.encoding);
-            presence["range"] = json!({ "start": lines.offset(range.start), "end": lines.offset(range.end) });
+            let (from, to) = (lines.offset(range.start), lines.offset(range.end));
+            let (start, end) = (from.min(to), from.max(to));
+            presence["range"] = json!({ "start": start, "end": end });
+            presence["quote"] = json!(anchor::create(&a.text, start, end, "").selectors.quote);
         }
         if let Some(Some(tx)) = self.replicas.get(&a.ws.root) {
             let _ = tx.send(ToReplica::Presence(presence));

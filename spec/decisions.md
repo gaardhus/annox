@@ -259,3 +259,9 @@ Resolution gains step 5 for point anchors (empty quotes, such as insertions and 
 `annox/acceptAll` takes an optional `confirmed` flag. With it, suggestions relocated by step 3 or 5 are accepted too, instead of being skipped with `NeedsReview`. Clients set it after a single prompt for the whole batch that says how many suggestions were relocated this way. See §4.3 and §6.6.2.
 
 **Why:** found in use. Adding a line after three suggestions changed the 32-character context of all three, so all of them relocated by step 3 and bulk accept skipped every one, even though each was shown at the right place. Accepting one suggestion also changes the context of any suggestion next to it, so this happens often. The skip exists to protect users who can't see what they're accepting. A prompt that names the count and relies on the inline display restores that protection, without one prompt per suggestion. Suggestion mode now widens changes to whole words (§4.6), which makes step 3 more reliable in the first place.
+
+## D44. Presence carries a quote, and cursors are resolved as anchors (2026-09-29)
+
+A peer's cursor includes the quote selector of its range, and a recipient whose text differs resolves it with the anchoring algorithm. A cursor that can't be resolved isn't shown. Buffers themselves aren't synced. See §7.8.
+
+**Why:** collaborators' copies of a document routinely differ, through unsaved edits, other branches, or pulls not yet made. Raw offsets then point at the wrong text, off by the length of every edit before the cursor. Anchoring already solves locating a range in text that has changed, including points next to edits (D42), so presence reuses it at the cost of about 64 code points per message. Syncing the buffers instead would make annox a co-editing system, which is out of scope: each person owns their copy of the text, and suggestions are how changes are proposed.

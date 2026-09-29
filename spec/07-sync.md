@@ -113,18 +113,21 @@ Presence shows who is connected to the hub, which document each person has open,
 
 | Method | Direction | Params |
 |---|---|---|
-| `annoxSync/presence` | replica → hub (notification) | `{ author, document?: Id, range?: { start, end }, version?: string }` |
+| `annoxSync/presence` | replica → hub (notification) | `{ author, document?: Id, range?: { start, end }, version?: string, quote?: { exact, prefix, suffix } }` |
 | `annoxSync/didChangePresence` | hub → replica (notification) | `{ peers: Peer[] }` |
 
 - `document` is the document record the user has open (§5.5). It is absent when no annotated document is open.
 - `range` is the cursor or selection, in code-point offsets (§3.3) into the sender's normalized buffer. `version` is the version (§3.4) of that buffer.
-- A **Peer** is `{ connection, author, document?, range?, version? }`. `connection` is an opaque id that the hub assigns to each connection, so that two sessions of the same author can be told apart.
+- `quote` is the quote selector (§3.5) of `range`, computed as in §3.6. A replica that sends `range` SHOULD send `quote` as well.
+- A **Peer** is `{ connection, author, document?, range?, version?, quote? }`. `connection` is an opaque id that the hub assigns to each connection, so that two sessions of the same author can be told apart.
 - Replicas SHOULD debounce `annoxSync/presence`, and send it when the open document or the cursor changes.
 - The hub sends `didChangePresence` to every subscribed replica whenever the set of peers or a peer's presence changes. It always carries the full list of peers other than the recipient's own connection. A connection that closes is removed from the list.
 
 ### 7.8.2 Displaying cursors
 
-The offsets in a peer's `range` refer to the peer's buffer, which may differ from the recipient's copy of the document. If `version` equals the version of the recipient's text, the range is exact. Otherwise, a replica SHOULD map it on a best-effort basis, for example by clamping it to the document, and MAY show only the document without a cursor.
+The offsets in a peer's `range` refer to the peer's buffer, which may differ from the recipient's copy of the document, for example because either side has unsaved edits. If `version` equals the version of the recipient's text, the range is exact.
+
+Otherwise, if the peer sent `quote`, a replica SHOULD resolve the anchor whose `version` is the peer's `version`, whose `position` is `range`, and whose `quote` is the peer's `quote` against its own text (§3.7), and show the cursor at the resulting range. If the anchor is orphaned, the replica SHOULD show only the document, without a cursor. If the peer sent no `quote`, a replica MAY map the range on a best-effort basis, for example by clamping it to the document, and MAY show only the document.
 
 ### 7.8.3 Privacy
 
