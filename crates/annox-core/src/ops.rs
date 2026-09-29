@@ -327,8 +327,10 @@ mod tests {
                 if entry.path().is_dir() {
                     stack.push(entry.path());
                 } else {
-                    let rel = entry.path().strip_prefix(ws.root.join(".annox")).unwrap().display().to_string();
-                    out.push(rel);
+                    let path = entry.path();
+                    let rel = path.strip_prefix(ws.root.join(".annox")).unwrap();
+                    let parts: Vec<_> = rel.components().map(|c| c.as_os_str().to_string_lossy()).collect();
+                    out.push(parts.join("/"));
                 }
             }
         }
