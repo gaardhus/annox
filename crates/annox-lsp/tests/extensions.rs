@@ -147,6 +147,33 @@ fn conflicts_are_surfaced_and_resolved() {
 }
 
 #[test]
+fn accept_all_needs_confirmation_for_partial_context() {
+    let mut f = setup();
+    let uri = f.uri.clone();
+    let sugg = f.client.call(
+        "annox/create",
+        json!({ "textDocument": { "uri": uri }, "kind": "suggestion", "range": range(1, 14, 27), "replacement": "we show that" }),
+    );
+    let sid = sugg["id"].as_str().unwrap().to_owned();
+    // The suffix changes, so the suggestion is found by quote search (step 3).
+    let edited = DOC.replace("tight", "sharp");
+    f.client.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": uri, "version": 2 }, "contentChanges": [{ "text": edited }] }),
+    );
+
+    let results = f.client.call("annox/acceptAll", json!({ "annotations": [sid] }))["results"].clone();
+    assert_eq!(results[0]["error"]["code"], 1008);
+
+    let id = f.client.request("annox/acceptAll", json!({ "annotations": [sid], "confirmed": true }));
+    let edit = f.client.answer_apply_edit(true);
+    assert_eq!(edit["edit"]["changes"][&uri][0]["newText"], "we show that");
+    let results = f.client.response(&id).unwrap()["results"].clone();
+    assert_eq!(results[0], json!({ "annotation": sid, "accepted": true }));
+    f.client.shutdown();
+}
+
+#[test]
 fn accept_all_and_revert() {
     let mut f = setup();
     let uri = f.uri.clone();

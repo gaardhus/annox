@@ -328,6 +328,10 @@ local function under_cursor(bufnr)
   return hits
 end
 
+local function buffer_annotations(bufnr, keep)
+  return vim.tbl_filter(keep, (M.state[bufnr] or {}).annotations or {})
+end
+
 local function describe(a)
   if a.kind == "suggestion" then
     return string.format("suggestion → %s", a.edit and a.edit.replacement or "")
@@ -460,11 +464,95 @@ M.reopen = status_action("open", function(a)
 end)
 M.reject = status_action("rejected", is_kind("suggestion", "open"))
 
+--- Accepts several suggestions as one edit, which a single undo reverts
+--- (§6.6.2), and reports the ones the server skipped. Suggestions found by
+--- partial context (steps 3 and 5) need `confirmed`, which is asked for once
+--- for the whole batch if it isn't given (§4.3).
+local function accept_all(bufnr, suggestions, confirmed, fresh)
+  if #suggestions == 0 then
+    return vim.notify("annox: no suggestions to accept", vim.log.levels.INFO)
+  end
+  if not fresh then
+    -- Pushed state can lag behind the buffer; resolve against it now.
+    local params = { textDocument = { uri = vim.uri_from_bufnr(bufnr) } }
+    return request(bufnr, "annox/annotations", params, function(result)
+      local wanted = {}
+      for _, a in ipairs(suggestions) do
+        wanted[a.id] = true
+      end
+      local current = vim.tbl_filter(function(a)
+        return wanted[a.id] and a.resolution and a.resolution.range ~= nil
+      end, result.annotations)
+      accept_all(bufnr, current, confirmed, true)
+    end)
+  end
+  local partial = #vim.tbl_filter(function(a)
+    return a.resolution.step == 3 or a.resolution.step == 5
+  end, suggestions)
+  if partial > 0 and confirmed == nil then
+    local all = string.format("Accept all %d", #suggestions)
+    local rest = string.format("Accept only the other %d", #suggestions - partial)
+    local choices = partial < #suggestions and { all, rest, "Cancel" } or { all, "Cancel" }
+    local prompt = string.format(
+      "%d of these suggestion%s moved because the text around %s changed. Check %s shown in the right place.",
+      partial,
+      partial == 1 and "" or "s",
+      partial == 1 and "it" or "them",
+      partial == 1 and "it is" or "they are"
+    )
+    return vim.ui.select(choices, { prompt = prompt }, function(choice)
+      if choice == all or choice == rest then
+        accept_all(bufnr, suggestions, choice == all, true)
+      end
+    end)
+  end
+  table.sort(suggestions, function(a, b)
+    return before(a.resolution.range.start, b.resolution.range.start)
+  end)
+  local ids = vim.tbl_map(function(a)
+    return a.id
+  end, suggestions)
+  request(bufnr, "annox/acceptAll", { annotations = ids, confirmed = confirmed or false }, function(result)
+    local accepted, skipped = 0, {}
+    for _, r in ipairs(result.results or {}) do
+      if r.error then
+        local message = type(r.error) == "table" and r.error.message or tostring(r.error)
+        skipped[message] = (skipped[message] or 0) + 1
+      else
+        accepted = accepted + 1
+      end
+    end
+    local parts = { string.format("accepted %d", accepted) }
+    for message, n in pairs(skipped) do
+      table.insert(parts, string.format("skipped %d (%s)", n, message))
+    end
+    local level = next(skipped) and vim.log.levels.WARN or vim.log.levels.INFO
+    vim.notify("annox: " .. table.concat(parts, "; "), level)
+  end)
+end
+
 --- Accepts the suggestion under the cursor: the server sends the edit back
---- as `workspace/applyEdit` (§6.6.2). opts: { annotation? }
+--- as `workspace/applyEdit` (§6.6.2). With `visual`, accepts every open
+--- suggestion touching the last visual selection, and with `all`, every open
+--- suggestion in the buffer. `confirmed` answers the prompt about suggestions
+--- found by partial context in advance. opts: { annotation?, visual?, all?, confirmed? }
 function M.accept(opts)
   opts = opts or {}
   local bufnr = vim.api.nvim_get_current_buf()
+  if opts.visual or opts.all then
+    local client = client_for(bufnr)
+    if not client then
+      return request(bufnr)
+    end
+    local sel = opts.visual and visual_range(bufnr, client.offset_encoding)
+    return accept_all(bufnr, buffer_annotations(bufnr, function(a)
+      local r = a.resolution and a.resolution.range
+      return a.kind == "suggestion"
+        and a.status == "open"
+        and r ~= nil
+        and (not sel or (before(r.start, sel["end"]) and before(sel.start, r["end"])))
+    end), opts.confirmed)
+  end
   with_annotation(opts, is_kind("suggestion", "open"), function(id)
     request(bufnr, "annox/accept", { annotation = id })
   end)
@@ -543,10 +631,6 @@ function M.list()
   end
   vim.fn.setqflist({}, " ", { title = "annox", items = items })
   vim.cmd.copen()
-end
-
-local function buffer_annotations(bufnr, keep)
-  return vim.tbl_filter(keep, (M.state[bufnr] or {}).annotations or {})
 end
 
 --- Calls `fn(annotation)` with `opts.annotation`'s view, the only candidate,
@@ -779,7 +863,7 @@ end
 --- While it is on, edits to the buffer become suggestions (§4.6). Whenever
 --- the user pauses (leaving insert mode, or after a normal-mode change), the
 --- buffer is compared with its text from before the edit. Each changed
---- stretch becomes a new suggestion, or extends one made in this session that
+--- stretch, widened to whole words, becomes a new suggestion, or extends one made in this session that
 --- it touches (a `retarget` event), and the buffer goes back to its original
 --- text. The file therefore never contains suggested text.
 ---
@@ -806,9 +890,16 @@ local function is_continuation(byte)
   return byte ~= nil and byte >= 0x80 and byte < 0xC0
 end
 
---- The changes from `base` to `lines`: { a0, a1, replacement, restore }, with
---- `[a0, a1)` a byte range of the base text, and `restore` the line range of
---- `lines` to put back and the base lines to put there.
+--- Letters, digits, underscore, and any non-ASCII byte (so multi-byte
+--- characters are never split).
+local function is_word(byte)
+  return byte ~= nil and (byte >= 0x80 or string.char(byte):match("[%w_]") ~= nil)
+end
+
+--- The changes from `base` to `lines`: { a0, a1, edited_end, replacement,
+--- restore }, with `[a0, a1)` a byte range of the base text, `edited_end`
+--- where the edit itself ended before widening, and `restore` the line range
+--- of `lines` to put back and the base lines to put there.
 local function changes(base, lines)
   local a, b = text_of(base), text_of(lines)
   local sa, sb = line_starts(base), line_starts(lines)
@@ -830,9 +921,25 @@ local function changes(base, lines)
     while is_continuation(a:byte(a1 + 1)) do
       a1, b1 = a1 + 1, b1 + 1
     end
+    local edited_end = a1
+    -- Widen a change that starts or ends inside a word to the whole word
+    -- (§4.6). The text around the change is the same in both versions.
+    local starts_in_word = is_word(a:byte(a0 + 1)) and a0 < a1 or is_word(b:byte(b0 + 1)) and b0 < b1
+    if starts_in_word then
+      while a0 > 0 and b0 > 0 and is_word(a:byte(a0)) and a:byte(a0) == b:byte(b0) do
+        a0, b0 = a0 - 1, b0 - 1
+      end
+    end
+    local ends_in_word = is_word(a:byte(a1)) and a0 < a1 or is_word(b:byte(b1)) and b0 < b1
+    if ends_in_word then
+      while is_word(a:byte(a1 + 1)) and a:byte(a1 + 1) == b:byte(b1 + 1) do
+        a1, b1 = a1 + 1, b1 + 1
+      end
+    end
     table.insert(out, {
       a0 = a0,
       a1 = a1,
+      edited_end = edited_end,
       replacement = b:sub(b0 + 1, b1),
       restore = { fb - 1, fb - 1 + cb, vim.list_slice(base, fa, fa + ca - 1) },
     })
@@ -902,9 +1009,13 @@ local function pump(bufnr)
     local id, v, r0, r1 = extendable(s, a0, a1, starts, enc)
     if id then
       -- Compose with the existing suggestion. Ties go after it, so typing at
-      -- the end of an insertion continues it.
+      -- the end of an insertion continues it. A change covering all of the
+      -- suggestion's text (struck through on screen) replaces it.
       local current = v.edit.replacement
-      if a0 >= r1 then
+      local covers = r0 < r1 and a0 <= r0 and a1 >= r1
+      if covers then
+        -- Keep the new text as it is.
+      elseif a0 >= r1 then
         replacement = current .. replacement
       elseif a1 <= r0 then
         replacement = replacement .. current
@@ -968,7 +1079,7 @@ local function capture(bufnr)
   end
   local last = found[#found]
   if bufnr == vim.api.nvim_get_current_buf() then
-    local pos = offset_position(s.base, line_starts(s.base), last.a1, "utf-8")
+    local pos = offset_position(s.base, line_starts(s.base), last.edited_end, "utf-8")
     local row = math.min(pos.line, #s.base - 1)
     pcall(vim.api.nvim_win_set_cursor, 0, { row + 1, pos.line > row and #s.base[row + 1] or pos.character })
   end
@@ -1115,7 +1226,7 @@ local subcommands = {
   reply = function() M.reply() end,
   resolve = function() M.resolve() end,
   reopen = function() M.reopen() end,
-  accept = function() M.accept() end,
+  accept = function(o) M.accept({ visual = o.range > 0, all = o.bang }) end,
   reject = function() M.reject() end,
   thread = function() M.thread() end,
   orphans = function() M.orphans() end,

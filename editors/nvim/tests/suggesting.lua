@@ -112,6 +112,18 @@ expect("undo of the join", { { 10, 10, "very nice " }, { 16, 19, "" } })
 keys("u")
 expect("undo of the deletion", { { 10, 10, "very nice " } })
 
+-- A change inside a word suggests the whole word.
+vim.api.nvim_win_set_cursor(0, { 1, 5 })
+keys("ra")
+expect("whole-word suggestion", { { 4, 9, "qaick" }, { 10, 10, "very nice " } })
+-- Changing that word again replaces the suggestion instead of stacking.
+vim.api.nvim_win_set_cursor(0, { 1, 5 })
+keys("re")
+expect("replaced suggestion", { { 4, 9, "qeick" }, { 10, 10, "very nice " } })
+keys("u")
+keys("u")
+expect("undo of the word", { { 10, 10, "very nice " } })
+
 -- The suggested text can be edited in a floating window.
 -- The cursor can be on either side of an insertion.
 local main_win = vim.api.nvim_get_current_win()
@@ -147,6 +159,34 @@ check(vim.fn.maparg("u", "n", false, true).buffer ~= 1, "undo key restored")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
 keys("x")
 check(text() == "he quick very nice brown fox.", "plain editing again")
+
+-- Bulk accept: the suggestions touching a visual selection, then all.
+local function line_range(s, e)
+  return { start = { line = 0, character = s }, ["end"] = { line = 0, character = e } }
+end
+annox.suggest({ range = line_range(3, 8), replacement = "slow" })
+annox.suggest({ range = line_range(25, 28), replacement = "cat" })
+wait("two suggestions", function()
+  return #suggestions() == 2
+end)
+-- Answer the one prompt about suggestions that moved with "Accept all".
+local prompts = {}
+vim.ui.select = function(items, opts, on_choice)
+  table.insert(prompts, opts.prompt)
+  on_choice(items[1])
+end
+vim.fn.setpos("'<", { buf, 1, 1, 0 })
+vim.fn.setpos("'>", { buf, 1, 10, 0 })
+vim.cmd("'<,'>Annox accept")
+wait("selection accepted", function()
+  return text() == "he slow very nice brown fox." and #suggestions() == 1
+end)
+vim.cmd("Annox! accept")
+wait("rest accepted", function()
+  return text() == "he slow very nice brown cat." and #suggestions() == 0
+end)
+-- Accepting "slow" changed the text around "fox", which then needed the prompt.
+check(#prompts == 1 and prompts[1]:find("^1 of these suggestion moved"), "one prompt: " .. vim.inspect(prompts))
 
 -- Orphaned annotations are announced above the text, not silently dropped.
 annox.comment({ range = { start = { line = 0, character = 4 }, ["end"] = { line = 0, character = 9 } }, body = "Fast?" })

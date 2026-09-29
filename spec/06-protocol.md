@@ -149,7 +149,7 @@ Every request that changes something writes the corresponding events (§2.4), th
 | `annox/edit` | `{ annotation, body?, label? }` | `edit` event. |
 | `annox/setStatus` | `{ annotation, status }` | `status` event. Not for `accepted`: use `annox/accept`. |
 | `annox/accept` | `{ annotation }` | Applies the suggestion (below). |
-| `annox/acceptAll` | `{ annotations: Id[] }` | Bulk accept (below). Returns `{ results: ({ annotation, accepted: true } \| { annotation, error })[] }`. |
+| `annox/acceptAll` | `{ annotations: Id[], confirmed?: boolean }` | Bulk accept (below). Returns `{ results: ({ annotation, accepted: true } \| { annotation, error })[] }`. |
 | `annox/retarget` | `{ annotation, range, replacement }` | `retarget` event (§4.2.1). |
 | `annox/reattach` | `{ annotation, range }` | A user-confirmed location for an orphaned comment (§3.7.4): `reanchor` event. Suggestions use `annox/retarget` instead. |
 | `annox/delete`, `annox/restore` | `{ annotation }` | `delete` or `restore` event. |
@@ -168,7 +168,7 @@ Every request that changes something writes the corresponding events (§2.4), th
 
 The client applies the edit to its buffer, so the user can undo it and save as usual. If the edit isn't applied, no event is written.
 
-**Bulk accept.** `annox/acceptAll` follows the rule in §4.3 for accepting several suggestions without showing each one. The server goes through `annotations` in the order given. It skips a suggestion, with an error in its result, if it is stale (`StaleSuggestion`), if it resolves only by step 3 or 5 (`NeedsReview`), or if its range overlaps one already chosen in this batch (`Overlap`). It then sends **one** `workspace/applyEdit` with all the chosen replacements, so a single undo reverts the whole batch. Only if that edit is applied does it write a `status` event for each chosen suggestion, all with the same `appliedVersion`.
+**Bulk accept.** `annox/acceptAll` follows the rule in §4.3 for accepting several suggestions without showing each one. The server goes through `annotations` in the order given. It skips a suggestion, with an error in its result, if it is stale (`StaleSuggestion`), if it resolves only by step 3 or 5 and `confirmed` isn't true (`NeedsReview`), or if its range overlaps one already chosen in this batch (`Overlap`). A client sets `confirmed` only after telling the user that the batch includes such suggestions and the user agreeing, for example with a single prompt for the whole batch (§4.3). It then sends **one** `workspace/applyEdit` with all the chosen replacements, so a single undo reverts the whole batch. Only if that edit is applied does it write a `status` event for each chosen suggestion, all with the same `appliedVersion`.
 
 ### 6.6.3 Notifications (server → client)
 

@@ -2,7 +2,7 @@
 
 ## 0.1 — 2026-09-29
 
-The first complete draft. The reasons behind each design choice are recorded as D1–D42 in [decisions.md](decisions.md).
+The first complete draft. The reasons behind each design choice are recorded as D1–D43 in [decisions.md](decisions.md).
 
 ### What 0.1 specifies
 

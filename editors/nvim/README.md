@@ -39,6 +39,7 @@ Changes others make to `.annox/`, such as a `git pull`, show up within a second 
 | `:Annox reply` | Reply to the thread under the cursor. |
 | `:Annox thread` | Show the thread under the cursor in a floating window. |
 | `:Annox accept` / `reject` | Accept or reject the suggestion under the cursor. Accepting edits the buffer, and you can undo as usual. |
+| `:'<,'>Annox accept` / `:Annox! accept` | Accept every suggestion touching the selection, or in the whole buffer, as one edit that a single undo reverts. If some suggestions moved because the text around them changed, you're asked once whether to accept them too. Stale or overlapping suggestions are skipped and reported. |
 | `:Annox resolve` / `reopen` | Resolve or reopen a thread. |
 | `:Annox orphans` | Pick from annotations whose text could no longer be found. |
 | `:Annox reattach` | Attach an orphaned comment to the selection. |
@@ -57,6 +58,7 @@ vim.keymap.set("x", "<leader>as", ":Annox suggest<cr>")
 vim.keymap.set("n", "<leader>at", "<cmd>Annox thread<cr>")
 vim.keymap.set("n", "<leader>ar", "<cmd>Annox reply<cr>")
 vim.keymap.set("n", "<leader>aa", "<cmd>Annox accept<cr>")
+vim.keymap.set("x", "<leader>aa", ":Annox accept<cr>")
 ```
 
 ## Suggestion mode
@@ -64,6 +66,7 @@ vim.keymap.set("n", "<leader>aa", "<cmd>Annox accept<cr>")
 `:Annox suggesting` turns the buffer into suggestion mode, like "Suggesting" in online editors. You edit as usual, and each time you leave insert mode or finish a normal-mode change such as `dw`, your edits become suggestions and the buffer goes back to its original text. The file never contains suggested text, so saving is always safe.
 
 - Suggestions are drawn inline: deleted text struck through, inserted text after it in green.
+- Changes are widened to whole words: changing `pd` to `pl` suggests `pd` → `pl`, not `d` → `l`.
 - Typing next to a suggestion you made in this session extends it. Delete a word and type its replacement right there, and you get one suggestion.
 - To change text you've already suggested, run `:Annox edit` on it. The inline green text can't hold the cursor.
 - `u` undoes your last suggestion, instead of undoing buffer changes. Set `suggest_undo_key` to change or disable this.
