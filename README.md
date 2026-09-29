@@ -1,6 +1,12 @@
-# annox
+<p align="center">
+  <img src="assets/annox-header.svg" alt="annox" width="400" height="128">
+</p>
 
-An open standard for document annotations — highlights, comments, and suggestions — that any editor can support.
+<p align="center">
+  <i>
+    An open standard for portable document annotations — highlights, comments, and suggestions — that any editor can support.
+  </i>
+</p>
 
 annox splits the problem the way LSP does: a portable **data format** that tools can read and write directly, and an optional **protocol** that lets editors talk to an annotation server instead of each editor integrating with each backend.
 
@@ -10,14 +16,14 @@ annox splits the problem the way LSP does: a portable **data format** that tools
 
 A Rust reference implementation lives in [`crates/`](crates/). It covers every section:
 
-| Spec | Implemented in | Tested by |
-|---|---|---|
-| §2 Data model | `annox-core` (`event`, `replay`) | replay vectors, reverse-order replay |
-| §3 Anchoring | `annox-core` (`text`, `anchor`) | anchoring vectors, worked example |
-| §4 Suggestions | `annox-core` (`suggestion`) and the server | suggestion vectors, accept/revert end-to-end |
-| §5 Storage | `annox-core` (`storage`, `ops`) | storage vectors, moves and publishing end-to-end |
-| §6 Protocol | `annox-lsp` (`annox lsp`) | in-process LSP tests, headless Neovim |
-| §7 Sync | `annox-sync` (`annox hub`, replica) | hub over WebSockets, two servers syncing |
+| Spec           | Implemented in                             | Tested by                                        |
+| -------------- | ------------------------------------------ | ------------------------------------------------ |
+| §2 Data model  | `annox-core` (`event`, `replay`)           | replay vectors, reverse-order replay             |
+| §3 Anchoring   | `annox-core` (`text`, `anchor`)            | anchoring vectors, worked example                |
+| §4 Suggestions | `annox-core` (`suggestion`) and the server | suggestion vectors, accept/revert end-to-end     |
+| §5 Storage     | `annox-core` (`storage`, `ops`)            | storage vectors, moves and publishing end-to-end |
+| §6 Protocol    | `annox-lsp` (`annox lsp`)                  | in-process LSP tests, headless Neovim            |
+| §7 Sync        | `annox-sync` (`annox hub`, replica)        | hub over WebSockets, two servers syncing         |
 
 Crates:
 
