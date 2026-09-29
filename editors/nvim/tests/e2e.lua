@@ -32,7 +32,10 @@ check(comment_hl.bg ~= nil and not comment_hl.undercurl, "comments tinted: " .. 
 check(vim.api.nvim_get_hl(0, { name = "AnnoxStale" }).link == "DiagnosticUnderlineWarn", "stale keeps the undercurl")
 vim.o.termguicolors = false
 vim.cmd.colorscheme("default")
-check(vim.api.nvim_get_hl(0, { name = "AnnoxComment" }).link == "DiagnosticUnderlineInfo", "underline without true colors")
+check(
+  vim.api.nvim_get_hl(0, { name = "AnnoxComment" }).link == "DiagnosticUnderlineInfo",
+  "underline without true colors"
+)
 
 vim.cmd.edit(root .. "/paper.tex")
 local buf = vim.api.nvim_get_current_buf()
@@ -212,12 +215,17 @@ wait("presence to be sent", function()
 end)
 check(sent[#sent].selection.start.line == 1 and sent[#sent].selection.start.character == 5, "cursor sent as presence")
 
-annox.on_presence(nil, { peers = { {
-  author = { id = "mailto:bob@example.org", name = "Bob" },
-  textDocument = { uri = vim.uri_from_bufnr(buf) },
-  range = range(1, 3, 3),
-} } })
-local presence = vim.api.nvim_buf_get_extmarks(buf, vim.api.nvim_get_namespaces().annox_presence, 0, -1, { details = true })
+annox.on_presence(nil, {
+  peers = {
+    {
+      author = { id = "mailto:bob@example.org", name = "Bob" },
+      textDocument = { uri = vim.uri_from_bufnr(buf) },
+      range = range(1, 3, 3),
+    },
+  },
+})
+local presence =
+  vim.api.nvim_buf_get_extmarks(buf, vim.api.nvim_get_namespaces().annox_presence, 0, -1, { details = true })
 check(#presence == 1 and presence[1][4].virt_text[1][1] == "▏Bob", "peer cursor drawn with name")
 
 print("annox nvim e2e: OK")

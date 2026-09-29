@@ -63,11 +63,23 @@ fn diagnostics_hover_and_accept() {
     let text = Text::from_raw(DOC);
     let author = json!({ "id": "mailto:ada@example.org", "name": "Ada" });
     let comment = NewAnnotation {
-        kind: "comment", start: 18, end: 30, body: Some("Which section?"), label: None, replacement: None, local: false,
+        kind: "comment",
+        start: 18,
+        end: 30,
+        body: Some("Which section?"),
+        label: None,
+        replacement: None,
+        local: false,
     };
     let comment = ops::create_annotation(&ws, &Index::read(&ws), "paper.tex", &text, &comment, &author).unwrap();
     let sugg = NewAnnotation {
-        kind: "suggestion", start: 32, end: 45, body: None, label: None, replacement: Some("we show that"), local: false,
+        kind: "suggestion",
+        start: 32,
+        end: 45,
+        body: None,
+        label: None,
+        replacement: Some("we show that"),
+        local: false,
     };
     let sugg = ops::create_annotation(&ws, &Index::read(&ws), "paper.tex", &text, &sugg, &author).unwrap();
 
@@ -129,7 +141,10 @@ fn diagnostics_hover_and_accept() {
     });
     let edits = &apply.params["edit"]["changes"][&uri];
     assert_eq!(edits[0]["newText"], "we show that");
-    assert_eq!(edits[0]["range"], json!({ "start": { "line": 1, "character": 14 }, "end": { "line": 1, "character": 27 } }));
+    assert_eq!(
+        edits[0]["range"],
+        json!({ "start": { "line": 1, "character": 14 }, "end": { "line": 1, "character": 27 } })
+    );
     client.conn.sender.send(Response::new_ok(apply.id, json!({ "applied": true })).into()).unwrap();
     assert_eq!(client.response(&accept).unwrap(), Value::Null);
 
@@ -147,7 +162,8 @@ fn diagnostics_hover_and_accept() {
     assert_eq!(client.response(&resolve).unwrap(), Value::Null);
     let loaded = Index::read(&ws).load("paper.tex");
     assert_eq!(loaded.derive()[&comment.id]["status"], "resolved");
-    let status_event = loaded.events.iter().find(|e| e.kind == "status" && e.annotation.as_deref() == Some(&comment.id));
+    let status_event =
+        loaded.events.iter().find(|e| e.kind == "status" && e.annotation.as_deref() == Some(&comment.id));
     assert_eq!(status_event.unwrap().author["name"], "Bob");
 
     // Hover shows only open threads (§6.5.2).

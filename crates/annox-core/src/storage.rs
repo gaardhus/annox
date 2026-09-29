@@ -289,12 +289,8 @@ impl Index {
         let at = self.documents_at(path);
         let loaded: Vec<String> =
             self.documents.keys().filter(|d| at.iter().any(|a| a == self.canonical(d))).cloned().collect();
-        let events: Vec<Event> = self
-            .events
-            .values()
-            .filter(|(_, loc)| loaded.contains(&loc.document))
-            .map(|(e, _)| e.clone())
-            .collect();
+        let events: Vec<Event> =
+            self.events.values().filter(|(_, loc)| loaded.contains(&loc.document)).map(|(e, _)| e.clone()).collect();
         let annotations = events
             .iter()
             .filter(|e| e.kind == "create" && e.annotation.as_deref() == Some(e.id.as_str()))
@@ -354,7 +350,10 @@ mod tests {
         let loc = classify(&format!(".annox/local/docs/a.md~{id}/document/{ev}.json")).unwrap();
         assert_eq!((loc.area, loc.is_document_event), (Area::Local, true));
         let loc = classify(&format!(".annox/synced/docs/a.md~{id}/{ev}.json")).unwrap();
-        assert_eq!((loc.folder.as_str(), loc.area, loc.synced), (format!("synced/docs/a.md~{id}").as_str(), Area::Shared, true));
+        assert_eq!(
+            (loc.folder.as_str(), loc.area, loc.synced),
+            (format!("synced/docs/a.md~{id}").as_str(), Area::Shared, true)
+        );
         assert!(classify(&format!(".annox/docs/paper.tex/{ev}.json")).is_none());
         assert!(classify(&format!(".annox/docs/paper.tex~{id}/notes.json")).is_none());
     }

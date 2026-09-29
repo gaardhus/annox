@@ -55,10 +55,9 @@ impl Fixture {
     }
 
     fn annotations(&mut self, closed: bool) -> Vec<Value> {
-        let r = self.client.call(
-            "annox/annotations",
-            json!({ "textDocument": { "uri": self.uri }, "includeClosed": closed }),
-        );
+        let r = self
+            .client
+            .call("annox/annotations", json!({ "textDocument": { "uri": self.uri }, "includeClosed": closed }));
         r["annotations"].as_array().unwrap().clone()
     }
 }
@@ -135,10 +134,8 @@ fn conflicts_are_surfaced_and_resolved() {
     assert_eq!(values, ["mine", "theirs"]);
     assert_eq!(entries[0]["author"]["name"], "Bob");
 
-    let resolved = f.client.call(
-        "annox/resolveConflict",
-        json!({ "annotation": id, "field": "body", "value": "merged" }),
-    );
+    let resolved =
+        f.client.call("annox/resolveConflict", json!({ "annotation": id, "field": "body", "value": "merged" }));
     assert_eq!(resolved["body"], "merged");
     assert_eq!(resolved["conflicts"], json!({}));
     let code = f.client.call_err("annox/resolveConflict", json!({ "annotation": id, "field": "body", "value": "x" }));
@@ -181,10 +178,9 @@ fn accept_all_and_revert() {
         "annox/create",
         json!({ "textDocument": { "uri": uri }, "kind": "suggestion", "range": range(1, 14, 27), "replacement": "we show that" }),
     );
-    let comment = f.client.call(
-        "annox/create",
-        json!({ "textDocument": { "uri": uri }, "kind": "comment", "range": range(1, 0, 12) }),
-    );
+    let comment = f
+        .client
+        .call("annox/create", json!({ "textDocument": { "uri": uri }, "kind": "comment", "range": range(1, 0, 12) }));
     assert_eq!(sugg["applicable"], true);
     let sid = sugg["id"].as_str().unwrap().to_owned();
 
@@ -203,7 +199,12 @@ fn accept_all_and_revert() {
     );
     let index = Index::read(&f.ws);
     let heads: Vec<String> = {
-        let own: Vec<_> = index.events.values().filter(|(e, _)| e.annotation.as_deref() == Some(&sid)).map(|(e, _)| e.clone()).collect();
+        let own: Vec<_> = index
+            .events
+            .values()
+            .filter(|(e, _)| e.annotation.as_deref() == Some(&sid))
+            .map(|(e, _)| e.clone())
+            .collect();
         let accepted = own.iter().find(|e| e.kind == "status").unwrap();
         accepted.after.clone()
     };

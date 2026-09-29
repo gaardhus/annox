@@ -83,7 +83,10 @@ annox.suggest_mode()
 check(annox.is_suggesting(buf), "suggestion mode on")
 check(vim.b[buf].annox_suggesting == true and annox.statusline() == "SUGGESTING", "statusline state on")
 check(#events == 1 and events[1] == true, "event on: " .. vim.inspect(events))
-check(winhl():find("CursorLineNr:AnnoxSuggestingCursorLineNr", 1, true) and winhl():find("^Normal:Normal,"), "tint on: " .. winhl())
+check(
+  winhl():find("CursorLineNr:AnnoxSuggestingCursorLineNr", 1, true) and winhl():find("^Normal:Normal,"),
+  "tint on: " .. winhl()
+)
 -- The tint belongs to the buffer, not the window.
 vim.cmd.enew()
 check(winhl() == "Normal:Normal", "no tint on another buffer: " .. winhl())

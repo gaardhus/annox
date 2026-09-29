@@ -10,8 +10,8 @@ mod views;
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
-use std::rc::Rc;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use annox_core::anchor::{self, Anchor, Resolution, State};
@@ -31,10 +31,10 @@ use lsp_types::{
     ApplyWorkspaceEditParams, ApplyWorkspaceEditResponse, CodeAction, CodeActionOrCommand, CodeActionParams,
     CodeActionProviderCapability, Command, Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams, ExecuteCommandOptions,
-    ExecuteCommandParams, Hover, HoverContents, HoverParams, HoverProviderCapability, InitializeParams,
-    MarkupContent, MarkupKind, NumberOrString, PublishDiagnosticsParams, RenameFilesParams, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions,
-    TextEdit, Url, WorkspaceEdit,
+    ExecuteCommandParams, Hover, HoverContents, HoverParams, HoverProviderCapability, InitializeParams, MarkupContent,
+    MarkupKind, NumberOrString, PublishDiagnosticsParams, RenameFilesParams, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, TextEdit,
+    Url, WorkspaceEdit,
 };
 use serde_json::{json, Map, Value};
 
@@ -129,9 +129,8 @@ pub fn run(connection: &Connection) -> anyhow::Result<()> {
     };
     let (id, params) = connection.initialize_start()?;
     let params: InitializeParams = serde_json::from_value(params)?;
-    let encoding = Encoding::negotiate(
-        params.capabilities.general.as_ref().and_then(|g| g.position_encodings.as_deref()),
-    );
+    let encoding =
+        Encoding::negotiate(params.capabilities.general.as_ref().and_then(|g| g.position_encodings.as_deref()));
     let annox_client = params.capabilities.experimental.as_ref().is_some_and(|e| e.get("annox").is_some());
     let dynamic_watch = params
         .capabilities
@@ -621,7 +620,13 @@ impl Server<'_> {
         self.author.clone().unwrap_or_else(|| default_author(&ws.root).unwrap_or_else(|_| git_author(&ws.root)))
     }
 
-    fn write_event(&self, a: &Analysis, annotation: &str, kind: &str, fields: Map<String, Value>) -> Result<(), Failure> {
+    fn write_event(
+        &self,
+        a: &Analysis,
+        annotation: &str,
+        kind: &str,
+        fields: Map<String, Value>,
+    ) -> Result<(), Failure> {
         let result = ops::append_event(&a.ws, &a.index, annotation, kind, fields, &self.author(&a.ws));
         self.invalidate();
         result.map(|_| ()).map_err(|e| (INTERNAL_ERROR, e.to_string()))
@@ -635,7 +640,14 @@ impl Server<'_> {
 
     /// Sends a `WorkspaceEdit` replacing `[start, end)` of `uri` with `new_text`,
     /// and parks `work` until the client answers.
-    fn apply_edit(&mut self, command: RequestId, uri: Url, edits: Vec<(usize, usize, String)>, work: Work, respond_view: bool) {
+    fn apply_edit(
+        &mut self,
+        command: RequestId,
+        uri: Url,
+        edits: Vec<(usize, usize, String)>,
+        work: Work,
+        respond_view: bool,
+    ) {
         let Some(a) = self.analyze(&uri) else {
             return self.reply(command, fail(NO_WORKSPACE, "no annox workspace"));
         };
@@ -691,13 +703,15 @@ impl Server<'_> {
             return;
         }
         let marker = std::fs::read_to_string(ws.root.join(".annox/annox.json")).unwrap_or_default();
-        let url = serde_json::from_str::<Value>(&marker).ok().and_then(|m| m["sync"]["url"].as_str().map(str::to_owned));
+        let url =
+            serde_json::from_str::<Value>(&marker).ok().and_then(|m| m["sync"]["url"].as_str().map(str::to_owned));
         let replica = url.and_then(|url| {
             let Some(credential) = annox_sync::credentials::lookup(&url) else {
                 self.warn(format!("annox: {url} has no entry in the credentials file; not syncing"));
                 return None;
             };
-            let config = ReplicaConfig { root: ws.root.clone(), url, token: credential.token, author: self.author(&ws) };
+            let config =
+                ReplicaConfig { root: ws.root.clone(), url, token: credential.token, author: self.author(&ws) };
             Some(replica::spawn(config, self.sync_tx.clone()))
         });
         self.replicas.insert(ws.root, replica);
@@ -742,7 +756,9 @@ impl Server<'_> {
             Some(d) => d.text.clone(),
             None => Text::from_raw(&std::fs::read_to_string(ws.root.join(&path)).unwrap_or_default()),
         };
-        let (Some(start), Some(end)) = (peer["range"]["start"].as_u64(), peer["range"]["end"].as_u64()) else { return view };
+        let (Some(start), Some(end)) = (peer["range"]["start"].as_u64(), peer["range"]["end"].as_u64()) else {
+            return view;
+        };
         let (start, end) = (start as usize, end as usize);
         let range = match serde_json::from_value(peer["quote"].clone()) {
             // Resolve the cursor as an anchor, so it stays on the same text
@@ -877,7 +893,10 @@ impl Server<'_> {
         let first = hits.first()?.resolution.range?;
         let sections: Vec<String> = hits.iter().map(|i| thread_markdown(i, a.replies.get(&i.id))).collect();
         Some(Hover {
-            contents: HoverContents::Markup(MarkupContent { kind: MarkupKind::Markdown, value: sections.join("\n\n---\n\n") }),
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: sections.join("\n\n---\n\n"),
+            }),
             range: Some(lines.range(first.0, first.1)),
         })
     }

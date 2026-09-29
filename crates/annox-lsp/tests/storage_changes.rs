@@ -35,7 +35,15 @@ fn outside_changes_are_pushed_without_a_save() {
 
     // Another tool (or `git pull`) adds a comment on disk.
     std::thread::sleep(std::time::Duration::from_millis(1100));
-    let new = NewAnnotation { kind: "comment", start: 6, end: 15, body: Some("from git"), label: None, replacement: None, local: false };
+    let new = NewAnnotation {
+        kind: "comment",
+        start: 6,
+        end: 15,
+        body: Some("from git"),
+        label: None,
+        replacement: None,
+        local: false,
+    };
     let author = json!({ "id": "mailto:bob@example.org" });
     ops::create_annotation(&ws, &Index::read(&ws), "notes.txt", &Text::from_raw(DOC), &new, &author).unwrap();
 

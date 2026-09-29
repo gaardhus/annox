@@ -4,7 +4,7 @@ annox is an open standard for annotating plain-text documents with highlights, c
 
 ## 1.1 How it fits together
 
-```
+```text
  ┌──────────────────────────┐        ┌──────────────────────────┐
  │ .annox/  (§5)            │        │ paper.tex                │
  │ event files, committed   │        │ the document, untouched  │

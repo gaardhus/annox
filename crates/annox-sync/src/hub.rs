@@ -104,8 +104,7 @@ impl Log {
 
     fn broadcast_presence(&self) {
         for (&conn, tx) in &self.subscribers {
-            let peers: Vec<&Value> =
-                self.presence.iter().filter(|(c, _)| **c != conn).map(|(_, p)| p).collect();
+            let peers: Vec<&Value> = self.presence.iter().filter(|(c, _)| **c != conn).map(|(_, p)| p).collect();
             let _ = tx.send(notification("annoxSync/didChangePresence", json!({ "peers": peers })));
         }
     }

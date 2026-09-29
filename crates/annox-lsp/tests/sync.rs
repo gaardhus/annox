@@ -69,7 +69,9 @@ fn annotations_and_presence_sync_between_servers() {
     let hub_data = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("ws://{}/w/notes", listener.local_addr().unwrap());
-    std::thread::spawn(move || serve(listener, HubConfig { data: hub_data.path().to_path_buf(), token: Some("tok".into()) }));
+    std::thread::spawn(move || {
+        serve(listener, HubConfig { data: hub_data.path().to_path_buf(), token: Some("tok".into()) })
+    });
 
     // Per-user credentials, outside both workspaces (§7.2).
     let config = tempfile::tempdir().unwrap();
@@ -144,7 +146,10 @@ fn annotations_and_presence_sync_between_servers() {
         }),
     );
     let cursor = json!({ "line": 0, "character": 6 });
-    ada.notify("annox/setPresence", json!({ "textDocument": { "uri": uri_a }, "selection": { "start": cursor, "end": cursor } }));
+    ada.notify(
+        "annox/setPresence",
+        json!({ "textDocument": { "uri": uri_a }, "selection": { "start": cursor, "end": cursor } }),
+    );
     let peers = loop {
         let p = bob.notification("annox/didChangePresence")["peers"].clone();
         if p[0]["range"]["start"] != json!({ "line": 0, "character": 6 }) {

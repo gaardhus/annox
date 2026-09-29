@@ -32,10 +32,7 @@ impl<'a> Log<'a> {
         loop {
             let before = live.len();
             for (id, e) in &by_id {
-                if !live.contains(id)
-                    && !e.after.is_empty()
-                    && e.after.iter().all(|a| live.contains(a.as_str()))
-                {
+                if !live.contains(id) && !e.after.is_empty() && e.after.iter().all(|a| live.contains(a.as_str())) {
                     live.insert(id);
                 }
             }
@@ -82,11 +79,8 @@ impl<'a> Log<'a> {
     /// The heads among `writers`: those not an ancestor of another writer
     /// (§2.5.2), sorted by id.
     pub fn field_heads<'b>(&self, writers: &[&'b str]) -> Vec<&'b str> {
-        let mut heads: Vec<&str> = writers
-            .iter()
-            .copied()
-            .filter(|w| !writers.iter().any(|o| o != w && self.is_ancestor(w, o)))
-            .collect();
+        let mut heads: Vec<&str> =
+            writers.iter().copied().filter(|w| !writers.iter().any(|o| o != w && self.is_ancestor(w, o))).collect();
         heads.sort_unstable();
         heads
     }
@@ -117,8 +111,7 @@ fn derive_fields<'a>(log: &Log<'a>, writes_of: impl Fn(&Event) -> Writes) -> Fie
         let mut conflicted = heads.len() > 1;
         // Special rule 1: anchor rewrites never conflict (§2.5.3).
         if name == "target" && conflicted {
-            let human: Vec<&str> =
-                heads.iter().copied().filter(|h| log.events[h].kind != "reanchor").collect();
+            let human: Vec<&str> = heads.iter().copied().filter(|h| log.events[h].kind != "reanchor").collect();
             if human.len() <= 1 {
                 conflicted = false;
                 if let Some(h) = human.first() {
@@ -157,7 +150,10 @@ fn annotation_writes(kind: &str, root_id: &str, e: &Event) -> Writes {
                 w.insert("target", e.field("target").cloned().unwrap_or(Value::Null));
             }
             if kind == "suggestion" {
-                w.insert("replacement", e.field("edit").and_then(|v| v.get("replacement")).cloned().unwrap_or(Value::Null));
+                w.insert(
+                    "replacement",
+                    e.field("edit").and_then(|v| v.get("replacement")).cloned().unwrap_or(Value::Null),
+                );
             }
         }
         "edit" => {
@@ -177,11 +173,8 @@ fn annotation_writes(kind: &str, root_id: &str, e: &Event) -> Writes {
             }
         }
         "status" if is_root => {
-            let allowed: &[&str] = if kind == "comment" {
-                &["open", "resolved"]
-            } else {
-                &["open", "accepted", "rejected", "withdrawn"]
-            };
+            let allowed: &[&str] =
+                if kind == "comment" { &["open", "resolved"] } else { &["open", "accepted", "rejected", "withdrawn"] };
             let Some(status) = str_field(e, "status").filter(|s| allowed.contains(s)) else {
                 return w;
             };
@@ -323,11 +316,7 @@ fn document_writes(e: &Event, may_merge: &dyn Fn(&str, &str) -> bool) -> Writes 
 /// Derives the state of document record `id` from its events. Returns `None`
 /// if there is no valid `document` event. `may_merge(doc, into)` decides
 /// whether a `merged` event is valid (§5.5.1), which depends on areas.
-pub fn derive_document(
-    events: &[Event],
-    id: &str,
-    may_merge: &dyn Fn(&str, &str) -> bool,
-) -> Option<DocumentState> {
+pub fn derive_document(events: &[Event], id: &str, may_merge: &dyn Fn(&str, &str) -> bool) -> Option<DocumentState> {
     let own = events.iter().filter(|e| e.document.as_deref() == Some(id));
     let log = Log::build(own, id)?;
     if log.root.kind != "document" {
@@ -346,8 +335,7 @@ pub fn derive_document(
 pub fn ordered_events(events: &[Event], id: &str) -> Vec<Event> {
     let own = events.iter().filter(|e| e.annotation.as_deref() == Some(id));
     let Some(log) = Log::build(own, id) else { return vec![] };
-    let mut remaining: BTreeMap<&str, usize> =
-        log.events.iter().map(|(k, e)| (*k, e.after.len())).collect();
+    let mut remaining: BTreeMap<&str, usize> = log.events.iter().map(|(k, e)| (*k, e.after.len())).collect();
     let mut ready: BTreeSet<&str> = remaining.iter().filter(|(_, n)| **n == 0).map(|(k, _)| *k).collect();
     let mut out = Vec::new();
     while let Some(next) = ready.pop_first() {

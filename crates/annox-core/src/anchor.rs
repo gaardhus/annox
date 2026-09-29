@@ -98,11 +98,7 @@ pub fn resolve(doc: &Text, anchor: &Anchor) -> Resolution {
     }
 
     // Step 1: position check.
-    if consistent
-        && s >= p.len()
-        && d[s - p.len()..s] == p[..]
-        && e + x.len() <= d.len()
-        && d[e..e + x.len()] == x[..]
+    if consistent && s >= p.len() && d[s - p.len()..s] == p[..] && e + x.len() <= d.len() && d[e..e + x.len()] == x[..]
     {
         return Resolution::exact(s, e, 1);
     }
@@ -138,11 +134,7 @@ pub fn resolve(doc: &Text, anchor: &Anchor) -> Resolution {
         let (wp, _) = collapse(&p);
         let (wx, _) = collapse(&x);
         let merged = wp.last() == Some(&' ') && wx.first() == Some(&' ');
-        let pattern: Vec<char> = if merged {
-            [&wp[..], &wx[1..]].concat()
-        } else {
-            [&wp[..], &wx[..]].concat()
-        };
+        let pattern: Vec<char> = if merged { [&wp[..], &wx[1..]].concat() } else { [&wp[..], &wx[..]].concat() };
         if pattern.iter().any(|&c| c != ' ') {
             let w = doc.collapsed();
             let points: Vec<usize> = w
@@ -215,33 +207,19 @@ pub(crate) fn nearest(candidates: &[usize], s: usize) -> Option<usize> {
 
 /// Context score of the occurrence `[i, j)` of a quote in `t` (§3.7.1).
 fn context_score(t: &[char], i: usize, j: usize, prefix: &[char], suffix: &[char]) -> usize {
-    let left = (1..=prefix.len().min(i))
-        .rev()
-        .find(|&k| t[i - k..i] == prefix[prefix.len() - k..])
-        .unwrap_or(0);
-    let right = (1..=suffix.len().min(t.len() - j))
-        .rev()
-        .find(|&k| t[j..j + k] == suffix[..k])
-        .unwrap_or(0);
+    let left = (1..=prefix.len().min(i)).rev().find(|&k| t[i - k..i] == prefix[prefix.len() - k..]).unwrap_or(0);
+    let right = (1..=suffix.len().min(t.len() - j)).rev().find(|&k| t[j..j + k] == suffix[..k]).unwrap_or(0);
     left + right
 }
 
 /// Selecting by context (§3.7.1).
-fn select_by_context(
-    t: &[char],
-    occ: &[usize],
-    qlen: usize,
-    prefix: &[char],
-    suffix: &[char],
-) -> Option<usize> {
+fn select_by_context(t: &[char], occ: &[usize], qlen: usize, prefix: &[char], suffix: &[char]) -> Option<usize> {
     match occ {
         [] => None,
         [only] => Some(*only),
         _ => {
-            let scored: Vec<(usize, usize)> = occ
-                .iter()
-                .map(|&i| (context_score(t, i, i + qlen, prefix, suffix), i))
-                .collect();
+            let scored: Vec<(usize, usize)> =
+                occ.iter().map(|&i| (context_score(t, i, i + qlen, prefix, suffix), i)).collect();
             let best = scored.iter().map(|&(sc, _)| sc).max()?;
             let mut winners = scored.iter().filter(|&&(sc, _)| sc == best);
             match (winners.next(), winners.next()) {
@@ -285,9 +263,8 @@ mod tests {
 
     #[test]
     fn worked_example_from_spec() {
-        let original = Text::from_raw(
-            "\\section{Results}\nIn Section 3, we prove that the bound is tight for all $n$.\n",
-        );
+        let original =
+            Text::from_raw("\\section{Results}\nIn Section 3, we prove that the bound is tight for all $n$.\n");
         let anchor = create(&original, 32, 45, "paper.tex");
         assert_eq!(anchor.selectors.quote.exact, "we prove that");
         let edited = Text::from_raw(

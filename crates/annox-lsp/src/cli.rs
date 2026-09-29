@@ -13,7 +13,8 @@ use annox_core::text::Text;
 use anyhow::{anyhow, bail, Context};
 use serde_json::{json, Map, Value};
 
-pub const USAGE: &str = "  annox init [DIR]                            create a workspace in DIR (default: current directory)
+pub const USAGE: &str =
+    "  annox init [DIR]                            create a workspace in DIR (default: current directory)
   annox list [FILE] [--all]                   annotations of FILE, or of every document, as JSON
   annox comment FILE --quote TEXT --body TEXT [--occurrence N] [--label L] [--local]
   annox suggest FILE --quote TEXT --replace TEXT [--body TEXT] [--occurrence N] [--label L] [--local]
@@ -154,7 +155,11 @@ pub fn run(args: &[String], cwd: &Path) -> anyhow::Result<Value> {
                 bail!("use `annox accept {id}`, which also applies the suggestion");
             }
             if !allowed.contains(&status) {
-                bail!("a {} can't be {status}; use one of: {}", state["kind"].as_str().unwrap_or_default(), allowed.join(", "));
+                bail!(
+                    "a {} can't be {status}; use one of: {}",
+                    state["kind"].as_str().unwrap_or_default(),
+                    allowed.join(", ")
+                );
             }
             if state["status"] == "accepted" {
                 bail!("{id} is accepted, which is final; make a new suggestion to undo it");
@@ -186,8 +191,10 @@ pub fn run(args: &[String], cwd: &Path) -> anyhow::Result<Value> {
 /// The author to write events as: flags, then environment, then the user
 /// config file, then git (§2.7).
 fn author(args: &Args, ws: &Workspace) -> anyhow::Result<Value> {
-    let get = |flag, var| args.get(flag).map(str::to_owned).or_else(|| std::env::var(var).ok().filter(|v| !v.is_empty()));
-    crate::resolve_author(get("author", "ANNOX_AUTHOR"), get("name", "ANNOX_AUTHOR_NAME"), &ws.root).map_err(|e| anyhow!(e))
+    let get =
+        |flag, var| args.get(flag).map(str::to_owned).or_else(|| std::env::var(var).ok().filter(|v| !v.is_empty()));
+    crate::resolve_author(get("author", "ANNOX_AUTHOR"), get("name", "ANNOX_AUTHOR_NAME"), &ws.root)
+        .map_err(|e| anyhow!(e))
 }
 
 fn no_workspace(from: &Path) -> anyhow::Error {
@@ -229,16 +236,15 @@ fn find_quote(text: &Text, quote: &str, occurrence: Option<&str>) -> anyhow::Res
     }
     let normalized = annox_core::text::normalize(quote);
     let needle: Vec<char> = normalized.chars().collect();
-    let starts: Vec<usize> = (0..=text.len().saturating_sub(needle.len()))
-        .filter(|&i| text.chars[i..].starts_with(&needle))
-        .collect();
+    let starts: Vec<usize> =
+        (0..=text.len().saturating_sub(needle.len())).filter(|&i| text.chars[i..].starts_with(&needle)).collect();
     let start = match (starts.as_slice(), occurrence) {
         ([], _) => bail!("the quote was not found in the file; quote the text exactly as it appears"),
         (_, Some(n)) => {
             let n: usize = n.parse().context("--occurrence must be a number")?;
-            *starts.get(n.wrapping_sub(1)).ok_or_else(|| {
-                anyhow!("--occurrence {n} is out of range: the quote occurs {} times", starts.len())
-            })?
+            *starts
+                .get(n.wrapping_sub(1))
+                .ok_or_else(|| anyhow!("--occurrence {n} is out of range: the quote occurs {} times", starts.len()))?
         }
         ([only], None) => *only,
         (many, None) => {
@@ -262,11 +268,8 @@ fn create(command: &str, args: &Args, cwd: &Path) -> anyhow::Result<Value> {
     let (ws, rel, abs) = open_file(cwd, args.positional(0, "file")?)?;
     let text = Text::from_raw(&std::fs::read_to_string(&abs)?);
     let (start, end) = find_quote(&text, args.require("quote")?, args.get("occurrence"))?;
-    let replacement = if command == "suggest" {
-        Some(annox_core::text::normalize(args.require("replace")?))
-    } else {
-        None
-    };
+    let replacement =
+        if command == "suggest" { Some(annox_core::text::normalize(args.require("replace")?)) } else { None };
     let body = args.get("body");
     if command == "comment" && body.is_none() {
         bail!("--body is required");
@@ -294,7 +297,8 @@ fn list(args: &Args, cwd: &Path) -> anyhow::Result<Value> {
         None => {
             let ws = Workspace::find(cwd).ok_or_else(|| no_workspace(cwd))?;
             let index = Index::read(&ws);
-            let paths = index.documents.values().filter(|d| d.merged_into.is_none()).filter_map(|d| d.path.clone()).collect();
+            let paths =
+                index.documents.values().filter(|d| d.merged_into.is_none()).filter_map(|d| d.path.clone()).collect();
             (ws, paths)
         }
     };
@@ -327,7 +331,15 @@ fn list(args: &Args, cwd: &Path) -> anyhow::Result<Value> {
 }
 
 /// One root annotation as listed: where it is now, and its thread.
-fn item(id: &str, state: &Value, path: &str, text: Option<&Text>, closed: bool, area: Area, replies: Vec<Value>) -> Value {
+fn item(
+    id: &str,
+    state: &Value,
+    path: &str,
+    text: Option<&Text>,
+    closed: bool,
+    area: Area,
+    replies: Vec<Value>,
+) -> Value {
     let target: Option<Anchor> = serde_json::from_value(state["target"].clone()).ok();
     let quote = target.as_ref().map(|t| t.selectors.quote.exact.clone());
     let mut view = json!({
@@ -383,7 +395,10 @@ fn move_target(command: &str, args: &Args, cwd: &Path) -> anyhow::Result<Value> 
     let kind = if command == "retarget" { "suggestion" } else { "comment" };
     if state["kind"] != kind {
         let other = if command == "retarget" { "reattach" } else { "retarget" };
-        bail!("only {kind}s can be {command}ed; use `annox {other}` for a {}", state["kind"].as_str().unwrap_or("reply"));
+        bail!(
+            "only {kind}s can be {command}ed; use `annox {other}` for a {}",
+            state["kind"].as_str().unwrap_or("reply")
+        );
     }
     // Closed annotations keep their anchors (§4.4.1).
     if state["status"] != "open" {
@@ -440,10 +455,8 @@ fn accept(args: &Args, cwd: &Path) -> anyhow::Result<Value> {
         out.push_str(&new_text);
     }
     std::fs::write(&file, out)?;
-    let fields = Map::from_iter([
-        ("status".into(), json!("accepted")),
-        ("appliedVersion".into(), json!(applied.text.version)),
-    ]);
+    let fields =
+        Map::from_iter([("status".into(), json!("accepted")), ("appliedVersion".into(), json!(applied.text.version))]);
     ops::append_event(&ws, &index, id, "status", fields, &author(args, &ws)?)?;
     Ok(json!({ "id": id, "status": "accepted", "path": path, "appliedVersion": applied.text.version }))
 }

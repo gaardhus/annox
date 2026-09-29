@@ -161,7 +161,10 @@ fn presence_is_relayed_and_dropped_on_disconnect() {
     b.call("annoxSync/hello", json!({ "format": 1, "subscribe": true }));
     assert_eq!(b.notification("annoxSync/didChangePresence")["peers"], json!([]));
 
-    a.notify("annoxSync/presence", json!({ "author": { "id": "mailto:ada@example.org" }, "document": DOC, "range": { "start": 3, "end": 3 } }));
+    a.notify(
+        "annoxSync/presence",
+        json!({ "author": { "id": "mailto:ada@example.org" }, "document": DOC, "range": { "start": 3, "end": 3 } }),
+    );
     let peers = b.notification("annoxSync/didChangePresence")["peers"].clone();
     assert_eq!(peers[0]["author"]["id"], "mailto:ada@example.org");
     assert_eq!(peers[0]["range"]["start"], 3);

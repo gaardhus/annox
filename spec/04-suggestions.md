@@ -116,7 +116,7 @@ It is used in two places:
 
 Allowed transitions:
 
-```
+```text
 open ──accept──▶ accepted
 open ──reject──▶ rejected ──reopen──▶ open
 open ──withdraw─▶ withdrawn ──reopen──▶ open
@@ -138,7 +138,7 @@ Suggestions that are `accepted`, `rejected`, or `withdrawn` are **closed**.
 
 Using the document from §3.9 after its edit (`As shown in Section 3, …`), a suggestion on "we prove that" with `replacement: "we show that"` resolves by step 3 to `[41, 54)`. It is applicable, and accepting it produces:
 
-```
+```text
 \section{Results}
 As shown in Section 3, we show that the bound is tight for all $n \geq 1$.
 ```

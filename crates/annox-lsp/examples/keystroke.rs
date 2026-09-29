@@ -25,7 +25,15 @@ fn main() {
     let ws = Workspace::init(&dir).unwrap();
     std::fs::write(dir.join("doc.txt"), &raw).unwrap();
     let author = json!({ "id": "mailto:bench@example.org" });
-    let first = NewAnnotation { kind: "comment", start: 0, end: 8, body: Some("hmm"), label: None, replacement: None, local: false };
+    let first = NewAnnotation {
+        kind: "comment",
+        start: 0,
+        end: 8,
+        body: Some("hmm"),
+        label: None,
+        replacement: None,
+        local: false,
+    };
     ops::create_annotation(&ws, &Index::read(&ws), "doc.txt", &text, &first, &author).unwrap();
     let folder = Index::read(&ws).events.values().next().unwrap().1.folder.clone();
     let stride = raw.len() / 1000;
@@ -37,7 +45,16 @@ fn main() {
             ("target".into(), json!(anchor::create(&text, at, at + 15, "doc.txt"))),
             ("body".into(), json!("hmm")),
         ]);
-        let e = Event { id: id.clone(), annotation: Some(id), document: None, after: vec![], kind: "create".into(), author: author.clone(), time: Event::now(), fields };
+        let e = Event {
+            id: id.clone(),
+            annotation: Some(id),
+            document: None,
+            after: vec![],
+            kind: "create".into(),
+            author: author.clone(),
+            time: Event::now(),
+            fields,
+        };
         ws.write_event(&folder, &e).unwrap();
     }
 
@@ -50,14 +67,21 @@ fn main() {
             return m;
         }
     };
-    let is_diagnostics = |m: &Message| matches!(m, Message::Notification(n) if n.method == "textDocument/publishDiagnostics");
+    let is_diagnostics =
+        |m: &Message| matches!(m, Message::Notification(n) if n.method == "textDocument/publishDiagnostics");
     send(Request::new(RequestId::from(1), "initialize".into(), json!({ "capabilities": {} })).into());
     wait(&|m| matches!(m, Message::Response(_)));
     send(Notification::new("initialized".into(), json!({})).into());
     let uri = format!("file://{}", dir.join("doc.txt").display());
 
     let start = Instant::now();
-    send(Notification::new("textDocument/didOpen".into(), json!({ "textDocument": { "uri": uri, "languageId": "text", "version": 1, "text": raw } })).into());
+    send(
+        Notification::new(
+            "textDocument/didOpen".into(),
+            json!({ "textDocument": { "uri": uri, "languageId": "text", "version": 1, "text": raw } }),
+        )
+        .into(),
+    );
     wait(&is_diagnostics);
     println!("open (cold: read storage, derive, resolve): {:.1} ms", start.elapsed().as_secs_f64() * 1e3);
 
@@ -66,7 +90,13 @@ fn main() {
     let mut edited = raw.clone();
     for k in 0..20 {
         edited.insert(0, 'x');
-        send(Notification::new("textDocument/didChange".into(), json!({ "textDocument": { "uri": uri, "version": k + 2 }, "contentChanges": [{ "text": edited }] })).into());
+        send(
+            Notification::new(
+                "textDocument/didChange".into(),
+                json!({ "textDocument": { "uri": uri, "version": k + 2 }, "contentChanges": [{ "text": edited }] }),
+            )
+            .into(),
+        );
     }
     let sent = start.elapsed();
     let diags = wait(&is_diagnostics);
@@ -80,7 +110,14 @@ fn main() {
 
     let hover = |id: i32| {
         let start = Instant::now();
-        send(Request::new(RequestId::from(id), "textDocument/hover".into(), json!({ "textDocument": { "uri": uri }, "position": { "line": 500, "character": 30 } })).into());
+        send(
+            Request::new(
+                RequestId::from(id),
+                "textDocument/hover".into(),
+                json!({ "textDocument": { "uri": uri }, "position": { "line": 500, "character": 30 } }),
+            )
+            .into(),
+        );
         wait(&|m| matches!(m, Message::Response(r) if r.id == RequestId::from(id)));
         start.elapsed()
     };

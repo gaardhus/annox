@@ -50,7 +50,8 @@ fn ambiguous_quotes_need_an_occurrence() {
     let err = error(dir.path(), &["comment", "paper.md", "--quote", "not there", "--body", "x"]);
     assert!(err.contains("not found"), "{err}");
 
-    let created = annox(dir.path(), &["comment", "paper.md", "--quote", "bound is tight", "--occurrence", "2", "--body", "x"]);
+    let created =
+        annox(dir.path(), &["comment", "paper.md", "--quote", "bound is tight", "--occurrence", "2", "--body", "x"]);
     assert_eq!(created["line"], 2);
     let list = annox(dir.path(), &["list", "paper.md"]);
     assert_eq!(list[0]["line"], 2);
@@ -139,12 +140,21 @@ fn retarget_and_reattach_rescue_stale_annotations() {
     annox(dir.path(), &["reattach", &c, "--quote", "Chapter 3"]);
     let list = annox(dir.path(), &["list"]);
     let by_kind = |k: &str| list.as_array().unwrap().iter().find(|a| a["kind"] == k).unwrap().clone();
-    assert_eq!((&by_kind("suggestion")["quote"], &by_kind("suggestion")["applicable"]), (&"tha bound".into(), &true.into()));
-    assert_eq!((&by_kind("comment")["quote"], &by_kind("comment")["resolution"]), (&"Chapter 3".into(), &"exact".into()));
+    assert_eq!(
+        (&by_kind("suggestion")["quote"], &by_kind("suggestion")["applicable"]),
+        (&"tha bound".into(), &true.into())
+    );
+    assert_eq!(
+        (&by_kind("comment")["quote"], &by_kind("comment")["resolution"]),
+        (&"Chapter 3".into(), &"exact".into())
+    );
 
     annox(dir.path(), &["accept", &s]);
     assert!(error(dir.path(), &["retarget", &s, "--quote", "the", "--replace", "a"]).contains("only open"));
-    assert_eq!(std::fs::read_to_string(dir.path().join("paper.md")).unwrap(), "In Chapter 3, we prove that the bound holds.\n");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("paper.md")).unwrap(),
+        "In Chapter 3, we prove that the bound holds.\n"
+    );
 }
 
 #[test]

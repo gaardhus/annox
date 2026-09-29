@@ -12,7 +12,7 @@ Document paths (§3.1) are relative to the workspace root.
 
 ## 5.2 Layout
 
-```
+```text
 <workspace root>/
   .annox/
     annox.json                          format marker (§5.3)

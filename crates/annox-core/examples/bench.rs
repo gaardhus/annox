@@ -91,7 +91,15 @@ fn loading() {
         let dir = std::env::temp_dir().join(format!("annox-bench-{}", annox_core::new_id()));
         let ws = Workspace::init(&dir).unwrap();
         // The first annotation creates the document record and its folder.
-        let first = NewAnnotation { kind: "comment", start: 0, end: 8, body: Some("hmm"), label: None, replacement: None, local: false };
+        let first = NewAnnotation {
+            kind: "comment",
+            start: 0,
+            end: 8,
+            body: Some("hmm"),
+            label: None,
+            replacement: None,
+            local: false,
+        };
         ops::create_annotation(&ws, &Index::read(&ws), "doc.txt", &text, &first, &author).unwrap();
         let index = Index::read(&ws);
         let folder = index.events.values().next().unwrap().1.folder.clone();
@@ -104,12 +112,30 @@ fn loading() {
                 ("body".into(), json!("hmm")),
             ]);
             let mut prev = id.clone();
-            let create = Event { id: id.clone(), annotation: Some(id.clone()), document: None, after: vec![], kind: "create".into(), author: author.clone(), time: Event::now(), fields };
+            let create = Event {
+                id: id.clone(),
+                annotation: Some(id.clone()),
+                document: None,
+                after: vec![],
+                kind: "create".into(),
+                author: author.clone(),
+                time: Event::now(),
+                fields,
+            };
             ws.write_event(&folder, &create).unwrap();
             for j in 0..edits {
                 let eid = annox_core::new_id();
                 let fields = Map::from_iter([("body".into(), json!(format!("edit {j}")))]);
-                let edit = Event { id: eid.clone(), annotation: Some(id.clone()), document: None, after: vec![prev], kind: "edit".into(), author: author.clone(), time: Event::now(), fields };
+                let edit = Event {
+                    id: eid.clone(),
+                    annotation: Some(id.clone()),
+                    document: None,
+                    after: vec![prev],
+                    kind: "edit".into(),
+                    author: author.clone(),
+                    time: Event::now(),
+                    fields,
+                };
                 ws.write_event(&folder, &edit).unwrap();
                 prev = eid;
             }

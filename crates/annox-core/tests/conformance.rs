@@ -19,11 +19,15 @@ fn vectors(name: &str) -> Vec<Value> {
 
 fn check_all(name: &str, check: impl Fn(&Value) -> Result<(), String>) {
     let cases = vectors(name);
-    let failures: Vec<String> = cases
-        .iter()
-        .filter_map(|c| check(c).err().map(|e| format!("{}: {e}", c["name"].as_str().unwrap())))
-        .collect();
-    assert!(failures.is_empty(), "{} of {} {name} vectors failed:\n{}", failures.len(), cases.len(), failures.join("\n"));
+    let failures: Vec<String> =
+        cases.iter().filter_map(|c| check(c).err().map(|e| format!("{}: {e}", c["name"].as_str().unwrap()))).collect();
+    assert!(
+        failures.is_empty(),
+        "{} of {} {name} vectors failed:\n{}",
+        failures.len(),
+        cases.len(),
+        failures.join("\n")
+    );
 }
 
 fn state_name(s: State) -> &'static str {
@@ -35,7 +39,11 @@ fn state_name(s: State) -> &'static str {
 }
 
 fn expect_eq(what: &str, got: Value, want: &Value) -> Result<(), String> {
-    if &got == want { Ok(()) } else { Err(format!("{what}: got {got}, want {want}")) }
+    if &got == want {
+        Ok(())
+    } else {
+        Err(format!("{what}: got {got}, want {want}"))
+    }
 }
 
 #[test]

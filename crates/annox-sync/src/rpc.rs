@@ -79,7 +79,9 @@ impl<S: Read + Write> Peer<S> {
     pub fn respond(&mut self, id: &Value, result: Result<Value, RpcError>) -> Result<(), Error> {
         let msg = match result {
             Ok(r) => json!({ "jsonrpc": "2.0", "id": id, "result": r }),
-            Err((code, message)) => json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } }),
+            Err((code, message)) => {
+                json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
+            }
         };
         self.send(&msg)
     }
@@ -103,7 +105,9 @@ impl<S: Read + Write> Peer<S> {
             let Some(msg) = self.recv_raw()? else { continue };
             if msg["id"] == json!(id) && msg.get("method").is_none() {
                 break match msg.get("error") {
-                    Some(e) => Err((e["code"].as_i64().unwrap_or(0) as i32, e["message"].as_str().unwrap_or("").to_owned())),
+                    Some(e) => {
+                        Err((e["code"].as_i64().unwrap_or(0) as i32, e["message"].as_str().unwrap_or("").to_owned()))
+                    }
                     None => Ok(msg["result"].clone()),
                 };
             }
@@ -118,7 +122,9 @@ impl<S: Read + Write> Peer<S> {
             Ok(Message::Text(text)) => Ok(serde_json::from_str(text.as_str()).ok()),
             Ok(Message::Close(_)) => Err(Error::Closed),
             Ok(_) => Ok(None),
-            Err(tungstenite::Error::Io(e)) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) => {
+            Err(tungstenite::Error::Io(e))
+                if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) =>
+            {
                 Ok(None)
             }
             Err(e) => Err(e.into()),

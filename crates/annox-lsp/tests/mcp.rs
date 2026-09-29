@@ -25,7 +25,8 @@ fn setup() -> (tempfile::TempDir, Config) {
     let dir = tempfile::tempdir().unwrap();
     annox_core::storage::Workspace::init(dir.path()).unwrap();
     std::fs::write(dir.path().join("paper.md"), "We prove that teh bound is tight.\n").unwrap();
-    let config = Config { root: dir.path().to_owned(), author: Some("urn:test:agent".into()), name: Some("Agent".into()) };
+    let config =
+        Config { root: dir.path().to_owned(), author: Some("urn:test:agent".into()), name: Some("Agent".into()) };
     (dir, config)
 }
 
@@ -43,7 +44,8 @@ fn handshake_and_tool_list() {
     );
     assert_eq!(responses.len(), 3, "notifications get no response");
     assert_eq!(responses[0]["result"]["protocolVersion"], "2025-03-26");
-    let tools: Vec<&str> = responses[1]["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
+    let tools: Vec<&str> =
+        responses[1]["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
     assert!(tools.contains(&"suggest") && tools.contains(&"retarget") && tools.contains(&"restore"), "{tools:?}");
     let suggest = responses[1]["result"]["tools"].as_array().unwrap().iter().find(|t| t["name"] == "suggest").unwrap();
     assert_eq!(suggest["inputSchema"]["required"], json!(["file", "quote", "replacement"]));
@@ -53,7 +55,10 @@ fn handshake_and_tool_list() {
 #[test]
 fn suggest_reply_and_accept() {
     let (dir, config) = setup();
-    let created = exchange(&config, &[call(1, "suggest", json!({ "file": "paper.md", "quote": "teh", "replacement": "the", "body": "typo" }))]);
+    let created = exchange(
+        &config,
+        &[call(1, "suggest", json!({ "file": "paper.md", "quote": "teh", "replacement": "the", "body": "typo" }))],
+    );
     let id = output(&created[0])["id"].as_str().unwrap().to_owned();
 
     let responses = exchange(

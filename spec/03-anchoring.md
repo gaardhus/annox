@@ -150,7 +150,7 @@ A rewrite is recorded as a `reanchor` event (§2.4), so previous anchors stay in
 
 Original document (78 code points):
 
-```
+```text
 \section{Results}
 In Section 3, we prove that the bound is tight for all $n$.
 ```
@@ -159,7 +159,7 @@ An annotation on "we prove that" is stored as shown in §3.5. The hash is omitte
 
 The document is then edited outside any annox-aware tool:
 
-```
+```text
 \section{Results}
 As shown in Section 3, we prove that the bound is tight for all $n \geq 1$.
 ```

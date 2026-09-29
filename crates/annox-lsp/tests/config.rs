@@ -19,7 +19,8 @@ fn config_file_sets_the_default_author() {
     let run = |args: &[&str]| cli::run(&args.iter().map(|s| s.to_string()).collect::<Vec<_>>(), dir.path());
     run(&["init"]).unwrap();
 
-    std::fs::write(&config, json!({ "author": { "id": "mailto:ada@example.org", "name": "Ada" } }).to_string()).unwrap();
+    std::fs::write(&config, json!({ "author": { "id": "mailto:ada@example.org", "name": "Ada" } }).to_string())
+        .unwrap();
     assert_eq!(default_author(dir.path()).unwrap(), json!({ "id": "mailto:ada@example.org", "name": "Ada" }));
 
     // The CLI writes as the configured author, and --name only renames it.

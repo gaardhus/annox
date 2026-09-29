@@ -71,7 +71,7 @@ A replica receiving items writes each event as a file (§5.4) in the sync mirror
 
 ### 7.5.3 Session outline
 
-```
+```text
 replica                                   hub
    │ annoxSync/hello {subscribe:true} ──────▶│
    │◀────────── {hubId, cursor: 1057, writable}│

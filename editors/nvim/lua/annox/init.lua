@@ -150,12 +150,15 @@ function M.render(bufnr)
   -- Orphaned annotations have no place in the text, so say so above it (§3.7.3).
   local orphans = M.orphan_count(bufnr)
   if orphans > 0 then
-    local text = string.format(
-      "⚠ %d annotation%s could not be located (:Annox orphans)",
-      orphans,
-      orphans == 1 and "" or "s"
+    local text =
+      string.format("⚠ %d annotation%s could not be located (:Annox orphans)", orphans, orphans == 1 and "" or "s")
+    vim.api.nvim_buf_set_extmark(
+      bufnr,
+      ns,
+      0,
+      0,
+      { virt_lines = { { { text, "AnnoxOrphans" } } }, virt_lines_above = true }
     )
-    vim.api.nvim_buf_set_extmark(bufnr, ns, 0, 0, { virt_lines = { { { text, "AnnoxOrphans" } } }, virt_lines_above = true })
   end
   for _, a in ipairs(state.annotations) do
     local r = a.resolution and a.resolution.range
@@ -169,7 +172,8 @@ function M.render(bufnr)
         priority = 150,
       }
       local label = a.kind == "suggestion" and ("→ " .. (a.edit and a.edit.replacement or ""))
-        or first_line(a.body) or a.label
+        or first_line(a.body)
+        or a.label
       if inline(bufnr, a) then
         -- Deleted text struck through, followed by the inserted text.
         if sl ~= el or sc ~= ec then
@@ -257,20 +261,25 @@ local function send_presence()
   end
   presence_timer = presence_timer or vim.uv.new_timer()
   presence_timer:stop()
-  presence_timer:start(150, 0, vim.schedule_wrap(function()
-    local bufnr = vim.api.nvim_get_current_buf()
-    local client = client_for(bufnr)
-    if not client then
-      return
-    end
-    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
-    local line = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, false)[1] or ""
-    local pos = { line = row - 1, character = vim.str_utfindex(line, client.offset_encoding, math.min(col, #line), false) }
-    client:notify("annox/setPresence", {
-      textDocument = { uri = vim.uri_from_bufnr(bufnr) },
-      selection = { start = pos, ["end"] = pos },
-    })
-  end))
+  presence_timer:start(
+    150,
+    0,
+    vim.schedule_wrap(function()
+      local bufnr = vim.api.nvim_get_current_buf()
+      local client = client_for(bufnr)
+      if not client then
+        return
+      end
+      local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+      local line = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, false)[1] or ""
+      local pos =
+        { line = row - 1, character = vim.str_utfindex(line, client.offset_encoding, math.min(col, #line), false) }
+      client:notify("annox/setPresence", {
+        textDocument = { uri = vim.uri_from_bufnr(bufnr) },
+        selection = { start = pos, ["end"] = pos },
+      })
+    end)
+  )
 end
 
 local function on_annotations(_, result)
@@ -783,63 +792,69 @@ function M.edit(opts)
   local editable = function(a)
     return a.status == "open"
   end
-  pick(opts, opts.annotation and buffer_annotations(bufnr, editable) or vim.tbl_filter(editable, under_cursor(bufnr)), "Edit", function(a)
-    if a.kind == "suggestion" and not a.applicable then
-      return vim.notify("annox: this suggestion is stale; use :Annox retarget", vim.log.levels.WARN)
-    end
-    local field = a.kind == "suggestion" and "replacement" or "body"
-    local text = field == "replacement" and a.edit.replacement or a.body
-    local lines = vim.split(type(text) == "string" and text or "", "\n")
-    local edit_buf = vim.api.nvim_create_buf(false, true)
-    vim.api.nvim_buf_set_lines(edit_buf, 0, -1, false, lines)
-    vim.api.nvim_buf_set_name(edit_buf, string.format("annox://%s/%s", field, a.id))
-    vim.bo[edit_buf].buftype = "acwrite"
-    vim.bo[edit_buf].bufhidden = "wipe"
-    vim.bo[edit_buf].filetype = field == "body" and "markdown" or vim.bo[bufnr].filetype
-    vim.bo[edit_buf].modified = false
-    local width = 20
-    for _, l in ipairs(lines) do
-      width = math.max(width, vim.fn.strdisplaywidth(l) + 2)
-    end
-    vim.api.nvim_open_win(edit_buf, true, {
-      relative = "cursor",
-      row = 1,
-      col = 0,
-      width = math.min(width, math.floor(vim.o.columns * 0.8)),
-      height = math.min(math.max(#lines, 3), 20),
-      border = "rounded",
-      title = field == "replacement" and " Suggested text (Esc saves and closes) " or " Comment (Esc saves and closes) ",
-    })
-    vim.keymap.set("n", "<Esc>", function()
-      if vim.bo[edit_buf].modified then
-        vim.cmd.write()
+  pick(
+    opts,
+    opts.annotation and buffer_annotations(bufnr, editable) or vim.tbl_filter(editable, under_cursor(bufnr)),
+    "Edit",
+    function(a)
+      if a.kind == "suggestion" and not a.applicable then
+        return vim.notify("annox: this suggestion is stale; use :Annox retarget", vim.log.levels.WARN)
       end
-      vim.api.nvim_win_close(0, true)
-    end, { buffer = edit_buf, desc = "annox: save and close" })
-    vim.api.nvim_create_autocmd("BufWriteCmd", {
-      buffer = edit_buf,
-      callback = function()
-        local new = table.concat(vim.api.nvim_buf_get_lines(edit_buf, 0, -1, false), "\n")
-        local method, params
-        if field == "replacement" then
-          method = "annox/retarget"
-          params = { annotation = a.id, range = a.resolution.range, replacement = new }
-          local s = M.suggesting[bufnr]
-          if s then
-            table.insert(s.undo, { id = a.id, range = a.resolution.range, replacement = a.edit.replacement })
-          end
-        else
-          method, params = "annox/edit", { annotation = a.id, body = new ~= "" and new or vim.NIL }
+      local field = a.kind == "suggestion" and "replacement" or "body"
+      local text = field == "replacement" and a.edit.replacement or a.body
+      local lines = vim.split(type(text) == "string" and text or "", "\n")
+      local edit_buf = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_lines(edit_buf, 0, -1, false, lines)
+      vim.api.nvim_buf_set_name(edit_buf, string.format("annox://%s/%s", field, a.id))
+      vim.bo[edit_buf].buftype = "acwrite"
+      vim.bo[edit_buf].bufhidden = "wipe"
+      vim.bo[edit_buf].filetype = field == "body" and "markdown" or vim.bo[bufnr].filetype
+      vim.bo[edit_buf].modified = false
+      local width = 20
+      for _, l in ipairs(lines) do
+        width = math.max(width, vim.fn.strdisplaywidth(l) + 2)
+      end
+      vim.api.nvim_open_win(edit_buf, true, {
+        relative = "cursor",
+        row = 1,
+        col = 0,
+        width = math.min(width, math.floor(vim.o.columns * 0.8)),
+        height = math.min(math.max(#lines, 3), 20),
+        border = "rounded",
+        title = field == "replacement" and " Suggested text (Esc saves and closes) "
+          or " Comment (Esc saves and closes) ",
+      })
+      vim.keymap.set("n", "<Esc>", function()
+        if vim.bo[edit_buf].modified then
+          vim.cmd.write()
         end
-        request(bufnr, method, params, function(view)
-          a = view
-          if vim.api.nvim_buf_is_valid(edit_buf) then
-            vim.bo[edit_buf].modified = false
+        vim.api.nvim_win_close(0, true)
+      end, { buffer = edit_buf, desc = "annox: save and close" })
+      vim.api.nvim_create_autocmd("BufWriteCmd", {
+        buffer = edit_buf,
+        callback = function()
+          local new = table.concat(vim.api.nvim_buf_get_lines(edit_buf, 0, -1, false), "\n")
+          local method, params
+          if field == "replacement" then
+            method = "annox/retarget"
+            params = { annotation = a.id, range = a.resolution.range, replacement = new }
+            local s = M.suggesting[bufnr]
+            if s then
+              table.insert(s.undo, { id = a.id, range = a.resolution.range, replacement = a.edit.replacement })
+            end
+          else
+            method, params = "annox/edit", { annotation = a.id, body = new ~= "" and new or vim.NIL }
           end
-        end)
-      end,
-    })
-  end)
+          request(bufnr, method, params, function(view)
+            a = view
+            if vim.api.nvim_buf_is_valid(edit_buf) then
+              vim.bo[edit_buf].modified = false
+            end
+          end)
+        end,
+      })
+    end
+  )
 end
 
 --- Points a stale suggestion at the selection (§4.2.1).
@@ -1133,12 +1148,13 @@ local function pump(bufnr)
     if id then
       method, params = "annox/retarget", { annotation = id, range = range, replacement = replacement }
     else
-      method, params = "annox/create", {
-        textDocument = { uri = vim.uri_from_bufnr(bufnr) },
-        kind = "suggestion",
-        range = range,
-        replacement = replacement,
-      }
+      method, params =
+        "annox/create", {
+          textDocument = { uri = vim.uri_from_bufnr(bufnr) },
+          kind = "suggestion",
+          range = range,
+          replacement = replacement,
+        }
     end
   end
   s.busy = true
@@ -1249,7 +1265,10 @@ local function mode_changed(bufnr)
   for _, win in ipairs(vim.fn.win_findbuf(bufnr)) do
     sync_tint(win)
   end
-  vim.api.nvim_exec_autocmds("User", { pattern = "AnnoxSuggesting", modeline = false, data = { buf = bufnr, enabled = on } })
+  vim.api.nvim_exec_autocmds(
+    "User",
+    { pattern = "AnnoxSuggesting", modeline = false, data = { buf = bufnr, enabled = on } }
+  )
   vim.cmd.redrawstatus({ bang = true })
 end
 
@@ -1348,25 +1367,63 @@ function M.init(opts)
 end
 
 local subcommands = {
-  init = function() M.init() end,
-  comment = function(o) M.comment({ visual = o.range > 0 }) end,
-  draft = function(o) M.comment({ visual = o.range > 0, ["local"] = true }) end,
-  publish = function(o) M.publish({ all = o.bang }) end,
-  retarget = function(o) M.retarget({ visual = o.range > 0 }) end,
-  reattach = function(o) M.reattach({ visual = o.range > 0 }) end,
-  conflicts = function() M.resolve_conflict() end,
-  history = function() M.history() end,
-  suggest = function(o) M.suggest({ visual = o.range > 0 }) end,
-  suggesting = function() M.suggest_mode() end,
-  edit = function() M.edit() end,
-  reply = function() M.reply() end,
-  resolve = function(o) M.resolve({ visual = o.range > 0, all = o.bang }) end,
-  reopen = function() M.reopen() end,
-  accept = function(o) M.accept({ visual = o.range > 0, all = o.bang }) end,
-  reject = function(o) M.reject({ visual = o.range > 0, all = o.bang }) end,
-  thread = function() M.thread() end,
-  orphans = function() M.orphans() end,
-  list = function() M.list() end,
+  init = function()
+    M.init()
+  end,
+  comment = function(o)
+    M.comment({ visual = o.range > 0 })
+  end,
+  draft = function(o)
+    M.comment({ visual = o.range > 0, ["local"] = true })
+  end,
+  publish = function(o)
+    M.publish({ all = o.bang })
+  end,
+  retarget = function(o)
+    M.retarget({ visual = o.range > 0 })
+  end,
+  reattach = function(o)
+    M.reattach({ visual = o.range > 0 })
+  end,
+  conflicts = function()
+    M.resolve_conflict()
+  end,
+  history = function()
+    M.history()
+  end,
+  suggest = function(o)
+    M.suggest({ visual = o.range > 0 })
+  end,
+  suggesting = function()
+    M.suggest_mode()
+  end,
+  edit = function()
+    M.edit()
+  end,
+  reply = function()
+    M.reply()
+  end,
+  resolve = function(o)
+    M.resolve({ visual = o.range > 0, all = o.bang })
+  end,
+  reopen = function()
+    M.reopen()
+  end,
+  accept = function(o)
+    M.accept({ visual = o.range > 0, all = o.bang })
+  end,
+  reject = function(o)
+    M.reject({ visual = o.range > 0, all = o.bang })
+  end,
+  thread = function()
+    M.thread()
+  end,
+  orphans = function()
+    M.orphans()
+  end,
+  list = function()
+    M.list()
+  end,
 }
 
 function M.setup(opts)

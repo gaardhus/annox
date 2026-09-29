@@ -68,7 +68,8 @@ pub fn check_url(url: &str) -> Result<(), String> {
     }
     let rest = url.strip_prefix("ws://").ok_or("the hub URL must start with wss://")?;
     let host = rest.split(['/', '?']).next().unwrap_or_default();
-    let host = host.rsplit_once(':').map_or(host, |(h, port)| if port.chars().all(|c| c.is_ascii_digit()) { h } else { host });
+    let host =
+        host.rsplit_once(':').map_or(host, |(h, port)| if port.chars().all(|c| c.is_ascii_digit()) { h } else { host });
     if matches!(host, "localhost" | "127.0.0.1" | "[::1]") {
         Ok(())
     } else {
@@ -120,9 +121,12 @@ impl Replica {
     }
 
     fn load_cursor(&self, hub_id: &str) -> u64 {
-        let saved: Option<Value> = std::fs::read_to_string(self.cursor_file()).ok().and_then(|t| serde_json::from_str(&t).ok());
+        let saved: Option<Value> =
+            std::fs::read_to_string(self.cursor_file()).ok().and_then(|t| serde_json::from_str(&t).ok());
         match saved {
-            Some(s) if s["hubId"] == hub_id && s["url"] == self.config.url.as_str() => s["cursor"].as_u64().unwrap_or(0),
+            Some(s) if s["hubId"] == hub_id && s["url"] == self.config.url.as_str() => {
+                s["cursor"].as_u64().unwrap_or(0)
+            }
             _ => 0,
         }
     }
@@ -207,7 +211,13 @@ impl Replica {
         }
     }
 
-    fn pull(&mut self, conn: &mut Conn, hub_id: &str, cursor: &mut u64, events: &Sender<FromReplica>) -> Result<(), Error> {
+    fn pull(
+        &mut self,
+        conn: &mut Conn,
+        hub_id: &str,
+        cursor: &mut u64,
+        events: &Sender<FromReplica>,
+    ) -> Result<(), Error> {
         loop {
             let result = conn.call("annoxSync/pull", json!({ "hubId": hub_id, "after": *cursor }))?;
             let page = match result {
@@ -256,18 +266,19 @@ impl Replica {
             if index.synced.contains(&event.id) {
                 continue;
             }
-            let path = index
-                .documents
-                .get(doc)
-                .and_then(|d| d.path.clone())
-                .or_else(|| (event.kind == "document").then(|| event.field("path")?.as_str().map(str::to_owned)).flatten());
+            let path = index.documents.get(doc).and_then(|d| d.path.clone()).or_else(|| {
+                (event.kind == "document").then(|| event.field("path")?.as_str().map(str::to_owned)).flatten()
+            });
             let Some(path) = path.filter(|p| is_document_path(p)) else {
                 still_pending.push(item);
                 continue;
             };
             let is_document_event = event.document.as_deref() == Some(doc);
-            let folder =
-                if is_document_event { format!("synced/docs/{path}~{doc}/document") } else { format!("synced/docs/{path}~{doc}") };
+            let folder = if is_document_event {
+                format!("synced/docs/{path}~{doc}/document")
+            } else {
+                format!("synced/docs/{path}~{doc}")
+            };
             if is_uuid(doc) && ws.write_event(&folder, &event).is_ok() && is_document_event {
                 index = Index::read(&ws);
             }

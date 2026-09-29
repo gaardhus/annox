@@ -27,9 +27,12 @@ check(#vim.lsp.get_clients({ bufnr = buf, name = "annox" }) == 0, "no server out
 
 annox.init({ confirm = false })
 check(vim.uv.fs_stat(root .. "/.annox/annox.json") ~= nil, "workspace created at the git root")
-check(vim.wait(5000, function()
-  return annox.state[buf] ~= nil
-end, 20), "server attached after init")
+check(
+  vim.wait(5000, function()
+    return annox.state[buf] ~= nil
+  end, 20),
+  "server attached after init"
+)
 
 print("annox nvim init: OK")
 vim.cmd.qall({ bang = true })

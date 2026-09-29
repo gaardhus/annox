@@ -44,7 +44,11 @@ pub fn create_annotation(
     let at = index.documents_at(path);
     let area_of = |id: &str| {
         index.folders.get(id).map_or(Area::Shared, |folders| {
-            if folders.iter().any(|f| !f.starts_with("local/")) { Area::Shared } else { Area::Local }
+            if folders.iter().any(|f| !f.starts_with("local/")) {
+                Area::Shared
+            } else {
+                Area::Local
+            }
         })
     };
     let shared = at.iter().find(|d| area_of(d) == Area::Shared);
@@ -239,7 +243,9 @@ pub fn move_document(ws: &Workspace, index: &Index, from: &str, to: &str, author
             for (e, _) in index.events.values().filter(|(_, l)| l.folder == *folder) {
                 move_file(ws, &format!(".annox/{folder}/{}.json", e.id), &new_folder)?;
             }
-            for (_, file) in index.document_events[doc].iter().filter(|(_, f)| f.starts_with(&format!(".annox/{folder}/"))) {
+            for (_, file) in
+                index.document_events[doc].iter().filter(|(_, f)| f.starts_with(&format!(".annox/{folder}/")))
+            {
                 move_file(ws, file, &format!("{new_folder}/document"))?;
             }
             let old = ws.root.join(".annox").join(folder);
@@ -261,10 +267,8 @@ pub fn append_event(
     fields: Map<String, Value>,
     author: &Value,
 ) -> io::Result<Event> {
-    let (_, create_loc) = index
-        .events
-        .get(annotation)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "unknown annotation"))?;
+    let (_, create_loc) =
+        index.events.get(annotation).ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "unknown annotation"))?;
     let own: Vec<Event> = index
         .events
         .values()
@@ -338,10 +342,8 @@ mod tests {
         let bob = json!({ "id": "mailto:bob@example.org" });
         let reply = create_reply(&ws, &Index::read(&ws), &comment, "Yes", false, &bob).unwrap();
         let resolved = append_event(&ws, &Index::read(&ws), &comment, "status", Map::new(), &bob).unwrap();
-        let mut expected = vec![
-            format!("docs/notes.md~{doc}/{}.json", reply.id),
-            format!("docs/notes.md~{doc}/{}.json", resolved.id),
-        ];
+        let mut expected =
+            vec![format!("docs/notes.md~{doc}/{}.json", reply.id), format!("docs/notes.md~{doc}/{}.json", resolved.id)];
         expected.sort();
         assert_eq!(files(&ws, "docs"), expected);
         let _ = std::fs::remove_dir_all(&ws.root);

@@ -79,7 +79,14 @@ impl Server<'_> {
         (lines.offset(range.start), lines.offset(range.end))
     }
 
-    fn write_and_view(&self, uri: &Url, a: &Analysis, id: &str, kind: &str, fields: Map<String, Value>) -> Result<Value, Failure> {
+    fn write_and_view(
+        &self,
+        uri: &Url,
+        a: &Analysis,
+        id: &str,
+        kind: &str,
+        fields: Map<String, Value>,
+    ) -> Result<Value, Failure> {
         self.write_event(a, id, kind, fields)?;
         self.view_of(uri, id)
     }
@@ -340,7 +347,9 @@ impl Server<'_> {
             let replacement = item.state["edit"]["replacement"].as_str().unwrap_or_default().to_owned();
             let error = match suggestion::apply(&a.text, &item.target, &replacement) {
                 Err(_) => Some((STALE_SUGGESTION, "the suggestion is stale")),
-                Ok(applied) if applied.resolution.step >= 3 && !confirmed => Some((NEEDS_REVIEW, "relocated by partial context; accept individually")),
+                Ok(applied) if applied.resolution.step >= 3 && !confirmed => {
+                    Some((NEEDS_REVIEW, "relocated by partial context; accept individually"))
+                }
                 Ok(applied) if edits.iter().any(|(s, e, _)| overlaps((*s, *e), (applied.start, applied.end))) => {
                     Some((OVERLAP, "overlaps a suggestion already in this batch"))
                 }
@@ -403,8 +412,15 @@ impl Server<'_> {
                 if state["kind"] == "comment" {
                     ("reanchor", Map::from_iter([("target".into(), target)]))
                 } else {
-                    let replacement = if field == "replacement" { value.clone() } else { state["edit"]["replacement"].clone() };
-                    ("retarget", Map::from_iter([("target".into(), target), ("edit".into(), json!({ "replacement": replacement }))]))
+                    let replacement =
+                        if field == "replacement" { value.clone() } else { state["edit"]["replacement"].clone() };
+                    (
+                        "retarget",
+                        Map::from_iter([
+                            ("target".into(), target),
+                            ("edit".into(), json!({ "replacement": replacement })),
+                        ]),
+                    )
                 }
             }
             "status" => {

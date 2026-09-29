@@ -36,10 +36,13 @@ struct Tool {
 
 const ID: (&str, &str, bool, &str) = ("id", "string", true, "Annotation id, from list_annotations.");
 const FILE: (&str, &str, bool, &str) = ("file", "string", true, "Path of the file, relative to the workspace.");
-const QUOTE: (&str, &str, bool, &str) =
-    ("quote", "string", true, "Text to target, exactly as it appears in the file.");
-const OCCURRENCE: (&str, &str, bool, &str) =
-    ("occurrence", "integer", false, "Which occurrence of the quote to target (1-based), when it occurs more than once.");
+const QUOTE: (&str, &str, bool, &str) = ("quote", "string", true, "Text to target, exactly as it appears in the file.");
+const OCCURRENCE: (&str, &str, bool, &str) = (
+    "occurrence",
+    "integer",
+    false,
+    "Which occurrence of the quote to target (1-based), when it occurs more than once.",
+);
 const LABEL: (&str, &str, bool, &str) = ("label", "string", false, "A short label, such as a category.");
 const LOCAL: (&str, &str, bool, &str) =
     ("local", "boolean", false, "Keep the annotation private to this machine, as a draft.");

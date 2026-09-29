@@ -182,7 +182,7 @@ A reply whose parent is deleted, missing, or not a root SHOULD still be shown, f
 
 Ada comments. Then, on two branches, Ada edits the body while Bob resolves the thread and also edits the body:
 
-```
+```text
 e1 create  (Ada)  body "Is this tight?"          after []
 e2 edit    (Ada)  body "Is this bound tight?"    after [e1]
 e3 status  (Bob)  status resolved                after [e1]
@@ -194,7 +194,7 @@ e4 edit    (Bob)  body "Tight — see Lemma 4."    after [e3]
 
 Ada resolves the conflict:
 
-```
+```text
 e5 edit (Ada) body "Is this bound tight? — Tight, see Lemma 4." after [e2, e4]
 ```
 
@@ -217,4 +217,3 @@ annox doesn't authenticate authors. Anyone who can write the files can write eve
 - Readers MUST ignore fields they don't recognize.
 - Fields added by tools that aren't part of this specification MUST be placed in an `ext` object, keyed by a reverse-domain name, e.g. `"ext": { "org.example.review": { "priority": 2 } }`.
 - New event types and kinds are added only by versions of this specification. Readers treat unrecognized ones as described in §2.4.
-

@@ -25,12 +25,9 @@ pub struct Applied {
 pub fn apply(doc: &Text, target: &Anchor, replacement: &str) -> Result<Applied, Resolution> {
     let resolution = anchor::resolve(doc, target);
     match resolution.range {
-        Some((start, end)) if is_applicable(&resolution) => Ok(Applied {
-            start,
-            end,
-            text: doc.splice(start, end, replacement),
-            resolution,
-        }),
+        Some((start, end)) if is_applicable(&resolution) => {
+            Ok(Applied { start, end, text: doc.splice(start, end, replacement), resolution })
+        }
         _ => Err(resolution),
     }
 }
