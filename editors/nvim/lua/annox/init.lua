@@ -285,11 +285,19 @@ local function under_cursor(bufnr)
   if not state or not client then
     return {}
   end
-  local pos = cursor_position(bufnr, client.offset_encoding)
+  local enc = client.offset_encoding
+  local pos = cursor_position(bufnr, enc)
+  -- The cursor's character ends where an empty range starts: an insertion
+  -- or point comment is drawn between the two characters, so both count.
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  local line = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, false)[1] or ""
+  local after = col < #line and col + vim.str_utf_end(line, col + 1) + 1 or col
   local hits = {}
   for _, a in ipairs(state.annotations) do
     local r = a.resolution and a.resolution.range
-    if r and before(r.start, pos) and before(pos, r["end"]) then
+    local empty = r and r.start.line == r["end"].line and r.start.character == r["end"].character
+    local touching = empty and r.start.line == row - 1 and byte_col(bufnr, r.start, enc) == after
+    if r and (touching or (before(r.start, pos) and before(pos, r["end"]))) then
       table.insert(hits, a)
     end
   end
@@ -563,7 +571,7 @@ function M.publish(opts)
 end
 
 --- Edits the replacement of the suggestion under the cursor, or the text of
---- the comment, in a floating window. `:w` saves, `:q` closes.
+--- the comment, in a floating window. Esc saves and closes, `:q!` discards.
 --- opts: { annotation? }
 function M.edit(opts)
   opts = opts or {}
@@ -596,8 +604,14 @@ function M.edit(opts)
       width = math.min(width, math.floor(vim.o.columns * 0.8)),
       height = math.min(math.max(#lines, 3), 20),
       border = "rounded",
-      title = field == "replacement" and " Suggested text (:w saves) " or " Comment (:w saves) ",
+      title = field == "replacement" and " Suggested text (Esc saves and closes) " or " Comment (Esc saves and closes) ",
     })
+    vim.keymap.set("n", "<Esc>", function()
+      if vim.bo[edit_buf].modified then
+        vim.cmd.write()
+      end
+      vim.api.nvim_win_close(0, true)
+    end, { buffer = edit_buf, desc = "annox: save and close" })
     vim.api.nvim_create_autocmd("BufWriteCmd", {
       buffer = edit_buf,
       callback = function()

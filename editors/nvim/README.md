@@ -34,7 +34,7 @@ Changes others make to `.annox/`, such as a `git pull`, show up within a second 
 | `:Annox init` | Create an annox workspace for this project and attach the server. |
 | `:Annox comment` | Comment on the cursor position, or on the selection when run from visual mode (`:'<,'>Annox comment`). |
 | `:Annox suggest` | Suggest a replacement for the selection. The prompt is pre-filled with the current text. |
-| `:Annox edit` | Edit the suggested text of the suggestion under the cursor, or the text of a comment, in a floating window. `:w` saves, `:q` closes. |
+| `:Annox edit` | Edit the suggested text of the suggestion under the cursor, or the text of a comment, in a floating window. Esc (in normal mode) saves and closes, `:w` saves, `:q!` discards. |
 | `:Annox suggesting` | Turn suggestion mode on or off for the buffer (see below). |
 | `:Annox reply` | Reply to the thread under the cursor. |
 | `:Annox thread` | Show the thread under the cursor in a floating window. |

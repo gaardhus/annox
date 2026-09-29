@@ -113,18 +113,23 @@ keys("u")
 expect("undo of the deletion", { { 10, 10, "very nice " } })
 
 -- The suggested text can be edited in a floating window.
+-- The cursor can be on either side of an insertion.
 local main_win = vim.api.nvim_get_current_win()
-vim.api.nvim_win_set_cursor(0, { 1, 10 })
+vim.api.nvim_win_set_cursor(0, { 1, 9 })
 annox.edit()
 local float = vim.api.nvim_get_current_win()
 check(vim.api.nvim_win_get_config(float).relative ~= "", "edit window is a float")
 check(vim.api.nvim_buf_get_lines(0, 0, -1, false)[1] == "very nice ", "float holds the suggested text")
 vim.api.nvim_buf_set_lines(0, 0, -1, false, { "very, very nice " })
-vim.cmd.write()
+-- Esc saves and closes.
+vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "xt", false)
+check(not vim.api.nvim_win_is_valid(float), "Esc closes the edit window")
+check(vim.api.nvim_get_current_win() == main_win, "back in the document")
 expect("edited suggestion", { { 10, 10, "very, very nice " } })
-check(not vim.bo.modified, "float saved")
-vim.api.nvim_win_close(float, true)
-vim.api.nvim_set_current_win(main_win)
+vim.api.nvim_win_set_cursor(0, { 1, 10 })
+annox.edit()
+check(vim.api.nvim_buf_get_lines(0, 0, -1, false)[1] == "very, very nice ", "opens from the other side too")
+vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "xt", false)
 keys("u")
 expect("undo of the edit", { { 10, 10, "very nice " } })
 
