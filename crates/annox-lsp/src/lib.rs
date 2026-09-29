@@ -455,7 +455,12 @@ impl Server<'_> {
         let request_id = RequestId::from(format!("annox-apply-{}", self.next_id));
         let pending = Pending { command, uri, applied_version: result.version, work, respond_view };
         self.pending.insert(request_id.clone(), pending);
-        let params = ApplyWorkspaceEditParams { label: Some("annox".into()), edit };
+        let label = match &self.pending[&request_id].work {
+            Work::Accept { .. } => "annox: accept suggestion",
+            Work::AcceptAll { .. } => "annox: accept suggestions",
+            Work::Revert { .. } => "annox: revert suggestion",
+        };
+        let params = ApplyWorkspaceEditParams { label: Some(label.into()), edit };
         self.send(Request::new(request_id, ApplyWorkspaceEdit::METHOD.into(), params));
     }
 

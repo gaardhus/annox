@@ -25,9 +25,7 @@ The server implements:
 
 Edits always go through `workspace/applyEdit`, and the status event is written only once the editor confirms. Still missing: sync and presence (§7), watching `.annox/` for outside changes (the server reloads on open, change, and save), and creating a workspace from the editor (run it in a directory with `.annox/annox.json`).
 
-To try it in Neovim (0.11+), in a directory containing `.annox/annox.json`:
+## Editor support
 
-```lua
-vim.lsp.config("annox", { cmd = { "/path/to/annox", "lsp" }, root_markers = { ".annox" } })
-vim.lsp.enable("annox")
-```
+- **Neovim:** [`editors/nvim/`](editors/nvim/README.md) is a plugin with highlights, comment and suggestion commands, threads, accept and reject, and orphan listing.
+- **Any other LSP editor:** point it at `annox lsp` for the plain-LSP features.
