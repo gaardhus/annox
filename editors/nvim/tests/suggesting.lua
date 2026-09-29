@@ -17,7 +17,7 @@ annox.setup({ cmd = { bin, "lsp" }, author = { id = "mailto:ada@example.org", na
 local function check(cond, msg)
   if not cond then
     io.stderr:write("FAIL: " .. msg .. "\n")
-    vim.cmd.cquit(1)
+    vim.cmd("cquit 1")
   end
 end
 

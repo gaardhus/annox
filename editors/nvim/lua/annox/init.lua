@@ -1015,7 +1015,9 @@ local function changes(base, lines)
   local a, b = text_of(base), text_of(lines)
   local sa, sb = line_starts(base), line_starts(lines)
   local out = {}
-  for _, h in ipairs(vim.text.diff(a, b, { result_type = "indices" })) do
+  -- `vim.diff` was renamed to `vim.text.diff` in Neovim 0.12.
+  local diff = vim.text.diff or vim.diff
+  for _, h in ipairs(diff(a, b, { result_type = "indices" })) do
     local la, ca, lb, cb = unpack(h)
     local fa, fb = ca == 0 and la + 1 or la, cb == 0 and lb + 1 or lb
     local a0, a1, b0, b1 = sa[fa], sa[fa + ca], sb[fb], sb[fb + cb]
