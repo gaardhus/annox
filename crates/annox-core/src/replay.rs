@@ -299,7 +299,7 @@ pub struct DocumentState {
     pub conflicts: BTreeMap<&'static str, Vec<String>>,
 }
 
-fn document_writes(e: &Event) -> Writes {
+fn document_writes(e: &Event, may_merge: &dyn Fn(&str, &str) -> bool) -> Writes {
     let mut w = Writes::new();
     match e.kind.as_str() {
         "document" | "move" => {
@@ -310,7 +310,7 @@ fn document_writes(e: &Event) -> Writes {
         "merged" => {
             let into = str_field(e, "into");
             if let (Some(into), Some(doc)) = (into, e.document.as_deref()) {
-                if into < doc {
+                if may_merge(doc, into) {
                     w.insert("mergedInto", json!(into));
                 }
             }
@@ -321,19 +321,30 @@ fn document_writes(e: &Event) -> Writes {
 }
 
 /// Derives the state of document record `id` from its events. Returns `None`
-/// if there is no valid `document` event.
-pub fn derive_document(events: &[Event], id: &str) -> Option<DocumentState> {
+/// if there is no valid `document` event. `may_merge(doc, into)` decides
+/// whether a `merged` event is valid (§5.5.1), which depends on areas.
+pub fn derive_document(
+    events: &[Event],
+    id: &str,
+    may_merge: &dyn Fn(&str, &str) -> bool,
+) -> Option<DocumentState> {
     let own = events.iter().filter(|e| e.document.as_deref() == Some(id));
     let log = Log::build(own, id)?;
     if log.root.kind != "document" {
         return None;
     }
-    let fields = derive_fields(&log, document_writes);
+    let fields = derive_fields(&log, |e| document_writes(e, may_merge));
     Some(DocumentState {
         path: fields.values.get("path").and_then(Value::as_str).map(str::to_owned),
         merged_into: fields.values.get("mergedInto").and_then(Value::as_str).map(str::to_owned),
         conflicts: fields.conflicts,
     })
+}
+
+/// The heads of document record `id`, for the `after` of a new event.
+pub fn document_heads(events: &[Event], id: &str) -> Vec<String> {
+    let own = events.iter().filter(|e| e.document.as_deref() == Some(id));
+    Log::build(own, id).map(|log| log.heads()).unwrap_or_default()
 }
 
 /// The heads of annotation `id`, for the `after` of a new event (§2.5.1).

@@ -225,3 +225,9 @@ The hub relays who is connected, their open document, and their cursor. Nothing 
 When duplicate document records span the local and shared areas, the survivor is the smallest shared id. Readers ignore a `mergedInto` value that names a document they don't know. See §5.5.1 and §5.8.
 
 **Why:** found in the full review. Merging a shared record into a local one wrote a redirect that no one else could follow, which hid every shared annotation on that file from other users. The reader-side rule is a safety net, in case a buggy writer does it anyway.
+
+## D39. Local records may merge into any shared record (2026-09-29)
+
+This refines D38. The rule that `into` must be smaller applies only within an area. A local record may merge into a shared record with any id. See §5.5.1.
+
+**Why:** found while implementing publishing. D38 made the smallest *shared* id the survivor, but the rule that `into` must be smaller then made the required merge invalid whenever the local record had the smaller id. Merges still can't loop, because shared records never merge into local ones.

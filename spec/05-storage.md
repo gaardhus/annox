@@ -73,7 +73,7 @@ A document record is an event log, like an annotation. Its events use the envelo
 |---|---|---|
 | `document` | `path` | Creates the document record at `path`. Its `id` is the document id, and `document` equals `id`. `after` is empty. |
 | `move` | `path` | The document now lives at `path`. |
-| `merged` | `into` (Id) | This record is a duplicate of document `into` (§5.8). `into` MUST be smaller than this document's id, and MUST NOT be a local record if this record is shared. |
+| `merged` | `into` (Id) | This record is a duplicate of document `into` (§5.8). If both records are in the same area, `into` MUST be smaller than this document's id. A local record MAY be merged into a shared record with any id. A shared record MUST NOT be merged into a local one. |
 
 Document events are replayed by the rules of §2.5, with these fields:
 
@@ -85,9 +85,9 @@ Document events are replayed by the rules of §2.5, with these fields:
 
 A conflicted `path` (two concurrent `move` heads) is surfaced and resolved like any other conflict (§2.5.3, §2.5.4). The resolving event is a `move` whose `after` lists both heads. Until then, the provisional value is used.
 
-A `merged` event is invalid, and changes nothing (§2.4), if its `into` isn't smaller than the document's id. A reader also ignores a `mergedInto` value that names a document it doesn't know, for example a local record on someone else's machine. The record then stays at its own path, so its annotations are never hidden behind an invisible redirect.
+A record's **area** is the area its `document/` events are stored in (§5.11). A `merged` event is invalid, and changes nothing (§2.4), if its `into` isn't smaller than the document's id, unless the record is local and `into` is a shared record. A reader also ignores a `mergedInto` value that names a document it doesn't know, for example a local record on someone else's machine. The record then stays at its own path, so its annotations are never hidden behind an invisible redirect.
 
-A document whose `mergedInto` is set is **merged**. Its `path` is ignored. Its **canonical document** is found by following `mergedInto` until reaching a document that isn't merged. Because `into` is always smaller, this can't loop. A document that isn't merged is its own canonical document.
+A document whose `mergedInto` is set is **merged**. Its `path` is ignored. Its **canonical document** is found by following `mergedInto` until reaching a document that isn't merged. This can't loop: shared records only merge into smaller shared records, and local records merge into smaller local records or into shared ones. A document that isn't merged is its own canonical document.
 
 The **current path** of a document is its `path` value. A document that isn't merged is **at** its current path.
 

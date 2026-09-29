@@ -181,28 +181,38 @@ pub struct Index {
     pub folders: BTreeMap<String, BTreeSet<String>>,
     /// Annotation events by id, with where they were read from.
     pub events: BTreeMap<String, (Event, Location)>,
+    /// Document events of each document id, with their file paths.
+    pub document_events: BTreeMap<String, Vec<(Event, String)>>,
+    /// The area of each document record: where its `document/` events are.
+    pub areas: BTreeMap<String, Area>,
 }
 
 impl Index {
     /// Reads every document folder in both areas.
     pub fn read(source: &impl FileSource) -> Index {
         let mut index = Index::default();
-        let mut doc_events: BTreeMap<String, Vec<Event>> = BTreeMap::new();
         for path in source.doc_files() {
             let Some(loc) = classify(&path) else { continue };
             index.folders.entry(loc.document.clone()).or_default().insert(loc.folder.clone());
             let Some(event) = parse_event(source, &path) else { continue };
             if loc.is_document_event {
                 if event.document.as_deref() == Some(loc.document.as_str()) {
-                    doc_events.entry(loc.document.clone()).or_default().push(event);
+                    index.areas.entry(loc.document.clone()).or_insert(loc.area);
+                    index.document_events.entry(loc.document.clone()).or_default().push((event, path));
                 }
             } else {
                 index.events.entry(event.id.clone()).or_insert((event, loc));
             }
         }
+        // Merge validity depends on areas (§5.5.1).
+        let areas = index.areas.clone();
+        let may_merge = |doc: &str, into: &str| {
+            into < doc || (areas.get(doc) == Some(&Area::Local) && areas.get(into) == Some(&Area::Shared))
+        };
         for id in index.folders.keys() {
-            let events = doc_events.get(id).map(Vec::as_slice).unwrap_or_default();
-            if let Some(state) = replay::derive_document(events, id) {
+            let events: Vec<Event> =
+                index.document_events.get(id).into_iter().flatten().map(|(e, _)| e.clone()).collect();
+            if let Some(state) = replay::derive_document(&events, id, &may_merge) {
                 index.documents.insert(id.clone(), state);
             }
         }
