@@ -78,7 +78,7 @@ For a statusline, `require("annox").is_suggesting()` tells whether the current b
 
 When the workspace syncs through a hub, collaborators' cursors appear as `▏Name` tags, and your own cursor is shared unless `presence = false`.
 
-Highlight groups, most linked to diagnostic groups by default: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, `AnnoxPresenceRange`, for inline suggestions, `AnnoxDeletion` and `AnnoxInsertion`, and `AnnoxOrphans` for the notice about annotations that could not be located.
+Highlight groups: `AnnoxComment`, `AnnoxSuggestion`, and `AnnoxLocal` tint the background of annotated text in the matching diagnostic color, and `AnnoxStale` and `AnnoxConflict` undercurl it. The full list: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, `AnnoxPresenceRange`, for inline suggestions, `AnnoxDeletion` and `AnnoxInsertion`, and `AnnoxOrphans` for the notice about annotations that could not be located.
 
 ## Tests
 

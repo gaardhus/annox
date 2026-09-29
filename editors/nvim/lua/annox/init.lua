@@ -35,13 +35,34 @@ M.peers = {}
 --- Latest state pushed by the server, per buffer: { annotations, document }.
 M.state = {}
 
+--- `color` blended over the editor background, `alpha` of the way, as "#rrggbb".
+--- A transparent background counts as black, or white with a light 'background'.
+local function tint(color, alpha)
+  local bg = vim.api.nvim_get_hl(0, { name = "Normal", link = false }).bg
+    or (vim.o.background == "light" and 0xffffff or 0)
+  local function channel(shift)
+    local c, b = bit.band(bit.rshift(color, shift), 0xff), bit.band(bit.rshift(bg, shift), 0xff)
+    return math.floor(b + (c - b) * alpha + 0.5)
+  end
+  return string.format("#%02x%02x%02x", channel(16), channel(8), channel(0))
+end
+
 local function set_highlights()
+  -- Annotated text gets a background tint in the diagnostic color, so it
+  -- isn't mistaken for a diagnostic. Problems (stale, conflict) keep the
+  -- undercurl. Without true colors, fall back to the underlines.
+  local tinted = { AnnoxComment = "Info", AnnoxSuggestion = "Hint", AnnoxLocal = "Ok" }
+  for group, severity in pairs(tinted) do
+    local fg = vim.api.nvim_get_hl(0, { name = "Diagnostic" .. severity, link = false }).fg
+    if vim.o.termguicolors and fg then
+      vim.api.nvim_set_hl(0, group, { default = true, bg = tint(fg, 0.2) })
+    else
+      vim.api.nvim_set_hl(0, group, { default = true, link = "DiagnosticUnderline" .. severity })
+    end
+  end
   local links = {
-    AnnoxComment = "DiagnosticUnderlineInfo",
-    AnnoxSuggestion = "DiagnosticUnderlineHint",
     AnnoxStale = "DiagnosticUnderlineWarn",
     AnnoxConflict = "DiagnosticUnderlineError",
-    AnnoxLocal = "DiagnosticUnderlineOk",
     AnnoxVirtualText = "Comment",
     AnnoxSign = "DiagnosticSignInfo",
     AnnoxPresence = "DiagnosticVirtualTextHint",

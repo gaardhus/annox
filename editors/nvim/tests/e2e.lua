@@ -24,6 +24,16 @@ local function wait(msg, cond)
   check(vim.wait(5000, cond, 20), "timed out waiting for " .. msg)
 end
 
+-- Annotated text is tinted with true colors, and underlined without them.
+vim.o.termguicolors = true
+vim.cmd.colorscheme("default")
+local comment_hl = vim.api.nvim_get_hl(0, { name = "AnnoxComment", link = false })
+check(comment_hl.bg ~= nil and not comment_hl.undercurl, "comments tinted: " .. vim.inspect(comment_hl))
+check(vim.api.nvim_get_hl(0, { name = "AnnoxStale" }).link == "DiagnosticUnderlineWarn", "stale keeps the undercurl")
+vim.o.termguicolors = false
+vim.cmd.colorscheme("default")
+check(vim.api.nvim_get_hl(0, { name = "AnnoxComment" }).link == "DiagnosticUnderlineInfo", "underline without true colors")
+
 vim.cmd.edit(root .. "/paper.tex")
 local buf = vim.api.nvim_get_current_buf()
 wait("server to attach", function()
