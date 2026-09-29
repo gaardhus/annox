@@ -4,6 +4,9 @@ build:
 hub:
     annox hub --data /tmp/annox-hub/ --listen 127.0.0.1:7878
 
+link:
+    ln -sf "$PWD/target/release/annox" ~/.local/bin/annox
+
 # Install the git hooks (formatting, linting, commit messages).
 hooks:
     prek install
