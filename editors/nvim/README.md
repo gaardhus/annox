@@ -15,6 +15,7 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim), pointing at this directory
     require("annox").setup({
       cmd = { "/path/to/annox/target/release/annox", "lsp" },
       -- author = { id = "mailto:you@example.org", name = "You" },  -- defaults to your git identity
+      -- presence = false,  -- stop sharing your cursor with collaborators on a sync hub
     })
   end,
 }
@@ -54,7 +55,9 @@ vim.keymap.set("n", "<leader>ar", "<cmd>Annox reply<cr>")
 vim.keymap.set("n", "<leader>aa", "<cmd>Annox accept<cr>")
 ```
 
-Highlight groups, all linked to diagnostic groups by default: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, and `AnnoxSign`.
+When the workspace syncs through a hub, collaborators' cursors appear as `▏Name` tags, and your own cursor is shared unless `presence = false`.
+
+Highlight groups, most linked to diagnostic groups by default: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, and `AnnoxPresenceRange`.
 
 ## Tests
 

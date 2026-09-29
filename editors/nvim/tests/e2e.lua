@@ -183,5 +183,32 @@ wait("history float", function()
   end
 end)
 
+-- Presence: moving the cursor sends it; others' cursors are drawn.
+local client = vim.lsp.get_clients({ bufnr = buf, name = "annox" })[1]
+local sent = {}
+local notify = client.notify
+client.notify = function(self, method, params)
+  if method == "annox/setPresence" then
+    table.insert(sent, params)
+  end
+  return notify(self, method, params)
+end
+vim.cmd.wincmd("p") -- leave the history float
+vim.api.nvim_set_current_buf(buf)
+vim.api.nvim_win_set_cursor(0, { 2, 5 })
+vim.api.nvim_exec_autocmds("CursorMoved", {})
+wait("presence to be sent", function()
+  return #sent > 0
+end)
+check(sent[#sent].selection.start.line == 1 and sent[#sent].selection.start.character == 5, "cursor sent as presence")
+
+annox.on_presence(nil, { peers = { {
+  author = { id = "mailto:bob@example.org", name = "Bob" },
+  textDocument = { uri = vim.uri_from_bufnr(buf) },
+  range = range(1, 3, 3),
+} } })
+local presence = vim.api.nvim_buf_get_extmarks(buf, vim.api.nvim_get_namespaces().annox_presence, 0, -1, { details = true })
+check(#presence == 1 and presence[1][4].virt_text[1][1] == "▏Bob", "peer cursor drawn with name")
+
 print("annox nvim e2e: OK")
 vim.cmd.qall({ bang = true })

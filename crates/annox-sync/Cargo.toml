@@ -1,0 +1,16 @@
+[package]
+name = "annox-sync"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+annox-core = { version = "0.1.0", path = "../annox-core" }
+crossbeam-channel = "0.5"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+serde_json = "1.0.151"
+tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
+uuid = { version = "1.26.1", features = ["v7"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"

@@ -16,7 +16,15 @@ M.config = {
   author = nil,
   --- Show the first line of each comment at the end of its line.
   virtual_text = true,
+  --- Share your document and cursor with others through a sync hub (§7.8).
+  --- Others' cursors are always shown.
+  presence = true,
 }
+
+local presence_ns = vim.api.nvim_create_namespace("annox_presence")
+
+--- Others' presence, as last pushed by the server.
+M.peers = {}
 
 --- Latest state pushed by the server, per buffer: { annotations, document }.
 M.state = {}
@@ -30,6 +38,8 @@ local function set_highlights()
     AnnoxLocal = "DiagnosticUnderlineOk",
     AnnoxVirtualText = "Comment",
     AnnoxSign = "DiagnosticSignInfo",
+    AnnoxPresence = "DiagnosticVirtualTextHint",
+    AnnoxPresenceRange = "Visual",
   }
   for group, link in pairs(links) do
     vim.api.nvim_set_hl(0, group, { default = true, link = link })
@@ -105,6 +115,71 @@ function M.render(bufnr)
       end
     end
   end
+end
+
+--- Draws others' cursors in `bufnr` (§7.8.2).
+function M.render_presence(bufnr)
+  vim.api.nvim_buf_clear_namespace(bufnr, presence_ns, 0, -1)
+  local client = client_for(bufnr)
+  if not client then
+    return
+  end
+  local uri = vim.uri_from_bufnr(bufnr)
+  local line_count = vim.api.nvim_buf_line_count(bufnr)
+  for _, peer in ipairs(M.peers) do
+    local r = peer.range
+    if peer.textDocument and peer.textDocument.uri == uri and r and r.start.line < line_count then
+      local author = peer.author or {}
+      local name = author.name or author.id or "someone"
+      local sl, el = r.start.line, math.min(r["end"].line, line_count - 1)
+      local sc, ec = byte_col(bufnr, r.start, client.offset_encoding), byte_col(bufnr, r["end"], client.offset_encoding)
+      if sl ~= el or sc ~= ec then
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, presence_ns, sl, sc, {
+          end_row = el,
+          end_col = ec,
+          hl_group = "AnnoxPresenceRange",
+        })
+      end
+      pcall(vim.api.nvim_buf_set_extmark, bufnr, presence_ns, sl, sc, {
+        virt_text = { { "▏" .. name, "AnnoxPresence" } },
+        virt_text_pos = "inline",
+      })
+    end
+  end
+end
+
+--- Handles `annox/didChangePresence` (§6.6.3).
+function M.on_presence(_, result)
+  M.peers = result.peers or {}
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(b) then
+      M.render_presence(b)
+    end
+  end
+end
+
+--- Sends the cursor as presence, at most every 150 ms (§7.8.1).
+local presence_timer
+local function send_presence()
+  if not M.config.presence then
+    return
+  end
+  presence_timer = presence_timer or vim.uv.new_timer()
+  presence_timer:stop()
+  presence_timer:start(150, 0, vim.schedule_wrap(function()
+    local bufnr = vim.api.nvim_get_current_buf()
+    local client = client_for(bufnr)
+    if not client then
+      return
+    end
+    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+    local line = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, false)[1] or ""
+    local pos = { line = row - 1, character = vim.str_utfindex(line, client.offset_encoding, math.min(col, #line), false) }
+    client:notify("annox/setPresence", {
+      textDocument = { uri = vim.uri_from_bufnr(bufnr) },
+      selection = { start = pos, ["end"] = pos },
+    })
+  end))
 end
 
 local function on_annotations(_, result)
@@ -611,9 +686,16 @@ function M.setup(opts)
     end,
     capabilities = { experimental = { annox = { version = "0.0" } } },
     init_options = { annox = { diagnostics = false, author = M.config.author } },
-    handlers = { ["annox/didChangeAnnotations"] = on_annotations },
+    handlers = {
+      ["annox/didChangeAnnotations"] = on_annotations,
+      ["annox/didChangePresence"] = M.on_presence,
+    },
   })
   vim.lsp.enable("annox")
+  vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "BufEnter" }, {
+    group = vim.api.nvim_create_augroup("annox_presence", { clear = true }),
+    callback = send_presence,
+  })
   vim.api.nvim_create_user_command("Annox", function(o)
     local fn = subcommands[o.fargs[1]]
     if not fn then

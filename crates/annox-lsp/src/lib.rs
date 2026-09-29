@@ -15,6 +15,8 @@ use annox_core::ops;
 use annox_core::storage::{Area, Index, Loaded, Workspace};
 use annox_core::suggestion;
 use annox_core::text::Text;
+use annox_sync::replica::{self, FromReplica, ReplicaConfig, ToReplica};
+use crossbeam_channel::{Receiver, Sender};
 use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
 use lsp_types::notification::{
     DidChangeTextDocument, DidChangeWatchedFiles, DidCloseTextDocument, DidOpenTextDocument, DidRenameFiles,
@@ -103,6 +105,7 @@ pub fn run(connection: &Connection) -> anyhow::Result<()> {
             "serverInfo": { "name": "annox", "version": env!("CARGO_PKG_VERSION") },
         }),
     )?;
+    let (sync_tx, sync_rx) = crossbeam_channel::unbounded();
     let mut server = Server {
         connection,
         encoding,
@@ -116,6 +119,9 @@ pub fn run(connection: &Connection) -> anyhow::Result<()> {
         roots,
         poll: !dynamic_watch,
         fingerprints: HashMap::new(),
+        replicas: HashMap::new(),
+        sync_tx,
+        sync_rx,
     };
     if dynamic_watch {
         server.register_watcher();
@@ -178,6 +184,10 @@ pub(crate) struct Server<'a> {
     /// Whether to poll `.annox/` because the client can't watch it (§6.4).
     poll: bool,
     fingerprints: HashMap<PathBuf, Vec<(String, u64, std::time::SystemTime)>>,
+    /// Sync replica per workspace root (§7), or `None` if it doesn't sync.
+    replicas: HashMap<PathBuf, Option<Sender<ToReplica>>>,
+    sync_tx: Sender<FromReplica>,
+    sync_rx: Receiver<FromReplica>,
 }
 
 /// A root annotation of a document, resolved against its current text.
@@ -243,6 +253,7 @@ impl Analysis {
 impl Server<'_> {
     fn main_loop(&mut self) -> anyhow::Result<()> {
         let ticker = if self.poll { crossbeam_channel::tick(POLL_INTERVAL) } else { crossbeam_channel::never() };
+        let sync_rx = self.sync_rx.clone();
         loop {
             crossbeam_channel::select! {
                 recv(self.connection.receiver) -> msg => match msg {
@@ -257,6 +268,7 @@ impl Server<'_> {
                     Err(_) => return Ok(()),
                 },
                 recv(ticker) -> _ => self.poll_storage(),
+                recv(sync_rx) -> event => if let Ok(event) = event { self.on_sync(event) },
             }
         }
     }
@@ -334,6 +346,7 @@ impl Server<'_> {
                 if let Ok(p) = serde_json::from_value::<DidOpenTextDocumentParams>(n.params) {
                     let uri = p.text_document.uri;
                     self.set_text(uri.clone(), &p.text_document.text);
+                    self.ensure_replica(&uri);
                     self.refresh(&uri);
                 }
             }
@@ -365,9 +378,7 @@ impl Server<'_> {
                     self.on_rename(p);
                 }
             }
-            // Presence is forwarded to a sync hub (§7.8), which this server
-            // doesn't connect to yet.
-            "annox/setPresence" => {}
+            "annox/setPresence" => self.set_presence(&n.params),
             _ => {}
         }
     }
@@ -551,6 +562,93 @@ impl Server<'_> {
     fn refresh_all(&self) {
         for uri in self.open.keys() {
             self.refresh(uri);
+        }
+        // Anything new on disk may need pushing to a hub (§7.6).
+        for tx in self.replicas.values().flatten() {
+            let _ = tx.send(ToReplica::Scan);
+        }
+    }
+
+    // Sync (§7).
+
+    /// Starts a replica for the workspace of `uri` if it names a hub and the
+    /// user has credentials for it (§6.4, §7.2).
+    pub(crate) fn ensure_replica(&mut self, uri: &Url) {
+        let Some(ws) = uri.to_file_path().ok().and_then(|p| Workspace::find(&p)) else { return };
+        if self.replicas.contains_key(&ws.root) {
+            return;
+        }
+        let marker = std::fs::read_to_string(ws.root.join(".annox/annox.json")).unwrap_or_default();
+        let url = serde_json::from_str::<Value>(&marker).ok().and_then(|m| m["sync"]["url"].as_str().map(str::to_owned));
+        let replica = url.and_then(|url| {
+            let Some(credential) = annox_sync::credentials::lookup(&url) else {
+                self.log(format!("annox: {url} has no entry in the credentials file; not syncing"));
+                return None;
+            };
+            let config = ReplicaConfig { root: ws.root.clone(), url, token: credential.token, author: self.author(&ws) };
+            Some(replica::spawn(config, self.sync_tx.clone()))
+        });
+        self.replicas.insert(ws.root, replica);
+    }
+
+    fn log(&self, message: String) {
+        self.send(Notification::new("window/logMessage".into(), json!({ "type": 3, "message": message })));
+    }
+
+    fn on_sync(&mut self, event: FromReplica) {
+        match event {
+            FromReplica::Changed { .. } => self.refresh_all(),
+            FromReplica::Status { message, .. } => self.log(format!("annox sync: {message}")),
+            FromReplica::Presence { root, peers } => {
+                if !self.annox_client {
+                    return;
+                }
+                let ws = Workspace { root };
+                let index = Index::read(&ws);
+                let peers: Vec<Value> = peers.iter().map(|p| self.presence_view(&ws, &index, p)).collect();
+                self.send(Notification::new("annox/didChangePresence".into(), json!({ "peers": peers })));
+            }
+        }
+    }
+
+    /// A hub peer (§7.8.1) with its document as a URI and its range as an LSP
+    /// `Range`, mapped onto this copy of the document (§7.8.2).
+    fn presence_view(&self, ws: &Workspace, index: &Index, peer: &Value) -> Value {
+        let mut view = json!({ "author": peer["author"] });
+        let Some(doc) = peer["document"].as_str() else { return view };
+        let Some(path) = index.documents.get(index.canonical(doc)).and_then(|d| d.path.clone()) else { return view };
+        let Ok(uri) = Url::from_file_path(ws.root.join(&path)) else { return view };
+        view["textDocument"] = json!({ "uri": uri });
+        let text = match self.open.get(&uri) {
+            Some(d) => d.text.clone(),
+            None => Text::from_raw(&std::fs::read_to_string(ws.root.join(&path)).unwrap_or_default()),
+        };
+        let (Some(start), Some(end)) = (peer["range"]["start"].as_u64(), peer["range"]["end"].as_u64()) else { return view };
+        let lines = LineIndex::new(&text, self.encoding);
+        let (start, end) = ((start as usize).min(text.len()), (end as usize).min(text.len()));
+        view["range"] = json!(lines.range(start.min(end), end));
+        view
+    }
+
+    /// Forwards the user's document and cursor to the hub (§7.8).
+    fn set_presence(&self, params: &Value) {
+        let uri = params["textDocument"]["uri"].as_str().and_then(|u| Url::parse(u).ok());
+        let Some(a) = uri.as_ref().and_then(|u| self.analyze(u)) else {
+            for tx in self.replicas.values().flatten() {
+                let _ = tx.send(ToReplica::Presence(json!({})));
+            }
+            return;
+        };
+        let mut presence = json!({ "version": a.text.version });
+        if let Some(doc) = a.loaded.at.first() {
+            presence["document"] = json!(doc);
+        }
+        if let Ok(range) = serde_json::from_value::<lsp_types::Range>(params["selection"].clone()) {
+            let lines = LineIndex::new(&a.text, self.encoding);
+            presence["range"] = json!({ "start": lines.offset(range.start), "end": lines.offset(range.end) });
+        }
+        if let Some(Some(tx)) = self.replicas.get(&a.ws.root) {
+            let _ = tx.send(ToReplica::Presence(presence));
         }
     }
 

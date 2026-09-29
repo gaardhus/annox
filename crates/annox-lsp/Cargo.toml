@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 annox-core = { version = "0.1.0", path = "../annox-core" }
+annox-sync = { version = "0.1.0", path = "../annox-sync" }
 anyhow = "1.0.104"
 crossbeam-channel = "0.5"
 lsp-server = "0.10.0"
