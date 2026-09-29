@@ -2,7 +2,7 @@ build:
     cargo build --release
 
 hub:
-    annox hub --data /tmp/annox-hub/ --listen 127.0.0.1:7878
+    @annox hub --data /tmp/annox-hub/ --listen 127.0.0.1:7878
 
 link:
     ln -sf "$PWD/target/release/annox" ~/.local/bin/annox
