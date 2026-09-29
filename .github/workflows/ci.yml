@@ -1,9 +1,9 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
+  # Pushes to main run CI from release.yml, so a release waits for it.
+  workflow_call:
 
 permissions:
   contents: read
