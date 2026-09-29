@@ -31,6 +31,15 @@ Crates:
 - **`annox-sync`** has the sync hub and replica (§7).
 - **`annox-lsp`** builds the `annox` binary. `annox lsp` runs the language server (§6) over stdio, and `annox hub` runs a sync hub.
 
+Install the latest `annox` binary on Linux or macOS (Apple silicon) into `~/.local/bin`. Add `--skill` to also install the [agent skill](#agents), and see `--help` for the version and directories. It verifies the download against the release's `SHA256SUMS`. On Windows, download the `.zip` from the [releases](https://github.com/gaardhus/annox/releases).
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/gaardhus/annox/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/gaardhus/annox/main/install.sh | sh -s -- --skill
+```
+
+To build from source and work on annox:
+
 ```sh
 cargo test               # unit, conformance, and end-to-end server tests
 cargo build --release    # produces target/release/annox
@@ -64,7 +73,7 @@ Write commands use `--author`/`--name`, or `ANNOX_AUTHOR`/`ANNOX_AUTHOR_NAME`, a
 
 ### Agents
 
-[`skills/annox/`](skills/annox/SKILL.md) is a skill that teaches an agent the CLI and how to use it well: suggest instead of editing text you own, and answer comments in their threads. For Claude Code, link it into your skills:
+[`skills/annox/`](skills/annox/SKILL.md) is a skill that teaches an agent the CLI and how to use it well: suggest instead of editing text you own, and answer comments in their threads. For Claude Code, install it with `install.sh --skill` (see [above](#reference-implementation)), or link it into your skills from a checkout:
 
 ```sh
 ln -s "$PWD/skills/annox" ~/.claude/skills/annox
