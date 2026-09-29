@@ -562,6 +562,68 @@ function M.publish(opts)
   end)
 end
 
+--- Edits the replacement of the suggestion under the cursor, or the text of
+--- the comment, in a floating window. `:w` saves, `:q` closes.
+--- opts: { annotation? }
+function M.edit(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  local editable = function(a)
+    return a.status == "open"
+  end
+  pick(opts, opts.annotation and buffer_annotations(bufnr, editable) or vim.tbl_filter(editable, under_cursor(bufnr)), "Edit", function(a)
+    if a.kind == "suggestion" and not a.applicable then
+      return vim.notify("annox: this suggestion is stale; use :Annox retarget", vim.log.levels.WARN)
+    end
+    local field = a.kind == "suggestion" and "replacement" or "body"
+    local text = field == "replacement" and a.edit.replacement or a.body
+    local lines = vim.split(type(text) == "string" and text or "", "\n")
+    local edit_buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(edit_buf, 0, -1, false, lines)
+    vim.api.nvim_buf_set_name(edit_buf, string.format("annox://%s/%s", field, a.id))
+    vim.bo[edit_buf].buftype = "acwrite"
+    vim.bo[edit_buf].bufhidden = "wipe"
+    vim.bo[edit_buf].filetype = field == "body" and "markdown" or vim.bo[bufnr].filetype
+    vim.bo[edit_buf].modified = false
+    local width = 20
+    for _, l in ipairs(lines) do
+      width = math.max(width, vim.fn.strdisplaywidth(l) + 2)
+    end
+    vim.api.nvim_open_win(edit_buf, true, {
+      relative = "cursor",
+      row = 1,
+      col = 0,
+      width = math.min(width, math.floor(vim.o.columns * 0.8)),
+      height = math.min(math.max(#lines, 3), 20),
+      border = "rounded",
+      title = field == "replacement" and " Suggested text (:w saves) " or " Comment (:w saves) ",
+    })
+    vim.api.nvim_create_autocmd("BufWriteCmd", {
+      buffer = edit_buf,
+      callback = function()
+        local new = table.concat(vim.api.nvim_buf_get_lines(edit_buf, 0, -1, false), "\n")
+        local method, params
+        if field == "replacement" then
+          method = "annox/retarget"
+          params = { annotation = a.id, range = a.resolution.range, replacement = new }
+          local s = M.suggesting[bufnr]
+          if s then
+            table.insert(s.undo, { id = a.id, range = a.resolution.range, replacement = a.edit.replacement })
+          end
+        else
+          method, params = "annox/edit", { annotation = a.id, body = new ~= "" and new or vim.NIL }
+        end
+        request(bufnr, method, params, function(view)
+          a = view
+          if vim.api.nvim_buf_is_valid(edit_buf) then
+            vim.bo[edit_buf].modified = false
+          end
+        end)
+      end,
+    })
+  end)
+end
+
 --- Points a stale suggestion at the selection (§4.2.1).
 --- opts: { annotation?, range?, visual?, replacement? }
 function M.retarget(opts)
@@ -1011,6 +1073,7 @@ local subcommands = {
   history = function() M.history() end,
   suggest = function(o) M.suggest({ visual = o.range > 0 }) end,
   suggesting = function() M.suggest_mode() end,
+  edit = function() M.edit() end,
   reply = function() M.reply() end,
   resolve = function() M.resolve() end,
   reopen = function() M.reopen() end,

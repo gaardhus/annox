@@ -34,6 +34,7 @@ Changes others make to `.annox/`, such as a `git pull`, show up within a second 
 | `:Annox init` | Create an annox workspace for this project and attach the server. |
 | `:Annox comment` | Comment on the cursor position, or on the selection when run from visual mode (`:'<,'>Annox comment`). |
 | `:Annox suggest` | Suggest a replacement for the selection. The prompt is pre-filled with the current text. |
+| `:Annox edit` | Edit the suggested text of the suggestion under the cursor, or the text of a comment, in a floating window. `:w` saves, `:q` closes. |
 | `:Annox suggesting` | Turn suggestion mode on or off for the buffer (see below). |
 | `:Annox reply` | Reply to the thread under the cursor. |
 | `:Annox thread` | Show the thread under the cursor in a floating window. |
@@ -64,6 +65,7 @@ vim.keymap.set("n", "<leader>aa", "<cmd>Annox accept<cr>")
 
 - Suggestions are drawn inline: deleted text struck through, inserted text after it in green.
 - Typing next to a suggestion you made in this session extends it. Delete a word and type its replacement right there, and you get one suggestion.
+- To change text you've already suggested, run `:Annox edit` on it. The inline green text can't hold the cursor.
 - `u` undoes your last suggestion, instead of undoing buffer changes. Set `suggest_undo_key` to change or disable this.
 - Accepting a suggestion still edits the buffer.
 - Suggestions are shared right away. Suggestion mode has no private-draft variant.
