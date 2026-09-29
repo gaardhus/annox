@@ -13,7 +13,8 @@ use crate::replay::{self, DocumentState};
 /// A source of workspace files, by path relative to the workspace root with
 /// `/` separators. Implemented for real directories and in-memory maps.
 pub trait FileSource {
-    /// Every file under `.annox/docs/` and `.annox/local/docs/`.
+    /// Every file under `.annox/docs/`, `.annox/local/docs/`, and
+    /// `.annox/synced/docs/`.
     fn doc_files(&self) -> Vec<String>;
     fn read(&self, path: &str) -> Option<String>;
 }
@@ -21,7 +22,7 @@ pub trait FileSource {
 impl FileSource for BTreeMap<String, String> {
     fn doc_files(&self) -> Vec<String> {
         self.keys()
-            .filter(|p| p.starts_with(".annox/docs/") || p.starts_with(".annox/local/docs/"))
+            .filter(|p| TREES.iter().any(|t| p.strip_prefix(".annox/").is_some_and(|r| r.starts_with(t))))
             .cloned()
             .collect()
     }
@@ -30,6 +31,13 @@ impl FileSource for BTreeMap<String, String> {
         self.get(path).cloned()
     }
 }
+
+/// The folder trees under `.annox/`, in reading order: when an event is in
+/// several, the first copy is used (§5.4).
+const TREES: [&str; 3] = ["docs/", "local/docs/", "synced/docs/"];
+
+/// Lines `.annox/.gitignore` must contain (§5.9).
+const IGNORED: [&str; 3] = ["cache/", "local/", "synced/"];
 
 /// A workspace on disk (§5.1).
 #[derive(Clone, Debug)]
@@ -56,11 +64,29 @@ impl Workspace {
         if !marker.exists() {
             fs::write(&marker, "{ \"format\": 1 }\n")?;
         }
-        let ignore = annox.join(".gitignore");
-        if !ignore.exists() {
-            fs::write(&ignore, "cache/\nlocal/\n")?;
+        let ws = Workspace { root: root.to_path_buf() };
+        ws.ensure_ignored()?;
+        Ok(ws)
+    }
+
+    /// Adds any line of §5.9 missing from `.annox/.gitignore`, so that
+    /// workspaces created before a line was required pick it up.
+    pub fn ensure_ignored(&self) -> io::Result<()> {
+        let ignore = self.root.join(".annox").join(".gitignore");
+        let existing = fs::read_to_string(&ignore).unwrap_or_default();
+        let missing: Vec<&str> = IGNORED.into_iter().filter(|l| !existing.lines().any(|e| e.trim() == *l)).collect();
+        if missing.is_empty() {
+            return Ok(());
         }
-        Ok(Workspace { root: root.to_path_buf() })
+        let mut text = existing;
+        if !text.is_empty() && !text.ends_with('\n') {
+            text.push('\n');
+        }
+        for line in missing {
+            text.push_str(line);
+            text.push('\n');
+        }
+        fs::write(ignore, text)
     }
 
     /// The document path (§3.1) of `file`, relative to the workspace root.
@@ -91,8 +117,8 @@ impl Workspace {
 impl FileSource for Workspace {
     fn doc_files(&self) -> Vec<String> {
         let mut out = Vec::new();
-        for area in [".annox/docs", ".annox/local/docs"] {
-            walk(&self.root, &self.root.join(area), &mut out);
+        for tree in TREES {
+            walk(&self.root, &self.root.join(".annox").join(tree), &mut out);
         }
         out
     }
@@ -129,7 +155,8 @@ fn folder_doc_id(name: &str) -> Option<&str> {
     (!prefix.is_empty() && is_uuid(id)).then_some(id)
 }
 
-/// Which area a folder is in (§5.11).
+/// Which area a folder is in (§5.11). The sync mirror (§5.12) is part of
+/// the shared area.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Area {
     Shared,
@@ -137,24 +164,24 @@ pub enum Area {
 }
 
 /// Where an event file lives: its document folder (relative to `.annox/`),
-/// document id, area, and whether it's a document event.
+/// document id, area, whether it's in the sync mirror (§5.12), and whether
+/// it's a document event.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Location {
     pub folder: String,
     pub document: String,
     pub area: Area,
+    pub synced: bool,
     pub is_document_event: bool,
 }
 
 fn classify(path: &str) -> Option<Location> {
-    let (area, rest) = if let Some(r) = path.strip_prefix(".annox/local/docs/") {
-        (Area::Local, r)
-    } else {
-        (Area::Shared, path.strip_prefix(".annox/docs/")?)
-    };
+    let path = path.strip_prefix(".annox/")?;
+    let tree = TREES.into_iter().find(|t| path.starts_with(t))?;
+    let rest = &path[tree.len()..];
+    let area = if tree == "local/docs/" { Area::Local } else { Area::Shared };
     let (dir, file) = rest.rsplit_once('/')?;
     file.strip_suffix(".json").filter(|s| is_uuid(s))?;
-    let area_prefix = if area == Area::Local { "local/docs/" } else { "docs/" };
     let (folder, is_document_event) = match dir.rsplit_once('/') {
         Some((parent, "document")) => (parent, true),
         None if dir == "document" => return None,
@@ -162,7 +189,13 @@ fn classify(path: &str) -> Option<Location> {
     };
     let name = folder.rsplit('/').next()?;
     let document = folder_doc_id(name)?.to_owned();
-    Some(Location { folder: format!("{area_prefix}{folder}"), document, area, is_document_event })
+    let synced = tree == "synced/docs/";
+    Some(Location { folder: format!("{tree}{folder}"), document, area, synced, is_document_event })
+}
+
+/// The tree (§5.2) a folder relative to `.annox/` is in.
+pub fn folder_tree(folder: &str) -> &'static str {
+    TREES.into_iter().find(|t| folder.starts_with(t)).unwrap_or("docs/")
 }
 
 fn parse_event(source: &impl FileSource, path: &str) -> Option<Event> {
@@ -185,16 +218,24 @@ pub struct Index {
     pub document_events: BTreeMap<String, Vec<(Event, String)>>,
     /// The area of each document record: where its `document/` events are.
     pub areas: BTreeMap<String, Area>,
+    /// Ids of events with a copy in the sync mirror (§5.12).
+    pub synced: BTreeSet<String>,
 }
 
 impl Index {
-    /// Reads every document folder in both areas.
+    /// Reads every document folder in both areas, and the sync mirror.
     pub fn read(source: &impl FileSource) -> Index {
         let mut index = Index::default();
-        for path in source.doc_files() {
+        let mut paths = source.doc_files();
+        // Committed copies before mirror copies (§5.4, §5.12).
+        paths.sort_by_key(|p| TREES.iter().position(|t| p.strip_prefix(".annox/").is_some_and(|r| r.starts_with(t))));
+        for path in paths {
             let Some(loc) = classify(&path) else { continue };
             index.folders.entry(loc.document.clone()).or_default().insert(loc.folder.clone());
             let Some(event) = parse_event(source, &path) else { continue };
+            if loc.synced {
+                index.synced.insert(event.id.clone());
+            }
             if loc.is_document_event {
                 if event.document.as_deref() == Some(loc.document.as_str()) {
                     index.areas.entry(loc.document.clone()).or_insert(loc.area);
@@ -312,6 +353,8 @@ mod tests {
         assert!(!loc.is_document_event);
         let loc = classify(&format!(".annox/local/docs/a.md~{id}/document/{ev}.json")).unwrap();
         assert_eq!((loc.area, loc.is_document_event), (Area::Local, true));
+        let loc = classify(&format!(".annox/synced/docs/a.md~{id}/{ev}.json")).unwrap();
+        assert_eq!((loc.folder.as_str(), loc.area, loc.synced), (format!("synced/docs/a.md~{id}").as_str(), Area::Shared, true));
         assert!(classify(&format!(".annox/docs/paper.tex/{ev}.json")).is_none());
         assert!(classify(&format!(".annox/docs/paper.tex~{id}/notes.json")).is_none());
     }

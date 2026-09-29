@@ -35,6 +35,24 @@ fn client(uri: &str, name: &str) -> Client {
     client
 }
 
+/// Ids of the event files under `.annox/<tree>` in `dir`, sorted.
+fn event_ids(dir: &std::path::Path, tree: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut stack = vec![dir.join(".annox").join(tree)];
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if let Some(id) = path.file_name().and_then(|n| n.to_str()).and_then(|n| n.strip_suffix(".json")) {
+                out.push(id.to_owned());
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
 /// Waits for an `annox/didChangeAnnotations` push satisfying `pred`.
 fn wait_annotations(client: &Client, pred: impl Fn(&[Value]) -> bool) -> Vec<Value> {
     loop {
@@ -87,6 +105,16 @@ fn annotations_and_presence_sync_between_servers() {
     bob.call("annox/reply", json!({ "parent": id, "body": "Yes!" }));
     let seen = wait_annotations(&ada, |a| a.first().is_some_and(|c| !c["replies"].as_array().unwrap().is_empty()));
     assert_eq!(seen[0]["replies"][0]["author"]["name"], "bob");
+
+    // Received events are kept in the git-ignored mirror, so each copy's
+    // docs/ holds only what its own user wrote, and a later git pull of the
+    // author's commit can't collide with them (§5.12).
+    let reply = seen[0]["replies"][0]["id"].as_str().unwrap().to_owned();
+    assert_eq!(event_ids(dir_b.path(), "docs"), vec![reply.clone()]);
+    assert!(!event_ids(dir_a.path(), "docs").contains(&reply));
+    assert!(event_ids(dir_a.path(), "synced/docs").contains(&reply));
+    assert!(event_ids(dir_b.path(), "synced/docs").contains(&id.as_str().unwrap().to_owned()));
+    assert!(std::fs::read_to_string(dir_b.path().join(".annox/.gitignore")).unwrap().lines().any(|l| l == "synced/"));
 
     // Presence: Ada's cursor shows up in Bob's copy of the file.
     ada.notify(

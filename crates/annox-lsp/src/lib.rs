@@ -938,7 +938,7 @@ impl Server<'_> {
 /// Names, sizes, and modification times of the event files under `root`.
 fn fingerprint(root: &Path) -> Vec<(String, u64, std::time::SystemTime)> {
     let mut out = Vec::new();
-    let mut stack = vec![root.join(".annox/docs"), root.join(".annox/local/docs")];
+    let mut stack = vec![root.join(".annox/docs"), root.join(".annox/local/docs"), root.join(".annox/synced/docs")];
     while let Some(dir) = stack.pop() {
         let Ok(entries) = std::fs::read_dir(&dir) else { continue };
         for entry in entries.flatten() {

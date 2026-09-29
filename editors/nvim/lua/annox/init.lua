@@ -1284,7 +1284,7 @@ function M.init(opts)
   end
   vim.fn.mkdir(annox, "p")
   vim.fn.writefile({ '{ "format": 1 }' }, vim.fs.joinpath(annox, "annox.json"))
-  vim.fn.writefile({ "cache/", "local/" }, vim.fs.joinpath(annox, ".gitignore"))
+  vim.fn.writefile({ "cache/", "local/", "synced/" }, vim.fs.joinpath(annox, ".gitignore"))
   -- vim.lsp.enable attaches on FileType; replay it for buffers in the workspace.
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
     local name = vim.api.nvim_buf_get_name(b)

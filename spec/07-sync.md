@@ -2,7 +2,7 @@
 
 Sync keeps copies of a workspace's annotations up to date live, without waiting for a git push and pull. Replicas, typically annox servers (§6), connect to a **sync hub** that stores the workspace's events and relays new ones to every connected replica.
 
-Sync needs no merge logic. Events are immutable, and merging two copies is the union of their events (§5). All the hub does is make sure every replica eventually has every event. Ordering and conflicts are still decided by `after` links on each replica (§2.5). Sync and version control can be used together: an event that arrives both ways is the same file, and duplicates are recognized by id (§5.4).
+Sync needs no merge logic. Events are immutable, and merging two copies is the union of their events (§5). All the hub does is make sure every replica eventually has every event. Ordering and conflicts are still decided by `after` links on each replica (§2.5). Sync and version control can be used together: received events are kept in a git-ignored mirror (§5.12), and an event that arrives both ways is recognized by its id (§5.4).
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY are to be interpreted as described in RFC 2119.
 
@@ -53,7 +53,7 @@ Events are transferred as **items**, which carry the document an event belongs t
 
 `seq` is present only in messages from the hub.
 
-A replica receiving items writes each event as a file (§5.4). A document event goes into the `document/` subfolder, and an annotation event goes directly into the document's folder, named after the document's current path. Documents new to the replica get a folder when their `document` event arrives. An item whose document isn't known yet is kept pending, for example in the cache, until its `document` event arrives.
+A replica receiving items writes each event as a file (§5.4) in the sync mirror, `.annox/synced/docs/` (§5.12). A document event goes into the `document/` subfolder, and an annotation event goes directly into the document's mirror folder, named after the document's current path. Documents new to the replica get a folder when their `document` event arrives. An item whose document isn't known yet is kept pending, for example in the cache, until its `document` event arrives.
 
 ### 7.5.2 Methods
 
@@ -90,7 +90,7 @@ A replica that syncs MUST:
 - pull everything after its cursor before relying on its state being current, and apply `didReceive` items as they arrive;
 - eventually push every shared event that the hub doesn't have: events written locally, and events that arrived by other routes such as git. How it tracks what the hub has is up to the implementation, for example a set of acknowledged ids in the cache. Pushing an event the hub already has is harmless;
 - push events in an order where every event comes after its document's `document` event and after every event in its `after` list, so other replicas rarely hold items pending;
-- write received events as ordinary files (§5.4), so storage stays the single source of truth.
+- write received events as ordinary files (§5.4) in the sync mirror (§5.12), so storage stays the single source of truth and received events never block a version-control pull.
 
 If the connection is read-only (`writable: false`), the replica keeps pulling, and SHOULD tell the user that their changes aren't being shared.
 

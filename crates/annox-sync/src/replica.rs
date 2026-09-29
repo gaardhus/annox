@@ -231,8 +231,10 @@ impl Replica {
         }
     }
 
-    /// Writes received items as event files (§7.5.1). Items are untrusted:
-    /// ids and paths are validated before anything touches the disk.
+    /// Writes received items as event files in the sync mirror (§5.12,
+    /// §7.5.1), even when git already delivered a copy, so the mirror keeps
+    /// every event the hub sent. Items are untrusted: ids and paths are
+    /// validated before anything touches the disk.
     fn apply(&mut self, items: Vec<Value>) {
         let ws = self.ws();
         let mut queue: Vec<Value> = std::mem::take(&mut self.pending);
@@ -244,14 +246,14 @@ impl Replica {
         }
         // Document events first, so annotation events find their folders.
         queue.sort_by_key(|i| i["event"]["annotation"].is_string());
+        // Older workspaces don't ignore the mirror yet (§5.9).
+        let _ = ws.ensure_ignored();
         let mut index = Index::read(&ws);
         let mut still_pending = Vec::new();
         for item in queue {
             let Ok(event) = serde_json::from_value::<Event>(item["event"].clone()) else { continue };
             let doc = item["document"].as_str().unwrap_or_default();
-            let exists = index.events.contains_key(&event.id)
-                || index.document_events.get(doc).is_some_and(|evs| evs.iter().any(|(e, _)| e.id == event.id));
-            if exists {
+            if index.synced.contains(&event.id) {
                 continue;
             }
             let path = index
@@ -264,7 +266,8 @@ impl Replica {
                 continue;
             };
             let is_document_event = event.document.as_deref() == Some(doc);
-            let folder = if is_document_event { format!("docs/{path}~{doc}/document") } else { format!("docs/{path}~{doc}") };
+            let folder =
+                if is_document_event { format!("synced/docs/{path}~{doc}/document") } else { format!("synced/docs/{path}~{doc}") };
             if is_uuid(doc) && ws.write_event(&folder, &event).is_ok() && is_document_event {
                 index = Index::read(&ws);
             }

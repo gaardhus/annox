@@ -88,7 +88,7 @@ Each user adds the hub to `~/.config/annox/credentials.json`, which is never com
 { "hubs": { "wss://hub.example.org/w/my-paper": { "token": "…" } } }
 ```
 
-The server syncs only with hubs listed there. Remote hubs must use `wss://`, and plain `ws://` is accepted only to localhost. The hub itself speaks plain WebSocket, so put it behind a TLS-terminating proxy to serve `wss://`. Sync and git work together: events arriving both ways are the same files. Collaborators' cursors appear in the editor as presence (§7.8). The hub doesn't implement read-only access yet.
+The server syncs only with hubs listed there. Remote hubs must use `wss://`, and plain `ws://` is accepted only to localhost. The hub itself speaks plain WebSocket, so put it behind a TLS-terminating proxy to serve `wss://`. Sync and git work together. Events received from the hub are kept in the git-ignored `.annox/synced/`, so `git status` only lists the events you wrote, and pulling a collaborator's commit never collides with events that sync already delivered. Each person commits their own events. Collaborators' cursors appear in the editor as presence (§7.8). The hub doesn't implement read-only access yet.
 
 ## Editor support
 

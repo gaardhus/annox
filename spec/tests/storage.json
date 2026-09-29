@@ -1,5 +1,5 @@
 {
-  "description": "Storage test vectors for annox spec §5. Each case gives a workspace's files (path relative to the workspace root → content) and a document path. Load it (§5.7.1) and compare with `expected`: `documents` maps every document id to its derived `path`, `mergedInto`, and `conflicts` (§5.5.1); `at` lists documents at the path (R); `loaded` the documents whose annotations are loaded (S); `folders` the folders read (relative to .annox/, so shared folders start with docs/ and local ones with local/docs/); `events` the annotation event ids read; `annotations` the annotation ids. All lists are sorted.",
+  "description": "Storage test vectors for annox spec §5. Each case gives a workspace's files (path relative to the workspace root → content) and a document path. Load it (§5.7.1) and compare with `expected`: `documents` maps every document id to its derived `path`, `mergedInto`, and `conflicts` (§5.5.1); `at` lists documents at the path (R); `loaded` the documents whose annotations are loaded (S); `folders` the folders read (relative to .annox/, so shared folders start with docs/, local ones with local/docs/, and sync mirror ones with synced/docs/); `events` the annotation event ids read; `annotations` the annotation ids. All lists are sorted.",
   "specVersion": "0.1",
   "cases": [
     {
@@ -811,6 +811,53 @@
         "annotations": [
           "01926d3a-0001-7000-8000-000000000000",
           "01926d3a-0002-7000-8000-000000000000"
+        ]
+      }
+    },
+    {
+      "name": "sync-mirror",
+      "description": "Events in the sync mirror (§5.12) load with the shared area. An event with a copy in both docs/ and synced/docs/ is read once, a mirror-only event is read like any other, and a document known only from the mirror is loaded normally.",
+      "files": {
+        ".annox/annox.json": "{ \"format\": 1 }\n",
+        ".annox/.gitignore": "cache/\nlocal/\nsynced/\n",
+        ".annox/docs/paper.tex~01926d3a-0100-7000-8000-000000000000/document/01926d3a-0100-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0100-7000-8000-000000000000\",\n  \"document\": \"01926d3a-0100-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"document\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T15:00:00Z\",\n  \"path\": \"paper.tex\"\n}\n",
+        ".annox/docs/paper.tex~01926d3a-0100-7000-8000-000000000000/01926d3a-0001-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0001-7000-8000-000000000000\",\n  \"annotation\": \"01926d3a-0001-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"create\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T14:00:00Z\",\n  \"kind\": \"comment\",\n  \"target\": {\n    \"path\": \"paper.tex\",\n    \"version\": \"sha256:066f0dd650a93335b6f09283c11769b9053c87a602e57091fc354aa6eb992fdd\",\n    \"selectors\": {\n      \"position\": {\n        \"start\": 6,\n        \"end\": 11\n      },\n      \"quote\": {\n        \"exact\": \"world\",\n        \"prefix\": \"Hello \",\n        \"suffix\": \", this is a document.\\n\"\n      }\n    }\n  }\n}\n",
+        ".annox/synced/docs/paper.tex~01926d3a-0100-7000-8000-000000000000/document/01926d3a-0100-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0100-7000-8000-000000000000\",\n  \"document\": \"01926d3a-0100-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"document\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T15:00:00Z\",\n  \"path\": \"paper.tex\"\n}\n",
+        ".annox/synced/docs/paper.tex~01926d3a-0100-7000-8000-000000000000/01926d3a-0001-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0001-7000-8000-000000000000\",\n  \"annotation\": \"01926d3a-0001-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"create\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T14:00:00Z\",\n  \"kind\": \"comment\",\n  \"target\": {\n    \"path\": \"paper.tex\",\n    \"version\": \"sha256:066f0dd650a93335b6f09283c11769b9053c87a602e57091fc354aa6eb992fdd\",\n    \"selectors\": {\n      \"position\": {\n        \"start\": 6,\n        \"end\": 11\n      },\n      \"quote\": {\n        \"exact\": \"world\",\n        \"prefix\": \"Hello \",\n        \"suffix\": \", this is a document.\\n\"\n      }\n    }\n  }\n}\n",
+        ".annox/synced/docs/paper.tex~01926d3a-0100-7000-8000-000000000000/01926d3a-0002-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0002-7000-8000-000000000000\",\n  \"annotation\": \"01926d3a-0001-7000-8000-000000000000\",\n  \"after\": [\n    \"01926d3a-0001-7000-8000-000000000000\"\n  ],\n  \"type\": \"edit\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T14:05:00Z\",\n  \"body\": \"Edited.\"\n}\n",
+        ".annox/synced/docs/notes.md~01926d3a-0200-7000-8000-000000000000/document/01926d3a-0200-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0200-7000-8000-000000000000\",\n  \"document\": \"01926d3a-0200-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"document\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T15:00:00Z\",\n  \"path\": \"notes.md\"\n}\n",
+        ".annox/synced/docs/notes.md~01926d3a-0200-7000-8000-000000000000/01926d3a-0003-7000-8000-000000000000.json": "{\n  \"id\": \"01926d3a-0003-7000-8000-000000000000\",\n  \"annotation\": \"01926d3a-0003-7000-8000-000000000000\",\n  \"after\": [],\n  \"type\": \"create\",\n  \"author\": {\n    \"id\": \"mailto:ada@example.org\",\n    \"name\": \"Ada Lovelace\"\n  },\n  \"time\": \"2026-09-28T14:00:00Z\",\n  \"kind\": \"comment\",\n  \"target\": {\n    \"path\": \"notes.md\",\n    \"version\": \"sha256:066f0dd650a93335b6f09283c11769b9053c87a602e57091fc354aa6eb992fdd\",\n    \"selectors\": {\n      \"position\": {\n        \"start\": 6,\n        \"end\": 11\n      },\n      \"quote\": {\n        \"exact\": \"world\",\n        \"prefix\": \"Hello \",\n        \"suffix\": \", this is a document.\\n\"\n      }\n    }\n  }\n}\n"
+      },
+      "path": "paper.tex",
+      "expected": {
+        "documents": {
+          "01926d3a-0100-7000-8000-000000000000": {
+            "path": "paper.tex",
+            "mergedInto": null,
+            "conflicts": {}
+          },
+          "01926d3a-0200-7000-8000-000000000000": {
+            "path": "notes.md",
+            "mergedInto": null,
+            "conflicts": {}
+          }
+        },
+        "at": [
+          "01926d3a-0100-7000-8000-000000000000"
+        ],
+        "loaded": [
+          "01926d3a-0100-7000-8000-000000000000"
+        ],
+        "folders": [
+          "docs/paper.tex~01926d3a-0100-7000-8000-000000000000",
+          "synced/docs/paper.tex~01926d3a-0100-7000-8000-000000000000"
+        ],
+        "events": [
+          "01926d3a-0001-7000-8000-000000000000",
+          "01926d3a-0002-7000-8000-000000000000"
+        ],
+        "annotations": [
+          "01926d3a-0001-7000-8000-000000000000"
         ]
       }
     }

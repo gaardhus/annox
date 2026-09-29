@@ -8,7 +8,7 @@ use serde_json::{json, Map, Value};
 use crate::anchor;
 use crate::event::Event;
 use crate::replay;
-use crate::storage::{Area, Index, Workspace};
+use crate::storage::{folder_tree, Area, Index, Workspace};
 use crate::text::Text;
 
 fn area_prefix(area: Area) -> &'static str {
@@ -44,7 +44,7 @@ pub fn create_annotation(
     let at = index.documents_at(path);
     let area_of = |id: &str| {
         index.folders.get(id).map_or(Area::Shared, |folders| {
-            if folders.iter().any(|f| f.starts_with("docs/")) { Area::Shared } else { Area::Local }
+            if folders.iter().any(|f| !f.starts_with("local/")) { Area::Shared } else { Area::Local }
         })
     };
     let shared = at.iter().find(|d| area_of(d) == Area::Shared);
@@ -98,11 +98,12 @@ pub fn create_annotation(
 }
 
 /// The folder of document `doc` in `area`, named after its current path, or
-/// `fallback` if the document has no known path.
+/// `fallback` if the document has no known path. Never a folder of the sync
+/// mirror, which holds only events received from the hub (§5.12).
 fn folder_for(index: &Index, doc: &str, area: Area, fallback: &str) -> String {
     match index.documents.get(doc).and_then(|d| d.path.as_deref()) {
         Some(path) => format!("{}{path}~{doc}", area_prefix(area)),
-        None => fallback.to_owned(),
+        None => fallback.strip_prefix("synced/").unwrap_or(fallback).to_owned(),
     }
 }
 
@@ -228,10 +229,10 @@ pub fn move_document(ws: &Workspace, index: &Index, from: &str, to: &str, author
             fields: Map::from_iter([("path".into(), json!(to))]),
         };
         ws.write_event(&format!("{}{to}~{doc}/document", area_prefix(area)), &event)?;
-        // Tidy: move files from folders with other names (§5.6 step 2).
+        // Tidy: move files from folders with other names (§5.6 step 2),
+        // keeping each in its tree, so mirror copies stay out of git (§5.12).
         for folder in &index.folders[doc] {
-            let folder_area = if folder.starts_with("local/") { Area::Local } else { Area::Shared };
-            let new_folder = format!("{}{to}~{doc}", area_prefix(folder_area));
+            let new_folder = format!("{}{to}~{doc}", folder_tree(folder));
             if *folder == new_folder {
                 continue;
             }
@@ -281,10 +282,83 @@ pub fn append_event(
         fields,
     };
     let doc = index.canonical(&create_loc.document);
-    let folder = match index.documents.get(doc).and_then(|d| d.path.as_deref()) {
-        Some(path) => format!("{}{path}~{doc}", area_prefix(create_loc.area)),
-        None => create_loc.folder.clone(),
-    };
-    ws.write_event(&folder, &event)?;
+    ws.write_event(&folder_for(index, doc, create_loc.area, &create_loc.folder), &event)?;
     Ok(event)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A workspace whose `notes.md` record and comment arrived only through
+    /// sync, so they're only in the mirror (§5.12).
+    fn mirrored() -> (Workspace, String, String) {
+        let root = std::env::temp_dir().join(format!("annox-ops-{}", crate::new_id()));
+        let ws = Workspace::init(&root).unwrap();
+        let author = json!({ "id": "mailto:ada@example.org" });
+        let index = Index::read(&ws);
+        let text = Text::from_raw("Hello world.\n");
+        let new = NewAnnotation {
+            kind: "comment",
+            start: 6,
+            end: 11,
+            body: Some("Hi"),
+            label: None,
+            replacement: None,
+            local: false,
+        };
+        let comment = create_annotation(&ws, &index, "notes.md", &text, &new, &author).unwrap();
+        let annox = ws.root.join(".annox");
+        std::fs::create_dir_all(annox.join("synced")).unwrap();
+        std::fs::rename(annox.join("docs"), annox.join("synced/docs")).unwrap();
+        let doc = Index::read(&ws).documents_at("notes.md").remove(0);
+        (ws, doc, comment.id)
+    }
+
+    fn files(ws: &Workspace, tree: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut stack = vec![ws.root.join(".annox").join(tree)];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                if entry.path().is_dir() {
+                    stack.push(entry.path());
+                } else {
+                    let rel = entry.path().strip_prefix(ws.root.join(".annox")).unwrap().display().to_string();
+                    out.push(rel);
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn replies_to_mirrored_annotations_go_to_docs() {
+        let (ws, doc, comment) = mirrored();
+        let bob = json!({ "id": "mailto:bob@example.org" });
+        let reply = create_reply(&ws, &Index::read(&ws), &comment, "Yes", false, &bob).unwrap();
+        let resolved = append_event(&ws, &Index::read(&ws), &comment, "status", Map::new(), &bob).unwrap();
+        let mut expected = vec![
+            format!("docs/notes.md~{doc}/{}.json", reply.id),
+            format!("docs/notes.md~{doc}/{}.json", resolved.id),
+        ];
+        expected.sort();
+        assert_eq!(files(&ws, "docs"), expected);
+        let _ = std::fs::remove_dir_all(&ws.root);
+    }
+
+    #[test]
+    fn renames_keep_mirror_files_in_the_mirror() {
+        let (ws, doc, comment) = mirrored();
+        let bob = json!({ "id": "mailto:bob@example.org" });
+        move_document(&ws, &Index::read(&ws), "notes.md", "renamed.md", &bob).unwrap();
+        let synced = files(&ws, "synced/docs");
+        assert!(synced.contains(&format!("synced/docs/renamed.md~{doc}/{comment}.json")));
+        assert!(synced.contains(&format!("synced/docs/renamed.md~{doc}/document/{doc}.json")));
+        assert!(synced.iter().all(|f| f.contains("renamed.md~")));
+        // The move event is written by bob, so it goes to docs/.
+        assert_eq!(files(&ws, "docs").len(), 1);
+        assert_eq!(Index::read(&ws).documents_at("renamed.md"), vec![doc]);
+        let _ = std::fs::remove_dir_all(&ws.root);
+    }
 }

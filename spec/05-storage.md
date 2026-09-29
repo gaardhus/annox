@@ -16,7 +16,7 @@ Document paths (§3.1) are relative to the workspace root.
 <workspace root>/
   .annox/
     annox.json                          format marker (§5.3)
-    .gitignore                          contains "cache/" and "local/"
+    .gitignore                          contains "cache/", "local/", and "synced/"
     docs/
       paper.tex~0192f0c4-…/             folder of document 0192f0c4-… (§5.5)
         document/
@@ -30,6 +30,8 @@ Document paths (§3.1) are relative to the workspace root.
             0192f2b7-….json
           0192f2c3-….json
     local/                              local-only annotations, never shared (§5.11)
+      docs/…                            same layout as docs/ above
+    synced/                             events received from a sync hub, never committed (§5.12)
       docs/…                            same layout as docs/ above
     cache/                              optional, never shared (§5.9)
 ```
@@ -56,10 +58,10 @@ Every event, whether it belongs to an annotation (§2.3) or a document (§5.5.1)
 
 - The name is `<event id>.json`, where the id is the event's `id` in canonical lowercase form.
 - The content is one JSON object (RFC 8259): the event, encoded as UTF-8 without a byte order mark. Writers SHOULD pretty-print it with a trailing newline, so that diffs are readable.
-- Event files are immutable. A tool MUST NOT modify an event file after writing it. It MAY move the file only as this section allows: between folders of the same document in the same area (§5.6), from a merged duplicate to its survivor (§5.8), or from the local area to the shared one when publishing (§5.11).
+- Event files are immutable. A tool MUST NOT modify an event file after writing it. It MAY move the file only as this section allows: between folders of the same document in the same tree (§5.6), from a merged duplicate to its survivor (§5.8), or from the local area to the shared one when publishing (§5.11). The **trees** are `docs/`, `local/docs/`, and `synced/docs/`.
 - Writers MUST write atomically: first write to a temporary file in the same directory whose name doesn't end in `.json` (e.g. `.<event id>.json.tmp`), then rename it into place.
 
-Readers MUST ignore files whose names are not `<UUID>.json`. That includes temporary files, editor backups, and OS metadata files. If two files hold events with the same `id`, they are the same event. Readers use one of them and MAY report a mismatch if their contents differ. A file whose content isn't valid JSON, or whose `id` doesn't match its filename, MUST be ignored and SHOULD be reported.
+Readers MUST ignore files whose names are not `<UUID>.json`. That includes temporary files, editor backups, and OS metadata files. If two files hold events with the same `id`, they are the same event. Readers use one of them, preferring a copy outside the sync mirror (§5.12), and MAY report a mismatch if their contents differ. A file whose content isn't valid JSON, or whose `id` doesn't match its filename, MUST be ignored and SHOULD be reported.
 
 ## 5.5 Documents
 
@@ -93,7 +95,7 @@ The **current path** of a document is its `path` value. A document that isn't me
 
 ### 5.5.2 Document folders
 
-A **document folder** is a directory under `.annox/docs/` (the **shared area**) or `.annox/local/docs/` (the **local area**, §5.11) whose name ends in `~<document id>`. Its location mirrors a path: the shared folder for document *d* at path `ch2/intro.md` is `.annox/docs/ch2/intro.md~<d>/`.
+A **document folder** is a directory under `.annox/docs/` or `.annox/synced/docs/` (together, the **shared area**; the second is the sync mirror, §5.12) or under `.annox/local/docs/` (the **local area**, §5.11) whose name ends in `~<document id>`. Its location mirrors a path: the shared folder for document *d* at path `ch2/intro.md` is `.annox/docs/ch2/intro.md~<d>/`.
 
 - The folder's `document/` subdirectory holds document events (§5.5.1) for *d*.
 - The event files directly inside the folder are annotation events.
@@ -107,7 +109,7 @@ A document can have several folders, for example after a rename (§5.6) or when 
 A Client that renames a document, or detects a rename (for example from git), MUST, for every document at the old path:
 
 1. write a `move` event with the new path to the document's log, and then
-2. SHOULD move the document's folders to `<new path>~<id>`, merging their contents into any existing folder with that name.
+2. SHOULD move the document's folders to `<new path>~<id>` in the same tree, merging their contents into any existing folder with that name. Files in the sync mirror stay in the mirror, so that no one commits an event that someone else wrote (§5.12).
 
 Step 2 only keeps folder names readable. Correctness depends on the `move` event alone.
 
@@ -121,7 +123,7 @@ An event written by a branch that didn't have the rename lands in a folder with 
 
 To load the annotations of the file at path *P*:
 
-1. Find every document folder under `.annox/docs/` and `.annox/local/docs/` (§5.11), and group the folders by document id.
+1. Find every document folder under `.annox/docs/`, `.annox/local/docs/` (§5.11), and `.annox/synced/docs/` (§5.12), and group the folders by document id.
 2. For each document id, read the `document/` events from all of its folders, and derive `path` and `mergedInto` (§5.5.1).
 3. Let *R* be the set of documents at *P*. Let *S* be every document whose canonical document is in *R*. This includes merged duplicates.
 4. Read the annotation event files in every folder of every document in *S*, and derive each annotation's state (§2.5).
@@ -133,6 +135,7 @@ If *R* has more than one document, the file has **duplicate records** (§5.8). R
 - **New annotation on *P*.** If *R* is empty, the Client first creates a document record: a `document` event with `path` *P*, written to `.annox/docs/<P>~<id>/document/`. If *R* has one document, it is used. If *R* has several, the one with the smallest id is used, and the Client SHOULD merge the others (§5.8).
 - **Later events of an annotation** are written to a folder of the canonical document of the folder holding the annotation's `create` event, in the same area as the `create` event (§5.11). Writers SHOULD use the folder named after the document's current path, creating it if needed.
 - Writers MUST NOT store events of one annotation under different canonical documents. Moving an annotation to another document is not supported in v1.
+- Writers MUST NOT write events they create to the sync mirror (§5.12), even when the annotation's other events are only there. A reply to, or a change of, an annotation received from a hub goes to `docs/`.
 
 ### 5.7.3 Missing documents
 
@@ -143,17 +146,17 @@ If no file exists at a document's current path, its annotations are kept. Viewer
 Duplicate records happen when two branches each start annotating the same new file and both create a document record. Readers load them together (§5.7.1). A Client that finds duplicates at a path SHOULD merge them:
 
 1. Let *s* be the duplicate with the smallest id among the **shared** records, or among all of them if every record is local. A shared record is never merged into a local one, because others could never see the survivor.
-2. For every other duplicate *d*: move *d*'s annotation event files into *s*'s folders, keeping each file in its area. Shared files go to *s*'s shared folder, and local files to *s*'s local folder. Then write a `merged` event with `into: s` to *d*'s log.
+2. For every other duplicate *d*: move *d*'s annotation event files into *s*'s folders, keeping each file in its tree. Files in `docs/` go to *s*'s folder there, local files to *s*'s local folder, and mirror files to *s*'s mirror folder. Then write a `merged` event with `into: s` to *d*'s log.
 
 *d*'s folder, now holding only `document/`, stays in place. If an event from a branch without the merge later lands in *d*'s folder, it is still loaded through the redirect, and it can be tidied into *s*'s folder. Choosing the smallest id means two Clients merging concurrently choose the same survivor.
 
 ## 5.9 Cache
 
-`.annox/cache/` MAY hold anything a tool finds useful, such as derived state or a path-to-document index. Its contents MUST be derivable from the rest of `.annox/`, MUST NOT be shared, and MAY be deleted at any time. `.annox/.gitignore` MUST list `cache/` and `local/`.
+`.annox/cache/` MAY hold anything a tool finds useful, such as derived state or a path-to-document index. Its contents MUST be derivable from the rest of `.annox/`, MUST NOT be shared, and MAY be deleted at any time. `.annox/.gitignore` MUST list `cache/`, `local/`, and `synced/`. A tool that finds a line missing, for example in a workspace created by an older tool, SHOULD add it.
 
 ## 5.10 Version control
 
-`.annox/` is meant to be committed alongside the documents, except `cache/` and `local/`. Nothing in it needs special merge configuration. Annotations can also be shared live through a sync hub (§7). Sync and version control can be used together.
+`.annox/` is meant to be committed alongside the documents, except `cache/`, `local/`, and `synced/`. Nothing in it needs special merge configuration. Annotations can also be shared live through a sync hub (§7). Sync and version control can be used together: events received from the hub are kept out of `docs/` (§5.12), so each user commits the events they wrote.
 
 ## 5.11 Local-only annotations
 
@@ -166,6 +169,20 @@ Duplicate records happen when two branches each start annotating the same new fi
 - **Display.** Loading always includes the local area (§5.7.1). Clients MUST visibly distinguish local annotations from shared ones, and MUST offer a way to publish them. Viewers MAY hide local annotations from what they display.
 
 A rename (§5.6) writes `move` events to every document record at the old path, in whichever area each record lives.
+
+## 5.12 Sync mirror
+
+`.annox/synced/` holds the events a replica received from a sync hub (§7). `synced/docs/` has the same layout and rules as `docs/`, and belongs to the shared area: readers load it together with `docs/` (§5.7.1), and its events are shared events.
+
+The mirror exists because of how version control treats untracked files. Suppose a replica wrote a received event into `docs/`. Until the author's commit arrives, that file is untracked in the recipient's copy, and version control refuses to overwrite untracked files, even identical ones: git stops the pull with "untracked working tree files would be overwritten by merge". Ignored files don't block a pull. Keeping received events in an ignored mirror means that everything untracked in `docs/` was written by the local user, and a pull never collides with it.
+
+- A replica MUST write the events it receives from a hub to the mirror, and nowhere else (§7.5.1). It writes them even when `docs/` already has a copy, so the mirror keeps every event the hub sent.
+- Events a tool creates go to `docs/` or `local/docs/`, never to the mirror (§5.7.2).
+- Tools MUST NOT delete mirror files once `docs/` has a copy. The `docs/` copy can disappear again, for example when switching to a branch without the commit that added it, or when that commit is reverted. The replica's cursor (§7.4) is already past the event, so the hub wouldn't send it again.
+- Renames and duplicate merges keep mirror files in the mirror (§5.6, §5.8).
+- A tool MAY offer to copy an event from the mirror into `docs/`, for a user who wants to commit an event that its author never committed. The copy has the same id, so readers see one event (§5.4).
+
+An event is in version control only once someone commits it. An event that its author never commits stays on the hub and in the mirrors of those who received it. The hub also doesn't know about branches: an event written on one branch reaches synced replicas whatever branch they have checked out.
 
 Test vectors are in [`tests/storage.json`](tests/storage.json).
 
