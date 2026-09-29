@@ -64,6 +64,67 @@ vim.keymap.set("n", "<leader>aa", "<cmd>Annox accept<cr>")
 vim.keymap.set("x", "<leader>aa", ":Annox accept<cr>")
 ```
 
+With lazy.nvim, as in LazyVim, you can put the keymaps in the plugin spec instead. which-key shows each `desc` as the label, and the second spec names the `<leader>a` group and gives every key a Nerd Font icon. Set `lazy = false`, because a spec with `keys` otherwise loads only when you press one of them. Visual-mode keymaps use `:` rather than `<cmd>` so that the selection is passed as a range. Some LazyVim extras also use `<leader>a`, so pick another prefix if yours does.
+
+```lua
+return {
+  {
+    dir = "/path/to/annox/editors/nvim",
+    lazy = false,
+    opts = { cmd = { "/path/to/annox/target/release/annox", "lsp" } },
+    config = function(_, opts)
+      require("annox").setup(opts)
+    end,
+    keys = {
+      { "<leader>ac", ":Annox comment<cr>", mode = { "n", "x" }, desc = "Comment" },
+      { "<leader>ad", ":Annox draft<cr>", mode = { "n", "x" }, desc = "Draft comment" },
+      { "<leader>as", ":Annox suggest<cr>", mode = "x", desc = "Suggest replacement" },
+      { "<leader>aS", "<cmd>Annox suggesting<cr>", desc = "Toggle suggestion mode" },
+      { "<leader>ae", "<cmd>Annox edit<cr>", desc = "Edit annotation" },
+      { "<leader>at", "<cmd>Annox thread<cr>", desc = "Show thread" },
+      { "<leader>ar", "<cmd>Annox reply<cr>", desc = "Reply" },
+      { "<leader>aa", "<cmd>Annox accept<cr>", desc = "Accept suggestion" },
+      { "<leader>aa", ":Annox accept<cr>", mode = "x", desc = "Accept suggestions in selection" },
+      { "<leader>aA", "<cmd>Annox! accept<cr>", desc = "Accept all in buffer" },
+      { "<leader>ax", "<cmd>Annox reject<cr>", desc = "Reject suggestion" },
+      { "<leader>ax", ":Annox reject<cr>", mode = "x", desc = "Reject suggestions in selection" },
+      { "<leader>aR", "<cmd>Annox resolve<cr>", desc = "Resolve thread" },
+      { "<leader>ao", "<cmd>Annox reopen<cr>", desc = "Reopen thread" },
+      { "<leader>ap", "<cmd>Annox publish<cr>", desc = "Publish draft" },
+      { "<leader>al", "<cmd>Annox list<cr>", desc = "List in quickfix" },
+      { "<leader>ah", "<cmd>Annox history<cr>", desc = "History" },
+      { "<leader>aO", "<cmd>Annox orphans<cr>", desc = "Orphans" },
+      { "<leader>aC", "<cmd>Annox conflicts<cr>", desc = "Resolve conflicts" },
+    },
+  },
+  {
+    "folke/which-key.nvim",
+    opts = {
+      spec = {
+        { "<leader>a", group = "annox", icon = { icon = "\u{f086}", color = "green" }, mode = { "n", "x" } },
+        { "<leader>ac", icon = "\u{f0e5}", mode = { "n", "x" } },
+        { "<leader>ad", icon = "\u{f24a}", mode = { "n", "x" } },
+        { "<leader>as", icon = "\u{f040}", mode = "x" },
+        { "<leader>aS", icon = { icon = "\u{f205}", color = "green" } },
+        { "<leader>ae", icon = "\u{f044}" },
+        { "<leader>at", icon = "\u{f0e6}" },
+        { "<leader>ar", icon = "\u{f112}" },
+        { "<leader>aa", icon = { icon = "\u{f00c}", color = "green" }, mode = { "n", "x" } },
+        { "<leader>aA", icon = { icon = "\u{f058}", color = "green" } },
+        { "<leader>ax", icon = { icon = "\u{f00d}", color = "red" }, mode = { "n", "x" } },
+        { "<leader>aR", icon = "\u{f05d}" },
+        { "<leader>ao", icon = "\u{f0e2}" },
+        { "<leader>ap", icon = "\u{f1d8}" },
+        { "<leader>al", icon = "\u{f03a}" },
+        { "<leader>ah", icon = "\u{f1da}" },
+        { "<leader>aO", icon = { icon = "\u{f127}", color = "yellow" } },
+        { "<leader>aC", icon = { icon = "\u{f126}", color = "orange" } },
+      },
+    },
+  },
+}
+```
+
 ## Suggestion mode
 
 `:Annox suggesting` turns the buffer into suggestion mode, like "Suggesting" in online editors. You edit as usual, and each time you leave insert mode or finish a normal-mode change such as `dw`, your edits become suggestions and the buffer goes back to its original text. The file never contains suggested text, so saving is always safe.
