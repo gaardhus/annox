@@ -1,0 +1,3 @@
+# Match the existing style: wide lines, one-liners where they fit.
+max_width = 120
+use_small_heuristics = "Max"

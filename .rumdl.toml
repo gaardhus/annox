@@ -1,0 +1,11 @@
+[global]
+# Prose is written one paragraph per line.
+disable = [
+  "MD013",
+  # Spaces inside code spans can be meaningful, e.g. ` today`.
+  "MD038",
+]
+
+[per-file-ignores]
+# The README opens with a centered HTML header image.
+"README.md" = ["MD033", "MD041"]

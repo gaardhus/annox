@@ -1,0 +1,6 @@
+[default.extend-words]
+# Deliberate misspellings in examples and test fixtures.
+teh = "teh"
+tha = "tha"
+# Vim's :enew.
+enew = "enew"

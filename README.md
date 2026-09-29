@@ -34,7 +34,11 @@ Crates:
 ```sh
 cargo test               # unit, conformance, and end-to-end server tests
 cargo build --release    # produces target/release/annox
+just hooks               # install the git hooks (needs prek and just)
+just check               # run the checks CI runs
 ```
+
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat: …`, `fix(nvim): …`). A commit-msg hook and CI check them with [committed](https://github.com/crate-ci/committed) (see `committed.toml`). Releases are automated: merging to `main` opens a release PR that bumps versions and updates `CHANGELOG.md`, and merging that PR tags `vX.Y.Z` and attaches `annox` binaries to the GitHub release.
 
 The server implements:
 
