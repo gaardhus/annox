@@ -41,7 +41,7 @@ Every event has these fields:
 | `author` | Author | yes | Who made the change. |
 | `time` | Timestamp | yes | When the change was made. Informational only. |
 
-The remaining fields depend on `type`. Events are immutable. Once written, an event MUST NOT be modified or removed, except by a compaction mechanism defined later (see open questions).
+The remaining fields depend on `type`. Events are immutable. Once written, an event MUST NOT be modified or removed. v1 has no compaction ([D29](decisions.md#d29-no-compaction-in-v1-2026-09-29)).
 
 ## 2.4 Event types
 
@@ -96,6 +96,8 @@ Re-targets a stale suggestion (§4.2.1): the anchor and the replacement change t
 ### `delete` and `restore`
 
 `delete` marks an annotation as deleted. `restore` undoes that. Neither has extra fields. Deleted annotations are hidden by clients, but their events are kept.
+
+**Deleting hides, it doesn't erase.** A deleted annotation's content stays in its event files, and in version-control history. Clients SHOULD make this clear to users, for example with the wording "delete" rather than "erase". Actually erasing content means removing files by hand and rewriting history, which is outside this specification. Events from other copies that refer to removed files become dangling (§2.5.1).
 
 ### Invalid and unknown events
 
@@ -218,6 +220,4 @@ annox doesn't authenticate authors. Anyone who can write the files can write eve
 
 ## Open questions
 
-- **Compaction.** Logs only grow. Should a snapshot event be able to replace an annotation's history, and when is that safe if others haven't merged yet?
 - **Mentions.** Is `@person` in a body just Markdown text, or a structured reference to an author id?
-- **Privacy.** A deleted comment's text stays in the log, and in git history. Is that acceptable, or does `delete` need a way to purge content?

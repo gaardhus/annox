@@ -165,3 +165,15 @@ The server is a language server. It reuses LSP's transport, lifecycle, document 
 See §1.5 and §6.7.
 
 **Why:** this is how LSP works, and without it no thin plugin could conform.
+
+## D29. No compaction in v1 (2026-09-29)
+
+Event files are never removed or rewritten, and logs only grow. The cache (§5.9) is the only answer to load performance.
+
+**Why:** it keeps v1 small and removes any risk of losing events from branches that haven't been merged. The trade-off is a known cost: adding compaction later (for example snapshot events with a `covers` list) requires a `format` bump (§5.3), because v1 readers would treat events that point at compacted history as dangling.
+
+## D30. Deleting hides content; it doesn't erase it (2026-09-29)
+
+A `delete` event hides an annotation. Its content stays in the event files and in version-control history, and the spec says so explicitly. See §2.4.
+
+**Why:** version-control history keeps the content no matter what, so an erase feature that only purges the working tree would suggest more than it does. Honest documentation is simpler and safer.

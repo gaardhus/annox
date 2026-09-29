@@ -153,6 +153,6 @@ Test vectors are in [`tests/storage.json`](tests/storage.json).
 
 ## Open questions
 
-- **Scale.** A heavily annotated workspace can hold thousands of event files. Is a cache (§5.9) enough, or should compaction (§2 open questions) be defined at the storage level?
+- **Scale.** A heavily annotated workspace can hold thousands of event files, and v1 has no compaction (D29). Is a cache (§5.9) enough in practice?
 - **Local-only annotations.** Should there be a git-ignored area for private highlights and notes that are never shared?
 - **Case-insensitive filesystems.** Two documents whose paths differ only in case can't coexist on macOS or Windows. That limitation already applies to the documents themselves, but folder names inherit it.
