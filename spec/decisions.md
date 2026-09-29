@@ -189,3 +189,15 @@ Replicas connect to one sync hub per workspace. The hub numbers events in the or
 It has the same layout as `docs/`, and readers load both areas together. An annotation lives entirely in one area. Publishing moves the files, and local document records reuse the duplicate-merging mechanism when published. See §5.11.
 
 **Why:** it enables private highlights and draft reviews, like GitHub's pending reviews, while reusing the existing machinery. A `private` field on annotations was rejected, because committed files aren't private.
+
+## D33. No suggestion grouping; bulk accept by ids (2026-09-29)
+
+Suggestions stay independent in v1. `annox/acceptAll` takes a list of ids, enforces the bulk rule of §4.3 (steps 0–2 only, no overlaps), and applies everything as one edit. See §6.6.2.
+
+**Why:** grouping adds a field and partial-application semantics for little gain. Reviewers can still accept many suggestions at once, with a single undo.
+
+## D34. Anyone may re-target a stale suggestion, with attribution (2026-09-29)
+
+Any user may re-target a suggestion. Clients must show who did it (`retargetedBy`) next to the original author. See §4.2.1.
+
+**Why:** stale suggestions from authors who are away can be rescued without losing their thread, and the attribution keeps it clear who changed what.

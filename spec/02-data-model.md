@@ -173,7 +173,7 @@ The derived state of an annotation has this shape. It is used by the test vector
 ```
 
 - `author` and `created` come from the `create` event.
-- For suggestions, `replacement` appears as `edit.replacement`, and `appliedVersion` appears when `status` is `accepted`. For replies, `parent` is present and `target`, `label`, and `status` are omitted.
+- For suggestions, `replacement` appears as `edit.replacement`, and `appliedVersion` appears when `status` is `accepted`. `retargetedBy` is `{ author, time }` from the event that wrote the current `replacement` if that event is a `retarget`, and `null` otherwise (§4.2.1). For replies, `parent` is present and `target`, `label`, and `status` are omitted.
 - `conflicts` maps each conflicted field name to the ids of its competing events, sorted by ascending id. The field itself holds the provisional value.
 
 A reply whose parent is deleted, missing, or not a root SHOULD still be shown, for example under a placeholder thread.

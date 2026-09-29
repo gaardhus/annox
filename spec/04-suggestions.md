@@ -45,7 +45,7 @@ A suggestion covers exactly one range, and the edit forms follow from that:
 
 **Base version.** `target.version` is the suggestion's base version: the document version its anchor was last checked against.
 
-Related changes, such as renaming a term in several places, are expressed as several suggestions. v1 has no way to group them (see open questions).
+Related changes, such as renaming a term in several places, are expressed as several suggestions. v1 has no way to group them ([D33](decisions.md#d33-no-suggestion-grouping-bulk-accept-by-ids-2026-09-29)). A bulk accept takes a list of suggestions (§6.6.2).
 
 ## 4.2 Applicability
 
@@ -70,6 +70,8 @@ Applicability only matters while the suggestion is `open`. Clients SHOULD show s
 - A client MUST NOT rewrite the anchor of a suggestion after step 4 or after a confirmed suggested location (§3.7.4). Those rewrites change `quote.exact`, and the suggestion would silently become applicable to text its author never saw.
 
 A stale suggestion becomes applicable again only when a user **re-targets** it. That means updating the anchor and reviewing `replacement` in the same action, recorded as a `retarget` event (§2.4).
+
+Any user MAY re-target a suggestion, not only its author. That way a stale suggestion can be rescued, and its thread kept, when its author is unavailable. Clients MUST show who re-targeted it alongside the original author, e.g. "suggested by Ada, re-targeted by Bob" (`retargetedBy`, §2.5.6).
 
 ## 4.3 Applying
 
@@ -143,7 +145,3 @@ As shown in Section 3, we show that the bound is tight for all $n \geq 1$.
 
 Test vectors are in [`tests/suggestions.json`](tests/suggestions.json).
 
-## Open questions
-
-- **Grouping.** Should related suggestions, such as the same fix in several places, be linkable so they can be accepted together?
-- **Re-targeting by others.** Can anyone re-target a stale suggestion, or only its author? This is a user-interface convention like §4.4, but it may belong in §2.

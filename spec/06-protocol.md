@@ -148,6 +148,7 @@ Every request that changes something writes the corresponding events (§2.4), th
 | `annox/edit` | `{ annotation, body?, label? }` | `edit` event. |
 | `annox/setStatus` | `{ annotation, status }` | `status` event. Not for `accepted`: use `annox/accept`. |
 | `annox/accept` | `{ annotation }` | Applies the suggestion (below). |
+| `annox/acceptAll` | `{ annotations: Id[] }` | Bulk accept (below). Returns `{ results: ({ annotation, accepted: true } \| { annotation, error })[] }`. |
 | `annox/retarget` | `{ annotation, range, replacement }` | `retarget` event (§4.2.1). |
 | `annox/reattach` | `{ annotation, range }` | A user-confirmed location for an orphaned comment (§3.7.4): `reanchor` event. Suggestions use `annox/retarget` instead. |
 | `annox/delete`, `annox/restore` | `{ annotation }` | `delete` or `restore` event. |
@@ -164,6 +165,8 @@ Every request that changes something writes the corresponding events (§2.4), th
 3. only if the client reports `applied: true`, writes the `status` event, with `appliedVersion` set to the version of the buffer after the edit (§4.3.2).
 
 The client applies the edit to its buffer, so the user can undo it and save as usual. If the edit isn't applied, no event is written.
+
+**Bulk accept.** `annox/acceptAll` follows the rule in §4.3 for accepting several suggestions without showing each one. The server goes through `annotations` in the order given. It skips a suggestion, with an error in its result, if it is stale (`StaleSuggestion`), if it resolves only by step 3 (`NeedsReview`), or if its range overlaps one already chosen in this batch (`Overlap`). It then sends **one** `workspace/applyEdit` with all the chosen replacements, so a single undo reverts the whole batch. Only if that edit is applied does it write a `status` event for each chosen suggestion, all with the same `appliedVersion`.
 
 ### 6.6.3 Notifications (server → client)
 
@@ -186,6 +189,8 @@ Failed requests use JSON-RPC errors with these codes. They are outside the range
 | 1005 | `NoWorkspace` | The document isn't in an annox workspace, and the user declined to create one. |
 | 1006 | `UnsupportedFormat` | The workspace's `format` isn't supported (§5.3). |
 | 1007 | `EditNotApplied` | The client declined or failed the `workspace/applyEdit`. |
+| 1008 | `NeedsReview` | In a bulk accept: the suggestion resolves only by step 3 and must be accepted individually (§4.3). |
+| 1009 | `Overlap` | In a bulk accept: the suggestion's range overlaps one already chosen in the same batch. |
 
 ## 6.7 Conformance
 
@@ -195,4 +200,3 @@ Failed requests use JSON-RPC errors with these codes. They are outside the range
 
 ## Open questions
 
-- **Batching.** Should there be a bulk `annox/acceptAll` that follows §4.3's rule for accepting many suggestions at once?

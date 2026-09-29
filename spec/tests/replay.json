@@ -513,6 +513,7 @@
         "edit": {
           "replacement": "we show that"
         },
+        "retargetedBy": null,
         "deleted": false,
         "conflicts": {
           "status": [
@@ -1167,6 +1168,13 @@
         "edit": {
           "replacement": "we show"
         },
+        "retargetedBy": {
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z"
+        },
         "deleted": false,
         "conflicts": {}
       }
@@ -1298,6 +1306,13 @@
         "status": "open",
         "edit": {
           "replacement": "we argue"
+        },
+        "retargetedBy": {
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:03:00Z"
         },
         "deleted": false,
         "conflicts": {
@@ -1608,6 +1623,7 @@
         "edit": {
           "replacement": "we show that"
         },
+        "retargetedBy": null,
         "appliedVersion": "sha256:abababababababababababababababababababababababababababababababab",
         "deleted": false,
         "conflicts": {}
