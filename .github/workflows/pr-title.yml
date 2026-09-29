@@ -1,0 +1,20 @@
+name: PR title
+
+# PRs are squash-merged with their title as the commit message, so the title
+# must follow the same rules as commits (committed.toml).
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  title:
+    name: PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$TITLE" | pipx run committed==1.1.11 --commit-file -
