@@ -132,6 +132,9 @@ jobs:
           name="annox-$TAG-$TARGET"
           mkdir "$name"
           cp README.md LICENSE "$name/"
+          # The agent skill, which install.sh --skill installs.
+          mkdir "$name/skills"
+          cp -R skills/annox "$name/skills/"
           if [[ "$TARGET" == *windows* ]]; then
             cp "target/$TARGET/release/annox.exe" "$name/"
             7z a "$name.zip" "$name"
@@ -142,3 +145,21 @@ jobs:
             asset="$name.tar.gz"
           fi
           gh release upload "$TAG" "$asset" --clobber
+
+  # Checksums of every archive, which install.sh verifies against.
+  checksums:
+    name: Checksums
+    needs: [release, binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'annox-*' --dir dist
+          cd dist
+          sha256sum annox-* > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "$TAG" SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber
