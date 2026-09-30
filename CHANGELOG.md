@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/gaardhus/annox/compare/v0.3.0...v0.4.0) - 2026-09-30
+
+### Added
+
+- Add a showcase website with a live in-browser demo
+
+### Fixed
+
+- Improve lazy load for nvim editor plugin
+
+### Documentation
+
+- *(site)* Lead the headline with portable annotations
+
 ## [0.3.0](https://github.com/gaardhus/annox/compare/v0.2.0...v0.3.0) - 2026-09-29
 
 ### Added
