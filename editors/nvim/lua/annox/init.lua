@@ -1368,6 +1368,33 @@ function M.init(opts)
   vim.notify("annox: created a workspace in " .. root, vim.log.levels.INFO)
 end
 
+--- Waits until the server has attached to `bufnr` and pushed its annotations,
+--- which it may still be doing when a command runs right after the plugin is
+--- lazy-loaded. Starts the server if the workspace was created since the
+--- buffer was opened, as `annox init` from a shell does. Returns whether the
+--- buffer is ready, and says why not when it isn't.
+local function wait_ready(bufnr)
+  local function ready()
+    return client_for(bufnr) ~= nil and M.state[bufnr] ~= nil
+  end
+  if ready() then
+    return true
+  end
+  if not vim.fs.root(bufnr, { ".annox" }) then
+    vim.notify("annox: this file is not in an annox workspace; run :Annox init", vim.log.levels.WARN)
+    return false
+  end
+  if not client_for(bufnr) then
+    -- Only vim.lsp.enable's handler, which reuses a server that is starting.
+    vim.api.nvim_exec_autocmds("FileType", { group = "nvim.lsp.enable", buffer = bufnr })
+  end
+  if vim.wait(3000, ready, 10) then
+    return true
+  end
+  vim.notify("annox: the server did not attach to this buffer; see :checkhealth vim.lsp", vim.log.levels.WARN)
+  return false
+end
+
 local subcommands = {
   init = function()
     M.init()
@@ -1464,6 +1491,9 @@ function M.setup(opts)
     local fn = subcommands[o.fargs[1]]
     if not fn then
       return vim.notify("annox: unknown subcommand " .. tostring(o.fargs[1]), vim.log.levels.ERROR)
+    end
+    if o.fargs[1] ~= "init" and not wait_ready(vim.api.nvim_get_current_buf()) then
+      return
     end
     fn(o)
   end, {
