@@ -1,22 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="annox">
-  <!-- Document -->
-  <rect x="14" y="10" width="76" height="100" rx="10" fill="#ffffff" stroke="#1f2937" stroke-width="5"/>
+  <!-- White halo keeps the dark outline visible on dark backgrounds -->
+  <path d="M26 10 h44 l20 20 v74 a10 10 0 0 1 -10 10 h-54 a10 10 0 0 1 -10 -10 v-84 a10 10 0 0 1 10 -10 z"
+        fill="#ffffff" stroke="#ffffff" stroke-width="11" stroke-linejoin="round"/>
+  <!-- Document with folded corner -->
+  <path d="M26 10 h44 l20 20 v74 a10 10 0 0 1 -10 10 h-54 a10 10 0 0 1 -10 -10 v-84 a10 10 0 0 1 10 -10 z"
+        fill="#ffffff" stroke="#1f2937" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M70 10 v12 a8 8 0 0 0 8 8 h12" fill="none" stroke="#1f2937" stroke-width="5" stroke-linejoin="round"/>
   <!-- Highlighted span -->
-  <rect x="26" y="40" width="52" height="14" rx="3" fill="#facc15"/>
+  <rect x="25" y="82" width="54" height="16" rx="4" fill="#facc15"/>
   <!-- Text lines -->
   <g stroke="#9ca3af" stroke-width="5" stroke-linecap="round">
-    <line x1="30" y1="30" x2="74" y2="30"/>
-    <line x1="30" y1="47" x2="74" y2="47" stroke="#1f2937"/>
-    <line x1="30" y1="64" x2="62" y2="64"/>
-    <line x1="30" y1="80" x2="54" y2="80"/>
-    <line x1="30" y1="96" x2="48" y2="96"/>
+    <line x1="31" y1="33" x2="58" y2="33"/>
+    <line x1="31" y1="50" x2="54" y2="50"/>
+    <line x1="31" y1="67" x2="54" y2="67"/>
+    <line x1="31" y1="90" x2="73" y2="90" stroke="#1f2937"/>
   </g>
-  <!-- Comment bubble -->
-  <path d="M70 66 h40 a10 10 0 0 1 10 10 v20 a10 10 0 0 1 -10 10 h-22 l-12 11 v-11 h-6 a10 10 0 0 1 -10 -10 v-20 a10 10 0 0 1 10 -10 z"
+  <!-- Comment bubble, tail curving down to the highlight -->
+  <path d="M74 38 H108 a10 10 0 0 1 10 10 v12 a10 10 0 0 1 -10 10 H90 Q82 72 71 78 Q75 74 76 70 H74 a10 10 0 0 1 -10 -10 v-12 a10 10 0 0 1 10 -10 z"
+        fill="#ffffff" stroke="#ffffff" stroke-width="11" stroke-linejoin="round"/>
+  <path d="M74 38 H108 a10 10 0 0 1 10 10 v12 a10 10 0 0 1 -10 10 H90 Q82 72 71 78 Q75 74 76 70 H74 a10 10 0 0 1 -10 -10 v-12 a10 10 0 0 1 10 -10 z"
         fill="#6366f1" stroke="#1f2937" stroke-width="5" stroke-linejoin="round"/>
   <g fill="#ffffff">
-    <circle cx="78" cy="86" r="4"/>
-    <circle cx="90" cy="86" r="4"/>
-    <circle cx="102" cy="86" r="4"/>
+    <circle cx="79" cy="54" r="4"/>
+    <circle cx="91" cy="54" r="4"/>
+    <circle cx="103" cy="54" r="4"/>
   </g>
 </svg>
