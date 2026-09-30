@@ -93,7 +93,8 @@ h2 {
   font-size: clamp(2.4rem, 6vw, 4.4rem);
   line-height: 1.08;
   font-weight: 700;
-  max-width: 20ch;
+  max-width: 28ch;
+  text-wrap: balance;
 }
 /* The headline is itself highlighted, drawn once like a marker stroke. */
 .marked {
