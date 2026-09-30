@@ -9,4 +9,10 @@ publish.workspace = true
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
-uuid = { version = "1.26.1", features = ["v7"] }
+uuid = { version = "1.26.1", features = ["v7"], optional = true }
+
+[features]
+# Reading and writing `.annox/` on disk, and generating ids. Off for the
+# WebAssembly build (`annox-wasm`), which gets ids and time from JavaScript.
+default = ["fs"]
+fs = ["dep:uuid"]

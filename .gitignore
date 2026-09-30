@@ -1,1 +1,4 @@
 target/
+# Built by `just site`
+site/annox-demo/pkg/
+site/assets/

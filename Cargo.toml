@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/annox-core", "crates/annox-lsp", "crates/annox-sync"]
+members = ["crates/annox-core", "crates/annox-lsp", "crates/annox-sync", "crates/annox-wasm"]
 resolver = "2"
 
 [workspace.package]

@@ -42,6 +42,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "annox-wasm"
+version = "0.3.0"
+dependencies = [
+ "annox-core",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "anstream"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

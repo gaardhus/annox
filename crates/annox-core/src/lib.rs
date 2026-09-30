@@ -10,15 +10,19 @@
 //! - [`config`]: per-user configuration, outside any workspace
 
 pub mod anchor;
+#[cfg(feature = "fs")]
 pub mod config;
 pub mod event;
+#[cfg(feature = "fs")]
 pub mod ops;
 pub mod replay;
+#[cfg(feature = "fs")]
 pub mod storage;
 pub mod suggestion;
 pub mod text;
 
 /// A new event or document id: a UUIDv7 in canonical lowercase form (§2.1).
+#[cfg(feature = "fs")]
 pub fn new_id() -> String {
     uuid::Uuid::now_v7().to_string()
 }

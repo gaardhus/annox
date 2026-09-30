@@ -29,3 +29,12 @@ test:
 test-nvim:
     cargo build -p annox-lsp --locked
     for t in editors/nvim/tests/*.lua; do ANNOX_BIN="$PWD/target/debug/annox" nvim --headless --clean -l "$t" || exit 1; done
+
+# Build the website in site/: annox-core as WebAssembly, plus the logos.
+site:
+    wasm-pack build crates/annox-wasm --target web --no-typescript --no-pack --out-dir ../../site/annox-demo/pkg
+    mkdir -p site/assets && cp assets/*.svg site/assets/
+
+# Build the website and serve it on http://localhost:8000.
+serve-site: site
+    python3 -m http.server -d site 8000

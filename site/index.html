@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>annox: portable document annotations</title>
+    <meta
+      name="description"
+      content="An open standard for highlights, comments, and suggestions that live next to your documents and survive edits."
+    />
+    <link rel="icon" href="assets/annox.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="annox-demo/annox-demo.js"></script>
+  </head>
+  <body>
+    <header class="top wrap">
+      <a class="brand" href="./"
+        ><img src="assets/annox.svg" alt="" width="32" height="32" />annox</a
+      >
+      <nav>
+        <a href="https://github.com/gaardhus/annox/tree/main/spec">Spec</a>
+        <a href="https://github.com/gaardhus/annox/tree/main/editors/nvim"
+          >Neovim</a
+        >
+        <a href="https://github.com/gaardhus/annox">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero wrap">
+        <h1>
+          <span class="marked"
+            >Comments that stay put when the text moves.</span
+          >
+        </h1>
+        <p class="lede">
+          <b>annox</b> is an open format for highlights, comments, and suggested
+          edits. They're stored as plain files next to your document, so they
+          travel with it through git and keep their place while the text
+          changes. People and AI agents can review the same file, from any
+          editor or tool that supports the format.
+        </p>
+      </section>
+
+      <section class="demo wrap" aria-label="Live demo">
+        <div class="demo-bar">
+          <p>
+            This is annox-core running in your browser. Edit the text and watch
+            the notes follow it.
+          </p>
+          <div class="demo-actions">
+            <button id="rewrite">Rewrite the text for me</button>
+            <button id="reset">Reset</button>
+          </div>
+        </div>
+        <annox-demo id="demo" path="marginalia.md" author="You"></annox-demo>
+      </section>
+
+      <section class="points wrap">
+        <div>
+          <h2>Plain files, not a service</h2>
+          <p>
+            Every change is one immutable JSON event in <code>.annox/</code>.
+            Commit it with the document. Merges don't conflict, because nothing
+            is ever rewritten.
+          </p>
+        </div>
+        <div>
+          <h2>Anchors that survive edits</h2>
+          <p>
+            Each note stores its position and the quoted text with some context.
+            When the document changes, a fixed search finds it again, or reports
+            it as orphaned instead of guessing.
+          </p>
+        </div>
+        <div>
+          <h2>One server, any editor</h2>
+          <p>
+            Like LSP, <code>annox lsp</code> does the work once. Plain LSP
+            editors get diagnostics and code actions. The Neovim plugin covers
+            the full workflow.
+          </p>
+        </div>
+      </section>
+
+      <section class="use wrap">
+        <div>
+          <h2>Install</h2>
+          <p>
+            Linux and macOS. Add <code>--skill</code> to also install the agent
+            skill.
+          </p>
+          <pre><code>curl -fsSL https://raw.githubusercontent.com/gaardhus/annox/main/install.sh | sh</code></pre>
+        </div>
+        <div>
+          <h2>From scripts and agents</h2>
+          <p>
+            The CLI targets text by quoting it, so an agent can review a file
+            without counting characters.
+          </p>
+          <pre><code>annox comment paper.md --quote "the bound is tight" --body "Cite Lemma 4?"
+annox suggest paper.md --quote "teh" --replace "the" --body "typo"
+annox accept ID</code></pre>
+        </div>
+      </section>
+    </main>
+
+    <footer class="wrap">
+      <p>
+        annox is MIT licensed. The spec is at version 0.1, a first draft, so
+        expect changes before 1.0.
+      </p>
+    </footer>
+
+    <script type="module">
+      const demo = document.getElementById("demo");
+      const text = `# On marginalia
+
+Readers have written in the margins for as long as there have been margins. Medieval scribes left complaints about the cold, students glossed their textbooks, and Fermat famously noted a proof that the margin was too narrow to contain.
+
+The trouble with digital margins is that they are rarely portable. A comment made in one editor is trapped there, tied to a file format or an account, and it tends to fall off as soon as teh text around it changes.
+
+A good annotation should behave like a pencil mark: it belongs to the document, travels with it, and stays next to the words it was about.
+`;
+      const ada = { id: "mailto:ada@example.org", name: "Ada Lovelace" };
+      const agent = { id: "urn:agent:claude", name: "Claude" };
+
+      demo.text = text;
+      demo.annotations = [
+        {
+          kind: "comment",
+          quote: "Fermat famously noted a proof",
+          body: "Worth a citation? The note is in his copy of Diophantus.",
+          author: ada,
+          replies: [
+            {
+              author: agent,
+              body: "Arithmetica, 1637. Published by his son in 1670.",
+            },
+          ],
+        },
+        {
+          kind: "suggestion",
+          quote: "teh",
+          replacement: "the",
+          body: "Typo.",
+          author: agent,
+        },
+        {
+          kind: "suggestion",
+          quote: "it tends to fall off",
+          replacement: "it comes loose",
+          author: ada,
+        },
+      ];
+
+      // An edit that moves one note, and removes the text another was about.
+      document.getElementById("rewrite").addEventListener("click", () => {
+        demo.text = demo.text
+          .replace(
+            "Readers have written in the margins",
+            "For centuries, readers have scribbled in the margins",
+          )
+          .replace(
+            "and Fermat famously",
+            "and the mathematician Pierre de Fermat famously",
+          )
+          .replace(
+            ", and it tends to fall off as soon as",
+            ". Edit it, and it breaks as soon as",
+          );
+      });
+      document
+        .getElementById("reset")
+        .addEventListener("click", () => demo.reset());
+    </script>
+  </body>
+</html>
