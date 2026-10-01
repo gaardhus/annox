@@ -105,7 +105,7 @@ local function first_line(text)
 end
 
 local function highlight_group(a)
-  if next(a.conflicts or {}) then
+  if type(a.conflicts) == "table" and next(a.conflicts) then
     return "AnnoxConflict"
   elseif a["local"] then
     return "AnnoxLocal"
@@ -665,30 +665,37 @@ M.resolve = bulk_status_action("comment", "resolved", "Resolve")
 
 local function thread_lines(a)
   local lines = {}
+  local function str(v)
+    return type(v) == "string" and v or ""
+  end
   local function person(x)
     local author = x.author or {}
     return string.format("**%s** · %s", author.name or author.id or "unknown", x.created or "")
   end
   if a.kind == "suggestion" then
     local stale = a.applicable and "" or " (stale)"
-    table.insert(lines, string.format("**Suggestion%s:** → `%s`", stale, a.edit and a.edit.replacement or ""))
-    local by = a.retargetedBy and a.retargetedBy.author
-    if by and by.id ~= (a.author or {}).id then
+    table.insert(
+      lines,
+      string.format("**Suggestion%s:** → `%s`", stale, type(a.edit) == "table" and str(a.edit.replacement) or "")
+    )
+    -- LSP decodes JSON null as vim.NIL, which is truthy.
+    local by = type(a.retargetedBy) == "table" and a.retargetedBy.author
+    if type(by) == "table" and by.id ~= (a.author or {}).id then
       table.insert(lines, string.format("_re-targeted by %s_", by.name or by.id))
     end
     table.insert(lines, "")
   end
-  if next(a.conflicts or {}) then
+  if type(a.conflicts) == "table" and next(a.conflicts) then
     table.insert(lines, "⚠ **Conflicting changes:** " .. table.concat(vim.tbl_keys(a.conflicts), ", "))
     table.insert(lines, "")
   end
   table.insert(lines, person(a) .. (a.status ~= "open" and ("  _" .. a.status .. "_") or ""))
-  vim.list_extend(lines, vim.split(a.body or "", "\n"))
+  vim.list_extend(lines, vim.split(str(a.body), "\n"))
   for _, r in ipairs(a.replies or {}) do
     -- The markdown float expands a thematic break into a full-width rule.
     table.insert(lines, "---")
     table.insert(lines, person(r))
-    vim.list_extend(lines, vim.split(r.body or "", "\n"))
+    vim.list_extend(lines, vim.split(str(r.body), "\n"))
   end
   return lines
 end
