@@ -1,8 +1,8 @@
 #!/bin/sh
 # Installs the `annox` binary from a GitHub release, and optionally the agent skill.
 #
-#   curl -fsSL https://raw.githubusercontent.com/gaardhus/annox/main/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/gaardhus/annox/main/install.sh | sh -s -- --skill
+#   curl -fsSL https://gaardhus.github.io/annox/install.sh | sh
+#   curl -fsSL https://gaardhus.github.io/annox/install.sh | sh -s -- --skill
 #
 # Options (or environment variables):
 #   --version vX.Y.Z   ANNOX_VERSION      release to install (default: the latest)

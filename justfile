@@ -44,10 +44,11 @@ vsix:
 code-install:
     code --install-extension "editors/vscode/annox-$(node -p "require('./editors/vscode/package.json').version").vsix"
 
-# Build the website in site/: annox-core as WebAssembly, plus the logos.
+# Build the website in site/: annox-core as WebAssembly, the logos, and install.sh.
 site:
     wasm-pack build crates/annox-wasm --target web --no-typescript --no-pack --out-dir ../../site/annox-demo/pkg
     mkdir -p site/assets && cp assets/*.svg site/assets/
+    cp install.sh site/install.sh
 
 # Build the website and serve it on http://localhost:8000.
 serve-site: site

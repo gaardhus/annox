@@ -35,8 +35,8 @@ Crates:
 Install the latest `annox` binary on Linux or macOS (Apple silicon) into `~/.local/bin`. Add `--skill` to also install the [agent skill](#agents), and see `--help` for the version and directories. It verifies the download against the release's `SHA256SUMS`. On Windows, download the `.zip` from the [releases](https://github.com/gaardhus/annox/releases).
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/gaardhus/annox/main/install.sh | sh
-curl -fsSL https://raw.githubusercontent.com/gaardhus/annox/main/install.sh | sh -s -- --skill
+curl -fsSL https://gaardhus.github.io/annox/install.sh | sh
+curl -fsSL https://gaardhus.github.io/annox/install.sh | sh -s -- --skill
 ```
 
 Later, `annox update` installs the newest release over the binary you run it from, and also updates the skill if it's installed. Pass `--version vX.Y.Z` to pick a release.

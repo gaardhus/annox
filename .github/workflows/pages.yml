@@ -9,6 +9,7 @@ on:
     paths:
       - site/**
       - assets/**
+      - install.sh
       - crates/annox-core/**
       - crates/annox-wasm/**
       - .github/workflows/pages.yml
