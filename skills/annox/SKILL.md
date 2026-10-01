@@ -56,7 +56,8 @@ annox delete ID / annox restore ID
 ## How to work
 
 - **Suggest, don't edit, when the user owns the text.** For prose, papers, and docs under review, make suggestions instead of editing the file. Edit the file directly only if the user asks you to.
-- **Keep each suggestion small and self-contained.** Make one suggestion per logical change, quoting only the text that changes plus enough around it to be unique. Then the user can accept some and reject others. Don't rewrite a whole paragraph to fix one word.
+- **Make one suggestion per logical change.** Then the user can accept some and reject others. Split unrelated fixes in the same sentence or paragraph into separate suggestions.
+- **Quote as little as possible.** Quote only the words that change, plus a word or two on either side if that's needed to make the quote unique. annox records the surrounding text itself, so you don't need extra context to keep the suggestion anchored. Start short: if the quote isn't unique, the command fails and lists the matching lines, and only then do you lengthen it. The user sees unchanged text in the quote as deleted and re-added, which hides the actual change. To fix one word, quote a few words, not the sentence. To change one sentence, quote that sentence, not the paragraph.
 - **Say why** in `--body` whenever the reason isn't obvious from the change.
 - **Use comments for questions and for problems you can't fix yourself.** Use suggestions for concrete replacement text.
 - **Answer review comments in their thread.** When the user asks you to address comments, run `annox list`, then handle each one. Either make the change (as a suggestion, or as a direct edit if asked) and `reply` saying what you did, or `reply` explaining why not. Resolve a comment (`annox status ID resolved`) only when you've fully addressed it and it's addressed to you.
