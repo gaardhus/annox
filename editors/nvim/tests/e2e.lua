@@ -81,7 +81,20 @@ check(#highlighted == 2, "expected 2 highlighted ranges, got " .. #highlighted)
 
 -- Thread lookup under the cursor.
 vim.api.nvim_win_set_cursor(0, { 2, 3 })
-annox.reply({ body = "Section 3." })
+-- The thread stays visible while the reply is typed, and closes afterwards.
+local function floats()
+  return vim.tbl_filter(function(w)
+    return vim.api.nvim_win_get_config(w).relative ~= ""
+  end, vim.api.nvim_list_wins())
+end
+local input = vim.ui.input
+vim.ui.input = function(_, on_confirm)
+  check(#floats() == 1, "expected the thread float during reply input")
+  on_confirm("Section 3.")
+end
+annox.reply()
+vim.ui.input = input
+check(#floats() == 0, "thread float should close after reply input")
 wait("reply", function()
   for _, a in ipairs(annotations()) do
     if a.id == comment.id then

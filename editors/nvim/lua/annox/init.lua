@@ -473,13 +473,40 @@ function M.suggest(opts)
   end)
 end
 
---- Replies to the thread under the cursor. opts: { annotation?, body? }
+local thread_lines
+
+local function find_annotation(bufnr, id)
+  for _, a in ipairs((M.state[bufnr] or {}).annotations or {}) do
+    if a.id == id then
+      return a
+    end
+  end
+end
+
+--- Replies to the thread under the cursor, showing the thread while the reply
+--- is typed. opts: { annotation?, body? }
 function M.reply(opts)
   opts = opts or {}
   local bufnr = vim.api.nvim_get_current_buf()
   with_annotation(opts, nil, function(id)
-    with_input(opts.body, "Reply: ", nil, function(body)
+    local send = function(body)
       request(bufnr, "annox/reply", { parent = id, body = body })
+    end
+    local a = find_annotation(bufnr, id)
+    if opts.body or not a then
+      return with_input(opts.body, "Reply: ", nil, send)
+    end
+    local _, win = vim.lsp.util.open_floating_preview(thread_lines(a), "markdown", { border = "rounded" })
+    -- The preview closes when its buffer is left; keep it up while the
+    -- input (often a float of its own) has focus.
+    pcall(vim.api.nvim_del_augroup_by_name, "nvim.preview_window_" .. win)
+    vim.ui.input({ prompt = "Reply: " }, function(body)
+      if vim.api.nvim_win_is_valid(win) then
+        vim.api.nvim_win_close(win, true)
+      end
+      if body and body ~= "" then
+        send(body)
+      end
     end)
   end)
 end
@@ -663,7 +690,7 @@ end
 M.reject = bulk_status_action("suggestion", "rejected", "Reject")
 M.resolve = bulk_status_action("comment", "resolved", "Resolve")
 
-local function thread_lines(a)
+function thread_lines(a)
   local lines = {}
   local function str(v)
     return type(v) == "string" and v or ""
@@ -703,11 +730,9 @@ end
 --- Shows the thread under the cursor in a floating window.
 function M.thread(opts)
   with_annotation(opts or {}, nil, function(id)
-    local bufnr = vim.api.nvim_get_current_buf()
-    for _, a in ipairs(M.state[bufnr].annotations) do
-      if a.id == id then
-        vim.lsp.util.open_floating_preview(thread_lines(a), "markdown", { border = "rounded", focus_id = "annox" })
-      end
+    local a = find_annotation(vim.api.nvim_get_current_buf(), id)
+    if a then
+      vim.lsp.util.open_floating_preview(thread_lines(a), "markdown", { border = "rounded", focus_id = "annox" })
     end
   end)
 end
