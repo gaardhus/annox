@@ -88,9 +88,13 @@ jobs:
       - name: Install through irm | iex, adding to PATH
         run: |
           $env:ANNOX_INSTALL_DIR = "$env:RUNNER_TEMP\iex"
+          $env:ANNOX_SKILL = '1'
           Get-Content -Raw ./install.ps1 | Invoke-Expression
           annox --version
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          foreach ($d in '.claude', '.agents') {
+            if (-not (Test-Path "$HOME\$d\skills\annox\SKILL.md")) { throw "skill not installed in ~\$d\skills" }
+          }
 
   nvim:
     name: Neovim ${{ matrix.neovim }}

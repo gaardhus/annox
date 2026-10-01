@@ -11,7 +11,7 @@ Use the `annox` CLI through the shell. Every command prints JSON. If the `annox`
 
 ## Identity
 
-Write as yourself, not as the user, so your annotations are distinguishable from theirs. Set this once per shell command, or export it:
+Write as yourself, not as the user, so your annotations are distinguishable from theirs. Use `urn:agent:` followed by your harness's name in lowercase, and the same id every time, so all your annotations share one author: `urn:agent:claude` for Claude Code, `urn:agent:codex`, `urn:agent:gemini`, `urn:agent:copilot`, `urn:agent:cursor`, `urn:agent:opencode`. Set it once per shell command, or export it:
 
 ```sh
 export ANNOX_AUTHOR=urn:agent:claude ANNOX_AUTHOR_NAME=Claude

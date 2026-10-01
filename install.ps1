@@ -6,8 +6,9 @@
 # Options (or environment variables, which also apply through a plain `irm | iex`):
 #   -Version vX.Y.Z   ANNOX_VERSION             release to install (default: the latest)
 #   -Dir DIR          ANNOX_INSTALL_DIR         where to put `annox.exe` (default: ~\.local\bin)
-#   -Skill            ANNOX_SKILL=1             also install the skill for Claude Code
-#   -SkillDir DIR     ANNOX_SKILL_DIR           where skills go (default: ~\.claude\skills)
+#   -Skill            ANNOX_SKILL=1             also install the agent skill, in ~\.claude\skills for
+#                                               Claude Code and ~\.agents\skills for other agents
+#   -SkillDir DIR     ANNOX_SKILL_DIR           install the skill only in DIR
 #   -NoModifyPath     ANNOX_NO_MODIFY_PATH=1    don't add the install directory to the user PATH
 
 param(
@@ -90,11 +91,22 @@ function Install-Annox {
     if ($Skill) {
       $src = Join-Path $tmp "$name\skills\annox"
       if (-not (Test-Path $src)) { throw "annox: $Version has no skill in its release archive" }
-      New-Item -ItemType Directory -Force -Path $SkillDir | Out-Null
-      $dest = Join-Path $SkillDir 'annox'
-      if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
-      Copy-Item -Recurse $src $dest
-      Say "installed the skill in $dest"
+      $targets = if ($SkillDir) {
+        @(@{ Dir = $SkillDir; For = '' })
+      } else {
+        # Claude Code reads only its own directory; most other agents read the shared one.
+        @(
+          @{ Dir = Join-Path $HOME '.claude\skills'; For = ' (Claude Code)' },
+          @{ Dir = Join-Path $HOME '.agents\skills'; For = ' (Codex, Gemini CLI, Copilot CLI, Cursor, OpenCode, ...)' }
+        )
+      }
+      foreach ($t in $targets) {
+        New-Item -ItemType Directory -Force -Path $t.Dir | Out-Null
+        $dest = Join-Path $t.Dir 'annox'
+        if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+        Copy-Item -Recurse $src $dest
+        Say "installed the skill in $dest$($t.For)"
+      }
     }
   } finally {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
@@ -129,8 +141,9 @@ Usage: install.ps1 [-Version vX.Y.Z] [-Dir DIR] [-Skill] [-SkillDir DIR] [-NoMod
 
   -Version vX.Y.Z  release to install (default: the latest; or ANNOX_VERSION)
   -Dir DIR         where to put `annox.exe` (default: ~\.local\bin; or ANNOX_INSTALL_DIR)
-  -Skill           also install the skill for Claude Code (or ANNOX_SKILL=1)
-  -SkillDir DIR    where skills go (default: ~\.claude\skills; or ANNOX_SKILL_DIR)
+  -Skill           also install the agent skill, in ~\.claude\skills for Claude Code
+                   and ~\.agents\skills for other agents (or ANNOX_SKILL=1)
+  -SkillDir DIR    install the skill only in DIR (or ANNOX_SKILL_DIR)
   -NoModifyPath    don't add the install directory to the user PATH (or ANNOX_NO_MODIFY_PATH=1)
 '@
   return
@@ -140,5 +153,5 @@ Install-Annox `
   -Version $Version `
   -Dir $(if ($Dir) { $Dir } else { Join-Path $HOME '.local\bin' }) `
   -Skill ($Skill -or $env:ANNOX_SKILL -eq '1') `
-  -SkillDir $(if ($SkillDir) { $SkillDir } else { Join-Path $HOME '.claude\skills' }) `
+  -SkillDir $SkillDir `
   -NoModifyPath ($NoModifyPath -or $env:ANNOX_NO_MODIFY_PATH -eq '1')
