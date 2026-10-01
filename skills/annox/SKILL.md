@@ -26,6 +26,7 @@ annox list                  # open annotations in every document
 annox list paper.md         # one file
 annox list --all            # also resolved, accepted, rejected, withdrawn, deleted
 annox show ID               # one annotation and its thread
+annox report --json         # counts per document: open, closed, orphaned, stale
 ```
 
 Filter instead of reading everything. Filters combine:

@@ -7,9 +7,10 @@ use lsp_server::Connection;
 
 /// Review comments and suggested edits, stored next to your files in `.annox/`.
 ///
-/// The annotation commands print JSON. Their write commands take --author and
-/// --name, or read ANNOX_AUTHOR and ANNOX_AUTHOR_NAME, then the author in
-/// ~/.config/annox/config.json, and otherwise use git's identity.
+/// The annotation commands print JSON, except `report` without --json. Their
+/// write commands take --author and --name, or read ANNOX_AUTHOR and
+/// ANNOX_AUTHOR_NAME, then the author in ~/.config/annox/config.json, and
+/// otherwise use git's identity.
 #[derive(Parser)]
 #[command(name = "annox", version, arg_required_else_help = true)]
 struct Cli {
@@ -80,16 +81,23 @@ fn main() -> anyhow::Result<()> {
             annox_lsp::mcp::serve(std::io::stdin().lock(), std::io::stdout().lock(), &config)?;
             Ok(())
         }
-        Command::Annotations(command) => match annox_lsp::cli::execute(command, &std::env::current_dir()?) {
-            Ok(output) => {
-                println!("{}", serde_json::to_string_pretty(&output)?);
-                Ok(())
+        Command::Annotations(command) => {
+            let text = matches!(command, annox_lsp::cli::Command::Report { json: false, .. });
+            match annox_lsp::cli::execute(command, &std::env::current_dir()?) {
+                Ok(output) if text => {
+                    print!("{}", annox_lsp::cli::render_report(&output));
+                    Ok(())
+                }
+                Ok(output) => {
+                    println!("{}", serde_json::to_string_pretty(&output)?);
+                    Ok(())
+                }
+                Err(e) => {
+                    eprintln!("annox: {e:#}");
+                    std::process::exit(1);
+                }
             }
-            Err(e) => {
-                eprintln!("annox: {e:#}");
-                std::process::exit(1);
-            }
-        },
+        }
         Command::Update { version } => update(version),
     }
 }

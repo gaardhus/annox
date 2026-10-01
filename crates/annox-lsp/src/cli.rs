@@ -35,6 +35,14 @@ pub enum Command {
         #[command(flatten)]
         filter: Filter,
     },
+    /// Summarize the annotations of FILE, or of every document, one line per document
+    Report {
+        /// A document in the workspace
+        file: Option<String>,
+        /// Print JSON instead of text
+        #[arg(long)]
+        json: bool,
+    },
     /// Print one annotation and its thread as JSON
     Show {
         /// The annotation's id, as printed by `annox list`; a reply's shows its thread
@@ -241,6 +249,7 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
             Ok(json!({ "root": ws.root }))
         }
         Command::List { file, all, filter } => list(file.as_deref(), all, filter, &cwd),
+        Command::Report { file, json: _ } => report(file.as_deref(), &cwd),
         Command::Show { id } => show(&id, &cwd),
         Command::Comment { file, at, body, meta, author } => {
             create(&file, &at, None, Some(&body), &meta, &author, &cwd)
@@ -478,6 +487,82 @@ impl Filter {
 /// Whether a listed annotation needs `retarget` or `reattach`.
 fn is_broken(view: &Value) -> bool {
     view["status"] == "open" && (view["resolution"] == "orphaned" || view["applicable"] == json!(false))
+}
+
+/// Counts of each document's annotations, without deleted ones. A missing
+/// document's open annotations count as orphaned (§5.10).
+fn report(file: Option<&str>, cwd: &Path) -> anyhow::Result<Value> {
+    let ws = Workspace::find(cwd).ok_or_else(|| no_workspace(cwd))?;
+    let views = list(file, true, Filter::default(), cwd)?;
+    let mut documents: Vec<Value> = Vec::new();
+    for view in views.as_array().into_iter().flatten().filter(|v| v["deleted"] != json!(true)) {
+        let path = view["path"].as_str().unwrap_or_default();
+        if documents.last().is_none_or(|d| d["path"] != path) {
+            documents.push(json!({
+                "path": path,
+                "missing": !ws.root.join(path).is_file(),
+                "comments": { "open": 0, "resolved": 0 },
+                "suggestions": { "open": 0, "accepted": 0, "rejected": 0, "withdrawn": 0 },
+                "orphaned": 0,
+                "stale": 0,
+                "conflicted": 0,
+            }));
+        }
+        let doc = documents.last_mut().expect("pushed above");
+        let missing = doc["missing"] == json!(true);
+        let bump = |count: &mut Value| *count = json!(count.as_u64().unwrap_or(0) + 1);
+        let (kind, status) = (view["kind"].as_str().unwrap_or_default(), view["status"].as_str().unwrap_or_default());
+        bump(&mut doc[format!("{kind}s")][status]);
+        if view["status"] == "open" {
+            if missing || view["resolution"] == "orphaned" {
+                bump(&mut doc["orphaned"]);
+            } else if view["applicable"] == json!(false) {
+                bump(&mut doc["stale"]);
+            }
+        }
+        if view.get("conflicts").is_some() {
+            bump(&mut doc["conflicted"]);
+        }
+    }
+    Ok(json!({ "documents": documents }))
+}
+
+/// `report`'s output as text, one line per document.
+pub fn render_report(report: &Value) -> String {
+    let documents = report["documents"].as_array().map_or(&[][..], Vec::as_slice);
+    if documents.is_empty() {
+        return "no annotations\n".into();
+    }
+    let count = |v: &Value| v.as_u64().unwrap_or(0);
+    let plural = |n: u64, what: &str| format!("{n} {what}{}", if n == 1 { "" } else { "s" });
+    let width = documents.iter().map(|d| d["path"].as_str().unwrap_or_default().chars().count()).max().unwrap_or(0);
+    let mut out = String::new();
+    for doc in documents {
+        let comments = &doc["comments"];
+        let suggestions = &doc["suggestions"];
+        let closed = count(&comments["resolved"])
+            + ["accepted", "rejected", "withdrawn"].iter().map(|s| count(&suggestions[s])).sum::<u64>();
+        let mut parts = Vec::new();
+        if doc["missing"] == json!(true) {
+            parts.push("file missing".to_owned());
+        }
+        for (n, what) in [(count(&comments["open"]), "open comment"), (count(&suggestions["open"]), "open suggestion")]
+        {
+            if n > 0 {
+                parts.push(plural(n, what));
+            }
+        }
+        for what in ["orphaned", "stale", "conflicted"] {
+            if count(&doc[what]) > 0 {
+                parts.push(format!("{} {what}", count(&doc[what])));
+            }
+        }
+        if closed > 0 {
+            parts.push(format!("{closed} closed"));
+        }
+        out.push_str(&format!("{:width$}  {}\n", doc["path"].as_str().unwrap_or_default(), parts.join(" · ")));
+    }
+    out
 }
 
 fn show(id: &str, cwd: &Path) -> anyhow::Result<Value> {

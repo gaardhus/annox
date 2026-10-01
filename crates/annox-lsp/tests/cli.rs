@@ -16,7 +16,7 @@ fn setup(doc: &str) -> tempfile::TempDir {
 
 fn try_annox(cwd: &Path, args: &[&str]) -> anyhow::Result<Value> {
     let mut args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    if !matches!(args[0].as_str(), "init" | "list" | "show") {
+    if !matches!(args[0].as_str(), "init" | "list" | "show" | "report") {
         args.extend(["--author".into(), "urn:test:agent".into(), "--name".into(), "Agent".into()]);
     }
     cli::run(&args, cwd)
@@ -238,4 +238,35 @@ fn init_local_keeps_the_workspace_out_of_git() {
     annox(dir.path(), &["init", "--local"]);
     let ignore = std::fs::read_to_string(dir.path().join(".annox/.gitignore")).unwrap();
     assert_eq!(ignore.lines().filter(|l| *l == "*").count(), 1);
+}
+
+#[test]
+fn report_counts_each_document() {
+    let dir = setup(DOC);
+    std::fs::write(dir.path().join("notes.md"), "Some notes.\n").unwrap();
+    let c = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "Section 3", "--body", "Which?"]));
+    annox(dir.path(), &["comment", "paper.md", "--quote", "prove", "--body", "x"]);
+    annox(dir.path(), &["suggest", "paper.md", "--quote", "teh", "--replace", "the"]);
+    annox(dir.path(), &["status", &c, "resolved"]);
+    let gone = id(&annox(dir.path(), &["comment", "notes.md", "--quote", "notes", "--body", "y"]));
+    annox(dir.path(), &["comment", "notes.md", "--quote", "Some", "--body", "z"]);
+    annox(dir.path(), &["delete", &gone]);
+    std::fs::remove_file(dir.path().join("notes.md")).unwrap();
+
+    let report = annox(dir.path(), &["report"]);
+    let docs = report["documents"].as_array().unwrap();
+    assert_eq!(docs.len(), 2);
+    let (notes, paper) = (&docs[0], &docs[1]);
+    assert_eq!((&notes["path"], &notes["missing"], &notes["orphaned"]), (&"notes.md".into(), &true.into(), &1.into()));
+    assert_eq!(notes["comments"]["open"], 1, "deleted annotations aren't counted");
+    assert_eq!((&paper["comments"]["open"], &paper["comments"]["resolved"]), (&1.into(), &1.into()));
+    assert_eq!((&paper["suggestions"]["open"], &paper["stale"]), (&1.into(), &0.into()));
+    assert_eq!(annox(dir.path(), &["report", "paper.md"])["documents"].as_array().unwrap().len(), 1);
+
+    let text = cli::render_report(&report);
+    assert_eq!(
+        text,
+        "notes.md  file missing · 1 open comment · 1 orphaned\npaper.md  1 open comment · 1 open suggestion · 1 closed\n"
+    );
+    assert_eq!(cli::render_report(&serde_json::json!({ "documents": [] })), "no annotations\n");
 }

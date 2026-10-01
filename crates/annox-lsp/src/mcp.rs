@@ -67,6 +67,14 @@ const TOOLS: &[Tool] = &[
         read_only: true,
     },
     Tool {
+        name: "report",
+        command: "report",
+        description: "Count each document's annotations: open comments and suggestions by status, and how many are orphaned, stale (can't be applied) or conflicted. A cheap overview before listing. Without `file`, covers every document in the workspace.",
+        positional: &["file"],
+        params: &[("file", "string", false, "Only this file.")],
+        read_only: true,
+    },
+    Tool {
         name: "show_annotation",
         command: "show",
         description: "Show one annotation and its thread, in the same form as list_annotations. Given a reply's id, shows its thread.",
