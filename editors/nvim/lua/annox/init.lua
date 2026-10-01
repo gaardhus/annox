@@ -77,6 +77,12 @@ local function set_highlights()
   end
   local removed = vim.api.nvim_get_hl(0, { name = "Removed", link = false })
   vim.api.nvim_set_hl(0, "AnnoxDeletion", { default = true, strikethrough = true, fg = removed.fg })
+  -- A suggestion's lines in the thread's diff block: plain text over the diff
+  -- background, instead of the code block's color.
+  local text = vim.api.nvim_get_hl(0, { name = "NormalFloat", link = false }).fg
+    or vim.api.nvim_get_hl(0, { name = "Normal", link = false }).fg
+  vim.api.nvim_set_hl(0, "AnnoxThreadDeletion", { default = true, fg = text })
+  vim.api.nvim_set_hl(0, "AnnoxThreadInsertion", { default = true, fg = text })
   -- Suggestion mode tints the number column and cursor line toward "Added".
   local added = vim.api.nvim_get_hl(0, { name = "Added", link = false }).fg
   vim.api.nvim_set_hl(0, "AnnoxSuggestingCursorLineNr", { default = true, link = "Added" })
@@ -473,7 +479,7 @@ function M.suggest(opts)
   end)
 end
 
-local thread_lines
+local thread_lines, open_thread
 
 local function find_annotation(bufnr, id)
   for _, a in ipairs((M.state[bufnr] or {}).annotations or {}) do
@@ -496,7 +502,7 @@ function M.reply(opts)
     if opts.body or not a then
       return with_input(opts.body, "Reply: ", nil, send)
     end
-    local _, win = vim.lsp.util.open_floating_preview(thread_lines(a), "markdown", { border = "rounded" })
+    local _, win = open_thread(a, bufnr)
     -- The preview closes when its buffer is left; keep it up while the
     -- input (often a float of its own) has focus.
     pcall(vim.api.nvim_del_augroup_by_name, "nvim.preview_window_" .. win)
@@ -690,7 +696,28 @@ end
 M.reject = bulk_status_action("suggestion", "rejected", "Reject")
 M.resolve = bulk_status_action("comment", "resolved", "Resolve")
 
-function thread_lines(a)
+--- A change as a fenced `diff` block, so the old text shows red and the new
+--- text green, like the server's hover.
+local function diff_block(old, new)
+  local longest = 2
+  for run in (old .. "\n" .. new):gmatch("`+") do
+    longest = math.max(longest, #run)
+  end
+  local fence = string.rep("`", longest + 1)
+  local lines = { fence .. "diff" }
+  for _, change in ipairs({ { "- ", old }, { "+ ", new } }) do
+    if change[2] ~= "" then
+      for _, line in ipairs(vim.split(change[2], "\n")) do
+        table.insert(lines, change[1] .. line)
+      end
+    end
+  end
+  table.insert(lines, fence)
+  return lines
+end
+
+--- The thread as markdown lines. A suggestion's old text is read from `bufnr`.
+function thread_lines(a, bufnr)
   local lines = {}
   local function str(v)
     return type(v) == "string" and v or ""
@@ -701,10 +728,24 @@ function thread_lines(a)
   end
   if a.kind == "suggestion" then
     local stale = a.applicable and "" or " (stale)"
-    table.insert(
-      lines,
-      string.format("**Suggestion%s:** → `%s`", stale, type(a.edit) == "table" and str(a.edit.replacement) or "")
-    )
+    table.insert(lines, string.format("**Suggestion%s:**", stale))
+    local old = ""
+    local r = type(a.resolution) == "table" and a.resolution.range
+    local client = bufnr and client_for(bufnr)
+    if type(r) == "table" and client then
+      local enc = client.offset_encoding
+      local ok, text = pcall(
+        vim.api.nvim_buf_get_text,
+        bufnr,
+        r.start.line,
+        byte_col(bufnr, r.start, enc),
+        r["end"].line,
+        byte_col(bufnr, r["end"], enc),
+        {}
+      )
+      old = ok and table.concat(text, "\n") or ""
+    end
+    vim.list_extend(lines, diff_block(old, type(a.edit) == "table" and str(a.edit.replacement) or ""))
     -- LSP decodes JSON null as vim.NIL, which is truthy.
     local by = type(a.retargetedBy) == "table" and a.retargetedBy.author
     if type(by) == "table" and by.id ~= (a.author or {}).id then
@@ -727,12 +768,40 @@ function thread_lines(a)
   return lines
 end
 
+--- Opens `a`'s thread in a floating window.
+function open_thread(a, bufnr, opts)
+  local fbuf, win = vim.lsp.util.open_floating_preview(
+    thread_lines(a, bufnr),
+    "markdown",
+    vim.tbl_extend("force", { border = "rounded" }, opts or {})
+  )
+  -- The diff colors only the background; the code block's own text color
+  -- would show through, so the changed lines get theirs.
+  local groups = { ["-"] = "AnnoxThreadDeletion", ["+"] = "AnnoxThreadInsertion" }
+  local fence
+  for i, line in ipairs(vim.api.nvim_buf_get_lines(fbuf, 0, -1, false)) do
+    if fence then
+      if line == fence then
+        break
+      end
+      local group = groups[line:sub(1, 1)]
+      if group then
+        vim.api.nvim_buf_set_extmark(fbuf, ns, i - 1, 0, { end_col = #line, hl_group = group, priority = 200 })
+      end
+    else
+      fence = line:match("^(```+)diff$")
+    end
+  end
+  return fbuf, win
+end
+
 --- Shows the thread under the cursor in a floating window.
 function M.thread(opts)
   with_annotation(opts or {}, nil, function(id)
-    local a = find_annotation(vim.api.nvim_get_current_buf(), id)
+    local bufnr = vim.api.nvim_get_current_buf()
+    local a = find_annotation(bufnr, id)
     if a then
-      vim.lsp.util.open_floating_preview(thread_lines(a), "markdown", { border = "rounded", focus_id = "annox" })
+      open_thread(a, bufnr, { focus_id = "annox" })
     end
   end)
 end
@@ -748,7 +817,7 @@ function M.orphans()
   end
   vim.ui.select(orphans, { prompt = "Orphaned annotations", format_item = describe }, function(a)
     if a then
-      vim.lsp.util.open_floating_preview(thread_lines(a), "markdown", { border = "rounded" })
+      open_thread(a, bufnr)
     end
   end)
 end

@@ -103,6 +103,21 @@ wait("reply", function()
   end
 end)
 
+-- A suggestion's thread shows the change as a diff block.
+annox.thread({ annotation = suggestion.id })
+check(#floats() == 1, "expected the suggestion thread float")
+local shown = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(floats()[1]), 0, -1, false), "\n")
+check(shown:find("```diff\n- we prove that\n+ we show that\n```", 1, true), "diff block: " .. shown)
+local groups = {}
+for _, m in ipairs(vim.api.nvim_buf_get_extmarks(vim.api.nvim_win_get_buf(floats()[1]), -1, 0, -1, { details = true })) do
+  groups[#groups + 1] = m[4].hl_group
+end
+check(
+  vim.tbl_contains(groups, "AnnoxThreadDeletion") and vim.tbl_contains(groups, "AnnoxThreadInsertion"),
+  "diff lines get their text color: " .. vim.inspect(groups)
+)
+vim.api.nvim_win_close(floats()[1], true)
+
 -- Accept: the server's workspace/applyEdit edits the buffer.
 annox.accept({ annotation = suggestion.id })
 wait("accepted edit in buffer", function()
