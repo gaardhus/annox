@@ -685,7 +685,8 @@ local function thread_lines(a)
   table.insert(lines, person(a) .. (a.status ~= "open" and ("  _" .. a.status .. "_") or ""))
   vim.list_extend(lines, vim.split(a.body or "", "\n"))
   for _, r in ipairs(a.replies or {}) do
-    table.insert(lines, "")
+    -- The markdown float expands a thematic break into a full-width rule.
+    table.insert(lines, "---")
     table.insert(lines, person(r))
     vim.list_extend(lines, vim.split(r.body or "", "\n"))
   end
