@@ -86,3 +86,27 @@ jobs:
             nvim --headless --clean -l "$t"
             echo "::endgroup::"
           done
+
+  vscode:
+    name: VS Code
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.9.2
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm run test:unit
+      - run: cargo build -p annox-lsp --locked
+      - name: Run extension tests
+        env:
+          ANNOX_BIN: ${{ github.workspace }}/target/debug/annox
+        run: xvfb-run -a npm run test:e2e
