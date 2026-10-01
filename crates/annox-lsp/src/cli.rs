@@ -29,6 +29,13 @@ pub enum Command {
         /// Also list resolved, accepted, rejected, withdrawn and deleted annotations
         #[arg(long)]
         all: bool,
+        #[command(flatten)]
+        filter: Filter,
+    },
+    /// Print one annotation and its thread as JSON
+    Show {
+        /// The annotation's id, as printed by `annox list`; a reply's shows its thread
+        id: String,
     },
     /// Comment on a quote in FILE
     Comment {
@@ -151,6 +158,34 @@ pub struct Quote {
     occurrence: Option<usize>,
 }
 
+/// Which annotations `list` prints. Filters combine with AND.
+#[derive(clap::Args, Debug, Default)]
+#[command(next_help_heading = "Filters")]
+pub struct Filter {
+    /// Only comments or only suggestions
+    #[arg(long, value_name = "KIND", value_parser = ["comment", "suggestion"])]
+    kind: Option<String>,
+    /// Only these statuses (repeatable or comma-separated) [default: open, or any with --all]
+    #[arg(long, value_name = "S", value_delimiter = ',',
+          value_parser = ["open", "resolved", "accepted", "rejected", "withdrawn"])]
+    status: Vec<String>,
+    /// Only annotations by this author id (repeatable)
+    #[arg(long, value_name = "ID")]
+    author: Vec<String>,
+    /// Skip annotations by this author id (repeatable)
+    #[arg(long, value_name = "ID")]
+    not_author: Vec<String>,
+    /// Only your own annotations (the identity write commands use)
+    #[arg(long, conflicts_with = "others")]
+    mine: bool,
+    /// Skip your own annotations (the identity write commands use)
+    #[arg(long)]
+    others: bool,
+    /// Only open annotations that need fixing: orphaned, or suggestions that can't be applied
+    #[arg(long)]
+    broken: bool,
+}
+
 /// Options of a new comment or suggestion.
 #[derive(clap::Args, Debug)]
 pub struct Meta {
@@ -199,7 +234,8 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
             let ws = Workspace::init(&dir)?;
             Ok(json!({ "root": ws.root }))
         }
-        Command::List { file, all } => list(file.as_deref(), all, &cwd),
+        Command::List { file, all, filter } => list(file.as_deref(), all, filter, &cwd),
+        Command::Show { id } => show(&id, &cwd),
         Command::Comment { file, at, body, meta, author } => {
             create(&file, &at, None, Some(&body), &meta, &author, &cwd)
         }
@@ -376,7 +412,7 @@ fn create(
     Ok(json!({ "id": event.id, "path": rel, "line": line_of(&text, start) }))
 }
 
-fn list(file: Option<&str>, all: bool, cwd: &Path) -> anyhow::Result<Value> {
+fn list(file: Option<&str>, all: bool, mut filter: Filter, cwd: &Path) -> anyhow::Result<Value> {
     let (ws, paths) = match file {
         Some(file) => {
             let (ws, rel, _) = open_file(cwd, file)?;
@@ -390,44 +426,87 @@ fn list(file: Option<&str>, all: bool, cwd: &Path) -> anyhow::Result<Value> {
             (ws, paths)
         }
     };
+    if filter.mine || filter.others {
+        let me = author(&Author { author: None, name: None }, &ws)?;
+        let me = me["id"].as_str().ok_or_else(|| anyhow!("no identity: set ANNOX_AUTHOR or pass --author ID"))?;
+        if filter.mine { &mut filter.author } else { &mut filter.not_author }.push(me.to_owned());
+    }
     let index = Index::read(&ws);
     let mut out = Vec::new();
     for path in paths {
         let text = std::fs::read_to_string(ws.root.join(&path)).ok().map(|raw| Text::from_raw(&raw));
         let states = index.load(&path).derive();
-        let mut replies: Vec<&Value> = states.values().filter(|s| s["kind"] == "reply").collect();
         for (id, state) in &states {
             if state["kind"] == "reply" {
                 continue;
             }
             let closed = state["status"] != "open";
             let deleted = state["deleted"] != json!(false);
-            if !all && (closed || deleted) {
+            let status_ok = if filter.status.is_empty() {
+                all || !closed
+            } else {
+                filter.status.iter().any(|s| state["status"] == json!(s))
+            };
+            if !status_ok || (deleted && !all) || !filter.matches_state(state) {
                 continue;
             }
-            let area = index.events.get(id).map_or(Area::Shared, |(_, loc)| loc.area);
-            let thread: Vec<Value> = replies
-                .iter()
-                .filter(|r| r["parent"] == json!(id) && (all || r["deleted"] == json!(false)))
-                .map(|r| json!({ "id": r["id"], "author": r["author"], "created": r["created"], "body": r["body"] }))
-                .collect();
-            replies.retain(|r| r["parent"] != json!(id));
-            out.push(item(id, state, &path, text.as_ref(), closed, area, thread));
+            let view = item(id, state, &path, text.as_ref(), &states, &index, all);
+            if !filter.broken || is_broken(&view) {
+                out.push(view);
+            }
         }
     }
     Ok(Value::Array(out))
 }
 
-/// One root annotation as listed: where it is now, and its thread.
+impl Filter {
+    /// The filters that depend only on the annotation's state.
+    fn matches_state(&self, state: &Value) -> bool {
+        let author = state["author"]["id"].as_str().unwrap_or_default();
+        self.kind.as_ref().is_none_or(|k| state["kind"] == json!(k))
+            && (self.author.is_empty() || self.author.iter().any(|a| a == author))
+            && !self.not_author.iter().any(|a| a == author)
+    }
+}
+
+/// Whether a listed annotation needs `retarget` or `reattach`.
+fn is_broken(view: &Value) -> bool {
+    view["status"] == "open" && (view["resolution"] == "orphaned" || view["applicable"] == json!(false))
+}
+
+fn show(id: &str, cwd: &Path) -> anyhow::Result<Value> {
+    let (ws, index) = open_workspace(cwd)?;
+    let state = derived(&index, id)?;
+    let id = match state["kind"].as_str() {
+        Some("reply") => state["parent"].as_str().unwrap_or_default().to_owned(),
+        _ => id.to_owned(),
+    };
+    let path = document_path(&index, &id)?;
+    let text = std::fs::read_to_string(ws.root.join(&path)).ok().map(|raw| Text::from_raw(&raw));
+    let states = index.load(&path).derive();
+    let state = states.get(&id).ok_or_else(|| anyhow!("unknown annotation {id}"))?;
+    Ok(item(&id, state, &path, text.as_ref(), &states, &index, true))
+}
+
+/// One root annotation as listed: where it is now, and its thread, with
+/// deleted replies only when `deleted_replies`.
 fn item(
     id: &str,
     state: &Value,
     path: &str,
     text: Option<&Text>,
-    closed: bool,
-    area: Area,
-    replies: Vec<Value>,
+    states: &std::collections::BTreeMap<String, Value>,
+    index: &Index,
+    deleted_replies: bool,
 ) -> Value {
+    let closed = state["status"] != "open";
+    let area = index.events.get(id).map_or(Area::Shared, |(_, loc)| loc.area);
+    let replies: Vec<Value> = states
+        .values()
+        .filter(|r| r["kind"] == "reply" && r["parent"] == json!(id))
+        .filter(|r| deleted_replies || r["deleted"] == json!(false))
+        .map(|r| json!({ "id": r["id"], "author": r["author"], "created": r["created"], "body": r["body"] }))
+        .collect();
     let target: Option<Anchor> = serde_json::from_value(state["target"].clone()).ok();
     let quote = target.as_ref().map(|t| t.selectors.quote.exact.clone());
     let mut view = json!({

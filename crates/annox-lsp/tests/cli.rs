@@ -16,7 +16,7 @@ fn setup(doc: &str) -> tempfile::TempDir {
 
 fn try_annox(cwd: &Path, args: &[&str]) -> anyhow::Result<Value> {
     let mut args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    if !matches!(args[0].as_str(), "init" | "list") {
+    if !matches!(args[0].as_str(), "init" | "list" | "show") {
         args.extend(["--author".into(), "urn:test:agent".into(), "--name".into(), "Agent".into()]);
     }
     cli::run(&args, cwd)
@@ -176,4 +176,50 @@ fn restore_undoes_delete() {
     assert_eq!(annox(dir.path(), &["list"]), serde_json::json!([]));
     annox(dir.path(), &["restore", &c]);
     assert_eq!(annox(dir.path(), &["list"])[0]["id"], c.as_str());
+}
+
+#[test]
+fn list_filters() {
+    let dir = setup(DOC);
+    let ids = |args: &[&str]| -> Vec<String> {
+        let mut ids: Vec<String> = annox(dir.path(), args).as_array().unwrap().iter().map(id).collect();
+        ids.sort();
+        ids
+    };
+    let sorted = |mut v: Vec<String>| {
+        v.sort();
+        v
+    };
+    let c = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "Section 3", "--body", "Which?"]));
+    let s = id(&annox(dir.path(), &["suggest", "paper.md", "--quote", "teh", "--replace", "the"]));
+    let args = ["comment", "paper.md", "--quote", "prove", "--body", "x", "--author", "urn:test:user"];
+    let theirs = id(&cli::run(&args.map(String::from), dir.path()).unwrap());
+    assert_eq!(ids(&["list", "--kind", "suggestion"]), vec![s.clone()]);
+    assert_eq!(ids(&["list", "--kind", "comment"]), sorted(vec![c.clone(), theirs.clone()]));
+    assert_eq!(ids(&["list", "--author", "urn:test:agent", "--kind", "comment"]), vec![c.clone()]);
+    assert_eq!(ids(&["list", "--not-author", "urn:test:agent"]), vec![theirs.clone()]);
+    assert_eq!(ids(&["list", "--author", "urn:test:user", "--author", "urn:test:agent", "--kind", "comment"]).len(), 2);
+    annox(dir.path(), &["delete", &theirs]);
+    assert!(error(dir.path(), &["list", "--kind", "reply"]).contains("invalid value"));
+
+    annox(dir.path(), &["status", &c, "resolved"]);
+    assert_eq!(ids(&["list", "--status", "resolved"]), vec![c.clone()]);
+    assert_eq!(ids(&["list", "--status", "open,resolved"]), sorted(vec![c.clone(), s.clone()]));
+
+    assert_eq!(ids(&["list", "--broken"]), Vec::<String>::new());
+    std::fs::write(dir.path().join("paper.md"), "Nothing here.\n").unwrap();
+    assert_eq!(ids(&["list", "--broken"]), vec![s.clone()]);
+    assert!(!ids(&["list", "--broken", "--all"]).contains(&c), "closed annotations aren't broken");
+}
+
+#[test]
+fn show_prints_one_thread() {
+    let dir = setup(DOC);
+    let c = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "Section 3", "--body", "Which?"]));
+    let r = id(&annox(dir.path(), &["reply", &c, "--body", "The third."]));
+    annox(dir.path(), &["status", &c, "resolved"]);
+    let shown = annox(dir.path(), &["show", &c]);
+    assert_eq!((&shown["status"], &shown["replies"][0]["body"]), (&"resolved".into(), &"The third.".into()));
+    assert_eq!(annox(dir.path(), &["show", &r]), shown, "a reply shows its thread");
+    assert!(error(dir.path(), &["show", "nope"]).contains("unknown annotation"));
 }

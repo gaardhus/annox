@@ -25,7 +25,20 @@ The MCP server may already be started with an identity; then you don't need to s
 annox list                  # open annotations in every document
 annox list paper.md         # one file
 annox list --all            # also resolved, accepted, rejected, withdrawn, deleted
+annox show ID               # one annotation and its thread
 ```
+
+Filter instead of reading everything. Filters combine:
+
+```sh
+annox list --kind comment --others   # review comments from other people
+annox list --mine --kind suggestion  # your own suggestions
+annox list --broken                  # orphaned, or suggestions that can't be applied
+annox list --status resolved         # only these statuses (comma-separated)
+annox list --author ID / --not-author ID
+```
+
+`--mine` and `--others` use your identity (see above).
 
 Each entry has `id`, `path`, `kind` (`comment` or `suggestion`), `status`, `author`, `body`, `quote` (the text it's attached to, as it reads now), `line`, `resolution`, and `replies`. Suggestions also have `replacement` and `applicable`.
 
@@ -60,10 +73,10 @@ annox delete ID / annox restore ID
 - **Quote as little as possible.** Quote only the words that change, plus a word or two on either side if that's needed to make the quote unique. annox records the surrounding text itself, so you don't need extra context to keep the suggestion anchored. Start short: if the quote isn't unique, the command fails and lists the matching lines, and only then do you lengthen it. The user sees unchanged text in the quote as deleted and re-added, which hides the actual change. To fix one word, quote a few words, not the sentence. To change one sentence, quote that sentence, not the paragraph.
 - **Say why** in `--body` whenever the reason isn't obvious from the change.
 - **Use comments for questions and for problems you can't fix yourself.** Use suggestions for concrete replacement text.
-- **Answer review comments in their thread.** When the user asks you to address comments, run `annox list`, then handle each one. Either make the change (as a suggestion, or as a direct edit if asked) and `reply` saying what you did, or `reply` explaining why not. Resolve a comment (`annox status ID resolved`) only when you've fully addressed it and it's addressed to you.
+- **Answer review comments in their thread.** When the user asks you to address comments, run `annox list --kind comment --others`, then handle each one. Either make the change (as a suggestion, or as a direct edit if asked) and `reply` saying what you did, or `reply` explaining why not. Resolve a comment (`annox status ID resolved`) only when you've fully addressed it and it's addressed to you.
 - **Don't accept suggestions unless the user asks you to.** `annox accept ID` writes the change into the file and is final. If it says the suggestion was relocated, check the text at the reported line before passing `--confirmed`.
 - **Don't change other people's annotations.** Don't edit, withdraw, or delete them. Reply instead.
-- **Suggestions you make go stale if you then edit the same text yourself.** Finish your direct edits first, or retarget your suggestions afterwards.
+- **Suggestions you make go stale if you then edit the same text yourself.** Finish your direct edits first, or check `annox list --mine --broken` afterwards and retarget what it lists.
 
 ## Setup
 

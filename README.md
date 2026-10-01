@@ -63,7 +63,8 @@ Edits always go through `workspace/applyEdit`, and the status event is written o
 The `annox` binary also reads and writes annotations directly, printing JSON. It's meant for scripts and AI agents: text is targeted by quoting it, not by offsets, and an ambiguous quote is an error that lists where it occurs.
 
 ```sh
-annox list [FILE] [--all]
+annox list [FILE] [--all] [--kind K] [--status S] [--mine | --others] [--broken]
+annox show ID
 annox comment paper.md --quote "the bound is tight" --body "Cite Lemma 4?"
 annox suggest paper.md --quote "teh" --replace "the" --body "typo"
 annox reply ID --body "Fixed."

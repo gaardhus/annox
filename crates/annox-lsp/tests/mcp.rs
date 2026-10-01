@@ -96,3 +96,34 @@ fn errors_are_tool_results() {
     }
     assert_eq!(responses[3]["error"]["code"], -32602);
 }
+
+#[test]
+fn list_filters_and_show() {
+    let (dir, config) = setup();
+    let created = exchange(
+        &config,
+        &[
+            call(1, "suggest", json!({ "file": "paper.md", "quote": "teh", "replacement": "the" })),
+            call(2, "comment", json!({ "file": "paper.md", "quote": "bound", "body": "Which?" })),
+        ],
+    );
+    let s = output(&created[0])["id"].clone();
+    let c = output(&created[1])["id"].clone();
+    let other = Config { root: dir.path().to_owned(), author: Some("urn:test:user".into()), name: None };
+    let responses = exchange(
+        &other,
+        &[
+            call(1, "list_annotations", json!({ "kind": "suggestion" })),
+            call(2, "list_annotations", json!({ "mine": true })),
+            call(3, "list_annotations", json!({ "others": true, "kind": "comment" })),
+            call(4, "list_annotations", json!({ "not_author": "urn:test:agent", "status": "open,resolved" })),
+            call(5, "show_annotation", json!({ "id": c })),
+        ],
+    );
+    let ids = |r: &Value| output(r).as_array().unwrap().iter().map(|a| a["id"].clone()).collect::<Vec<_>>();
+    assert_eq!(ids(&responses[0]), vec![s]);
+    assert_eq!(ids(&responses[1]), Vec::<Value>::new(), "`mine` is the server's identity");
+    assert_eq!(ids(&responses[2]), vec![c.clone()]);
+    assert_eq!(ids(&responses[3]), Vec::<Value>::new());
+    assert_eq!(output(&responses[4])["body"], "Which?");
+}

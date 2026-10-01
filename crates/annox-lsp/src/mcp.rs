@@ -56,7 +56,22 @@ const TOOLS: &[Tool] = &[
         params: &[
             ("file", "string", false, "Only this file."),
             ("all", "boolean", false, "Include resolved, accepted, rejected, withdrawn and deleted annotations."),
+            ("kind", "string", false, "Only `comment` or only `suggestion`."),
+            ("status", "string", false, "Only these statuses, comma-separated: open, resolved, accepted, rejected, withdrawn."),
+            ("author", "string", false, "Only annotations by this author id."),
+            ("not_author", "string", false, "Skip annotations by this author id."),
+            ("mine", "boolean", false, "Only your own annotations."),
+            ("others", "boolean", false, "Skip your own annotations."),
+            ("broken", "boolean", false, "Only open annotations that are orphaned or can't be applied, to fix with retarget or reattach."),
         ],
+        read_only: true,
+    },
+    Tool {
+        name: "show_annotation",
+        command: "show",
+        description: "Show one annotation and its thread, in the same form as list_annotations. Given a reply's id, shows its thread.",
+        positional: &["id"],
+        params: &[ID],
         read_only: true,
     },
     Tool {
@@ -156,6 +171,7 @@ const TOOLS: &[Tool] = &[
 fn option_name(param: &str) -> &str {
     match param {
         "replacement" => "replace",
+        "not_author" => "not-author",
         other => other,
     }
 }
@@ -191,6 +207,11 @@ fn command_line(tool: &Tool, arguments: &Value, config: &Config) -> Result<Vec<S
     }
     for (name, ty, required, _) in tool.params {
         let value = arguments.get(name).filter(|v| !v.is_null());
+        // `mine` and `others` mean the server's identity, when it has one.
+        if let (Some(author), "mine" | "others", Some(true)) = (&config.author, *name, value.and_then(Value::as_bool)) {
+            args.extend([format!("--{}", if *name == "mine" { "author" } else { "not-author" }), author.clone()]);
+            continue;
+        }
         match value {
             None if *required => return Err(format!("missing argument {name}")),
             None => {}
