@@ -21,6 +21,9 @@ pub enum Command {
     Init {
         /// The project root
         dir: Option<PathBuf>,
+        /// Keep `.annox/` out of version control, so annotations aren't shared
+        #[arg(long)]
+        local: bool,
     },
     /// Print the annotations of FILE, or of every document, as JSON
     List {
@@ -229,9 +232,12 @@ pub fn run(args: &[String], cwd: &Path) -> anyhow::Result<Value> {
 pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
     let cwd = cwd.canonicalize()?;
     match command {
-        Command::Init { dir } => {
+        Command::Init { dir, local } => {
             let dir = dir.map_or(cwd.clone(), |d| cwd.join(d));
             let ws = Workspace::init(&dir)?;
+            if local {
+                ws.ignore_all()?;
+            }
             Ok(json!({ "root": ws.root }))
         }
         Command::List { file, all, filter } => list(file.as_deref(), all, filter, &cwd),

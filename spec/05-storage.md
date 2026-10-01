@@ -158,6 +158,8 @@ Duplicate records happen when two branches each start annotating the same new fi
 
 `.annox/` is meant to be committed alongside the documents, except `cache/`, `local/`, and `synced/`. Nothing in it needs special merge configuration. Annotations can also be shared live through a sync hub (§7). Sync and version control can be used together: events received from the hub are kept out of `docs/` (§5.12), so each user commits the events they wrote.
 
+A user who doesn't want to share a workspace through version control MAY add `*` to `.annox/.gitignore`, which keeps all of `.annox/` out of it.
+
 ## 5.11 Local-only annotations
 
 `.annox/local/` holds annotations that are never shared: private highlights and notes, and draft comments not yet published, such as a review in progress. It is excluded from version control (§5.9) and from sync (§7.1). `local/docs/` has the same layout and rules as `docs/`, and readers load both together (§5.7.1).

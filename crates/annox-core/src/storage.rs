@@ -72,9 +72,20 @@ impl Workspace {
     /// Adds any line of §5.9 missing from `.annox/.gitignore`, so that
     /// workspaces created before a line was required pick it up.
     pub fn ensure_ignored(&self) -> io::Result<()> {
+        self.add_ignored(&IGNORED)
+    }
+
+    /// Makes git ignore all of `.annox/`, for a workspace that isn't shared
+    /// through version control (§5.10).
+    pub fn ignore_all(&self) -> io::Result<()> {
+        self.add_ignored(&["*"])
+    }
+
+    /// Adds any of `lines` missing from `.annox/.gitignore`.
+    fn add_ignored(&self, lines: &[&str]) -> io::Result<()> {
         let ignore = self.root.join(".annox").join(".gitignore");
         let existing = fs::read_to_string(&ignore).unwrap_or_default();
-        let missing: Vec<&str> = IGNORED.into_iter().filter(|l| !existing.lines().any(|e| e.trim() == *l)).collect();
+        let missing: Vec<&str> = lines.iter().copied().filter(|l| !existing.lines().any(|e| e.trim() == *l)).collect();
         if missing.is_empty() {
             return Ok(());
         }

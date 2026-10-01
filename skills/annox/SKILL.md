@@ -80,4 +80,4 @@ annox delete ID / annox restore ID
 
 ## Setup
 
-If a command says the file isn't in an annox workspace, ask the user before running `annox init` at the project root. It creates `.annox/`, which is meant to be committed.
+If a command says the file isn't in an annox workspace, ask the user before running `annox init` at the project root. It creates `.annox/`, which is meant to be committed; `annox init --local` keeps it out of git instead.

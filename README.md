@@ -63,6 +63,7 @@ Edits always go through `workspace/applyEdit`, and the status event is written o
 The `annox` binary also reads and writes annotations directly, printing JSON. It's meant for scripts and AI agents: text is targeted by quoting it, not by offsets, and an ambiguous quote is an error that lists where it occurs.
 
 ```sh
+annox init [--local]
 annox list [FILE] [--all] [--kind K] [--status S] [--mine | --others] [--broken]
 annox show ID
 annox comment paper.md --quote "the bound is tight" --body "Cite Lemma 4?"
@@ -73,6 +74,8 @@ annox accept ID
 ```
 
 Write commands use `--author`/`--name`, or `ANNOX_AUTHOR`/`ANNOX_AUTHOR_NAME`, and otherwise your [configured identity](#configuration). Give an agent its own id, for example `ANNOX_AUTHOR=urn:agent:claude`, so its annotations are distinguishable from yours. A running `annox lsp` picks up the changes, so they appear in the editor. Run `annox help` for every command.
+
+`annox init` creates `.annox/` at the project root, which is meant to be committed so collaborators see the annotations. To keep them to yourself, use `annox init --local`. It adds `*` to `.annox/.gitignore`, so git ignores the whole folder. To share them later, delete that line.
 
 ### Agents
 

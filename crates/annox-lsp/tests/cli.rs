@@ -223,3 +223,19 @@ fn show_prints_one_thread() {
     assert_eq!(annox(dir.path(), &["show", &r]), shown, "a reply shows its thread");
     assert!(error(dir.path(), &["show", "nope"]).contains("unknown annotation"));
 }
+
+#[test]
+fn init_local_keeps_the_workspace_out_of_git() {
+    let dir = tempfile::tempdir().unwrap();
+    let git = |args: &[&str]| std::process::Command::new("git").args(args).current_dir(dir.path()).output().unwrap();
+    git(&["init", "-q"]);
+    std::fs::write(dir.path().join("paper.md"), DOC).unwrap();
+    annox(dir.path(), &["init", "--local"]);
+    annox(dir.path(), &["comment", "paper.md", "--quote", "teh", "--body", "typo"]);
+    let status = String::from_utf8(git(&["status", "--porcelain", "--untracked-files=all"]).stdout).unwrap();
+    assert_eq!(status, "?? paper.md\n");
+    // Running it again on an existing workspace doesn't repeat the line.
+    annox(dir.path(), &["init", "--local"]);
+    let ignore = std::fs::read_to_string(dir.path().join(".annox/.gitignore")).unwrap();
+    assert_eq!(ignore.lines().filter(|l| *l == "*").count(), 1);
+}
