@@ -1,0 +1,688 @@
+{
+  "name": "annox",
+  "displayName": "annox",
+  "description": "Portable document annotations: comments, suggestions and review threads stored in .annox/.",
+  "version": "0.4.0",
+  "publisher": "gaardhus",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gaardhus/annox"
+  },
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "annotations",
+    "comments",
+    "review",
+    "suggestions",
+    "lsp"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "workspaceContains:.annox/annox.json",
+    "workspaceContains:**/.annox/annox.json"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "annox.init",
+        "title": "Initialize Workspace",
+        "category": "annox"
+      },
+      {
+        "command": "annox.comment",
+        "title": "Comment",
+        "category": "annox",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "annox.draft",
+        "title": "Draft Comment",
+        "category": "annox",
+        "icon": "$(comment-draft)"
+      },
+      {
+        "command": "annox.suggest",
+        "title": "Suggest Replacement",
+        "category": "annox",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "annox.toggleSuggesting",
+        "title": "Toggle Suggestion Mode",
+        "category": "annox",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "annox.reply",
+        "title": "Reply",
+        "category": "annox"
+      },
+      {
+        "command": "annox.showThread",
+        "title": "Show Thread",
+        "category": "annox"
+      },
+      {
+        "command": "annox.editAnnotation",
+        "title": "Edit",
+        "category": "annox",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "annox.acceptSuggestion",
+        "title": "Accept Suggestion",
+        "category": "annox",
+        "icon": "$(check)"
+      },
+      {
+        "command": "annox.acceptAll",
+        "title": "Accept All Suggestions in File",
+        "category": "annox",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "annox.rejectSuggestion",
+        "title": "Reject Suggestion",
+        "category": "annox",
+        "icon": "$(close)"
+      },
+      {
+        "command": "annox.rejectAll",
+        "title": "Reject All Suggestions in File",
+        "category": "annox"
+      },
+      {
+        "command": "annox.resolveThread",
+        "title": "Resolve Thread",
+        "category": "annox",
+        "icon": "$(pass)"
+      },
+      {
+        "command": "annox.resolveAll",
+        "title": "Resolve All Threads in File",
+        "category": "annox"
+      },
+      {
+        "command": "annox.reopenThread",
+        "title": "Reopen",
+        "category": "annox",
+        "icon": "$(issue-reopened)"
+      },
+      {
+        "command": "annox.publish",
+        "title": "Publish Draft",
+        "category": "annox",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "annox.publishAll",
+        "title": "Publish All Drafts in File",
+        "category": "annox"
+      },
+      {
+        "command": "annox.list",
+        "title": "List Annotations",
+        "category": "annox",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "annox.orphans",
+        "title": "Show Annotations That Could Not Be Located",
+        "category": "annox"
+      },
+      {
+        "command": "annox.reattach",
+        "title": "Re-attach Comment to Selection",
+        "category": "annox",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "annox.retarget",
+        "title": "Re-target Suggestion at Selection",
+        "category": "annox",
+        "icon": "$(target)"
+      },
+      {
+        "command": "annox.resolveConflicts",
+        "title": "Resolve Conflicts",
+        "category": "annox",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "annox.history",
+        "title": "Show History",
+        "category": "annox",
+        "icon": "$(history)"
+      },
+      {
+        "command": "annox.restartServer",
+        "title": "Restart Server",
+        "category": "annox"
+      },
+      {
+        "command": "annox.undo",
+        "title": "Undo Last Suggestion",
+        "category": "annox"
+      },
+      {
+        "command": "annox.submitComment",
+        "title": "Comment",
+        "category": "annox"
+      },
+      {
+        "command": "annox.submitDraft",
+        "title": "Save Draft",
+        "category": "annox"
+      },
+      {
+        "command": "annox.cancelNewThread",
+        "title": "Cancel",
+        "category": "annox"
+      },
+      {
+        "command": "annox.editComment",
+        "title": "Edit",
+        "category": "annox",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "annox.saveComment",
+        "title": "Save",
+        "category": "annox"
+      },
+      {
+        "command": "annox.cancelEditComment",
+        "title": "Cancel",
+        "category": "annox"
+      },
+      {
+        "command": "annox.open",
+        "title": "Open Annotation",
+        "category": "annox"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "annox.editor",
+        "label": "annox"
+      }
+    ],
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "annox",
+          "title": "annox",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "views": {
+      "annox": [
+        {
+          "id": "annox.annotations",
+          "name": "Annotations",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "annox.annotations",
+        "contents": "No annotations in the open files.\n[Initialize Workspace](command:annox.init)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "annox.submitComment",
+          "when": "false"
+        },
+        {
+          "command": "annox.submitDraft",
+          "when": "false"
+        },
+        {
+          "command": "annox.cancelNewThread",
+          "when": "false"
+        },
+        {
+          "command": "annox.editComment",
+          "when": "false"
+        },
+        {
+          "command": "annox.saveComment",
+          "when": "false"
+        },
+        {
+          "command": "annox.cancelEditComment",
+          "when": "false"
+        },
+        {
+          "command": "annox.undo",
+          "when": "false"
+        },
+        {
+          "command": "annox.comment",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.draft",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.suggest",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.toggleSuggesting",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.reply",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.showThread",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.editAnnotation",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.acceptSuggestion",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.acceptAll",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.rejectSuggestion",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.rejectAll",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.resolveThread",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.resolveAll",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.reopenThread",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.publish",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.publishAll",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.list",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.orphans",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.reattach",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.retarget",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.resolveConflicts",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.history",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.open",
+          "when": "false"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "annox.acceptSuggestion",
+          "group": "inline@1",
+          "when": "commentController == annox && commentThread =~ /\\bapplicable\\b/"
+        },
+        {
+          "command": "annox.rejectSuggestion",
+          "group": "inline@2",
+          "when": "commentController == annox && commentThread =~ /\\bsuggestion\\b/ && commentThread =~ /\\bopen\\b/"
+        },
+        {
+          "command": "annox.editAnnotation",
+          "group": "inline@3",
+          "when": "commentController == annox && commentThread =~ /\\bapplicable\\b/"
+        },
+        {
+          "command": "annox.retarget",
+          "group": "inline@3",
+          "when": "commentController == annox && commentThread =~ /\\bstale\\b/"
+        },
+        {
+          "command": "annox.resolveThread",
+          "group": "inline@4",
+          "when": "commentController == annox && commentThread =~ /\\bcomment\\b/ && commentThread =~ /\\bopen\\b/"
+        },
+        {
+          "command": "annox.reopenThread",
+          "group": "inline@4",
+          "when": "commentController == annox && commentThread =~ /\\bclosed\\b/"
+        },
+        {
+          "command": "annox.publish",
+          "group": "inline@5",
+          "when": "commentController == annox && commentThread =~ /\\bdraft\\b/"
+        },
+        {
+          "command": "annox.reattach",
+          "group": "inline@6",
+          "when": "commentController == annox && commentThread =~ /\\bcomment\\b/ && commentThread =~ /\\borphaned\\b/"
+        },
+        {
+          "command": "annox.resolveConflicts",
+          "group": "inline@7",
+          "when": "commentController == annox && commentThread =~ /\\bconflicted\\b/"
+        },
+        {
+          "command": "annox.history",
+          "group": "inline@8",
+          "when": "commentController == annox && commentThread =~ /^annox /"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "annox.reply",
+          "group": "inline@1",
+          "when": "commentController == annox && !commentThreadIsEmpty"
+        },
+        {
+          "command": "annox.submitComment",
+          "group": "inline@1",
+          "when": "commentController == annox && commentThreadIsEmpty && commentThread != annox-new-draft"
+        },
+        {
+          "command": "annox.submitDraft",
+          "group": "inline@2",
+          "when": "commentController == annox && commentThreadIsEmpty"
+        },
+        {
+          "command": "annox.cancelNewThread",
+          "group": "inline@3",
+          "when": "commentController == annox && commentThreadIsEmpty"
+        }
+      ],
+      "comments/comment/title": [
+        {
+          "command": "annox.editComment",
+          "group": "inline",
+          "when": "commentController == annox && comment =~ /\\beditable\\b/"
+        }
+      ],
+      "comments/comment/context": [
+        {
+          "command": "annox.cancelEditComment",
+          "group": "inline@1",
+          "when": "commentController == annox"
+        },
+        {
+          "command": "annox.saveComment",
+          "group": "inline@2",
+          "when": "commentController == annox"
+        }
+      ],
+      "editor/context": [
+        {
+          "submenu": "annox.editor",
+          "group": "annox",
+          "when": "annox.inWorkspace"
+        }
+      ],
+      "annox.editor": [
+        {
+          "command": "annox.comment",
+          "group": "1_write@1"
+        },
+        {
+          "command": "annox.draft",
+          "group": "1_write@2"
+        },
+        {
+          "command": "annox.suggest",
+          "group": "1_write@3"
+        },
+        {
+          "command": "annox.toggleSuggesting",
+          "group": "1_write@4"
+        },
+        {
+          "command": "annox.showThread",
+          "group": "2_thread@1"
+        },
+        {
+          "command": "annox.acceptSuggestion",
+          "group": "2_thread@2"
+        },
+        {
+          "command": "annox.rejectSuggestion",
+          "group": "2_thread@3"
+        },
+        {
+          "command": "annox.resolveThread",
+          "group": "2_thread@4"
+        },
+        {
+          "command": "annox.list",
+          "group": "3_more@1"
+        },
+        {
+          "command": "annox.history",
+          "group": "3_more@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "annox.toggleSuggesting",
+          "group": "navigation",
+          "when": "annox.inWorkspace && !annox.suggesting"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "annox.reopenThread",
+          "group": "inline@1",
+          "when": "view == annox.annotations && viewItem == 'annox closed'"
+        },
+        {
+          "command": "annox.history",
+          "group": "inline@2",
+          "when": "view == annox.annotations && viewItem =~ /^annox /"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "annox.undo",
+        "key": "ctrl+z",
+        "mac": "cmd+z",
+        "when": "editorTextFocus && annox.suggesting && !editorReadonly"
+      }
+    ],
+    "configuration": {
+      "title": "annox",
+      "properties": {
+        "annox.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Path to the `annox` binary. If empty, `annox` is looked up on `PATH` and in `~/.local/bin`."
+        },
+        "annox.author.id": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Your author id for new annotations, e.g. `mailto:you@example.org`. If empty, the server uses `~/.config/annox/config.json`, then your git identity."
+        },
+        "annox.author.name": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Your display name, used with `#annox.author.id#`."
+        },
+        "annox.presence": {
+          "type": "boolean",
+          "default": true,
+          "description": "Share your cursor with collaborators on a sync hub. Others' cursors are always shown."
+        },
+        "annox.labels": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the first line of each comment, or each suggested replacement, at the end of its line."
+        },
+        "annox.inlineSuggestions": {
+          "type": "boolean",
+          "default": false,
+          "description": "Always draw suggestions inline, as struck-through and inserted text, not only in suggestion mode."
+        },
+        "annox.suggestionDelay": {
+          "type": "number",
+          "default": 750,
+          "minimum": 100,
+          "description": "In suggestion mode, how long to wait after you stop typing, in milliseconds, before your edits become suggestions."
+        }
+      }
+    },
+    "colors": [
+      {
+        "id": "annox.commentBackground",
+        "description": "Background of text with a comment.",
+        "defaults": {
+          "dark": "#3794ff26",
+          "light": "#1a85ff1f",
+          "highContrast": "#3794ff26",
+          "highContrastLight": "#1a85ff1f"
+        }
+      },
+      {
+        "id": "annox.suggestionBackground",
+        "description": "Background of text with a suggestion.",
+        "defaults": {
+          "dark": "#b180d72e",
+          "light": "#652d901f",
+          "highContrast": "#b180d72e",
+          "highContrastLight": "#652d901f"
+        }
+      },
+      {
+        "id": "annox.draftBackground",
+        "description": "Background of text with a local draft.",
+        "defaults": {
+          "dark": "#89d18526",
+          "light": "#38833a1f",
+          "highContrast": "#89d18526",
+          "highContrastLight": "#38833a1f"
+        }
+      },
+      {
+        "id": "annox.pointForeground",
+        "description": "Marker for an annotation on a point between characters.",
+        "defaults": {
+          "dark": "#3794ff",
+          "light": "#1a85ff",
+          "highContrast": "#3794ff",
+          "highContrastLight": "#1a85ff"
+        }
+      },
+      {
+        "id": "annox.deletionForeground",
+        "description": "Text a suggestion deletes, when drawn inline.",
+        "defaults": {
+          "dark": "#f48771",
+          "light": "#ad0707",
+          "highContrast": "#f48771",
+          "highContrastLight": "#ad0707"
+        }
+      },
+      {
+        "id": "annox.insertionForeground",
+        "description": "Text a suggestion inserts, when drawn inline.",
+        "defaults": {
+          "dark": "#81b88b",
+          "light": "#2f7d32",
+          "highContrast": "#81b88b",
+          "highContrastLight": "#2f7d32"
+        }
+      },
+      {
+        "id": "annox.labelForeground",
+        "description": "Comment text at the end of lines.",
+        "defaults": {
+          "dark": "#8b949e",
+          "light": "#6e7781",
+          "highContrast": "#8b949e",
+          "highContrastLight": "#6e7781"
+        }
+      },
+      {
+        "id": "annox.presenceForeground",
+        "description": "Names at collaborators' cursors.",
+        "defaults": {
+          "dark": "#c586c0",
+          "light": "#a626a4",
+          "highContrast": "#c586c0",
+          "highContrastLight": "#a626a4"
+        }
+      },
+      {
+        "id": "annox.presenceBackground",
+        "description": "Collaborators' selections.",
+        "defaults": {
+          "dark": "#c586c026",
+          "light": "#a626a41f",
+          "highContrast": "#c586c026",
+          "highContrastLight": "#a626a41f"
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
+    "check": "tsc --noEmit",
+    "test:unit": "node --test test/unit/",
+    "test:e2e": "node test/e2e/run.mjs",
+    "package": "cp ../../LICENSE . && npm run build -- --minify && npx --yes @vscode/vsce@4 package --no-dependencies"
+  },
+  "dependencies": {
+    "diff": "^9.0.0",
+    "vscode-languageclient": "^10.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "@types/vscode": "~1.100.0",
+    "@vscode/test-electron": "^3.1.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}

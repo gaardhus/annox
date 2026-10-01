@@ -49,7 +49,7 @@ just hooks               # install the git hooks (needs prek and just)
 just check               # run the checks CI runs
 ```
 
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat: …`, `fix(nvim): …`). A commit-msg hook and CI check them with [committed](https://github.com/crate-ci/committed) (see `committed.toml`), and PR titles too, since PRs are squash-merged. Releases are automated: every push to `main` updates a release PR that bumps the version and `CHANGELOG.md` with [git-cliff](https://git-cliff.org) (see `cliff.toml`), and merging that PR tags `vX.Y.Z` and attaches `annox` binaries to the GitHub release. The binary, the crates, and the editor plugin share that one version; the spec is versioned separately.
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat: …`, `fix(nvim): …`). A commit-msg hook and CI check them with [committed](https://github.com/crate-ci/committed) (see `committed.toml`), and PR titles too, since PRs are squash-merged. Releases are automated: every push to `main` updates a release PR that bumps the version and `CHANGELOG.md` with [git-cliff](https://git-cliff.org) (see `cliff.toml`), and merging that PR tags `vX.Y.Z` and attaches `annox` binaries and the VS Code extension to the GitHub release. The binary, the crates, and the editor plugins share that one version; the spec is versioned separately.
 
 The server implements:
 
@@ -114,6 +114,7 @@ The server syncs only with hubs listed there. Remote hubs must use `wss://`, and
 ## Editor support
 
 - **Neovim:** [`editors/nvim/`](editors/nvim/README.md) is a plugin covering the full workflow: highlights, comments and suggestions, threads, accept and reject, suggestion mode, local drafts, re-targeting, conflict resolution, and history.
+- **VS Code:** [`editors/vscode/`](editors/vscode/README.md) is an extension with the same workflow, showing annotations as native comment threads beside those of other providers. Each release attaches it as a `.vsix`.
 - **Any other LSP editor:** point it at `annox lsp` for the plain-LSP features. It accepts `initializationOptions` of the form `{ "annox": { "author": { "id": "…", "name": "…" }, "diagnostics": true } }` (§6.2). Both are optional.
 
 ## Configuration

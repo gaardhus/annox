@@ -76,6 +76,8 @@ jobs:
           fi
           sed -i "0,/^version = \".*\"$/s//version = \"${next#v}\"/" Cargo.toml
           cargo update --workspace
+          # The VS Code extension shares the version.
+          (cd editors/vscode && npm version "${next#v}" --no-git-tag-version --allow-same-version)
           git cliff --unreleased --tag "$next" --strip header -o section.md
           python3 - <<'EOF'
           from pathlib import Path
@@ -97,6 +99,8 @@ jobs:
             Cargo.toml
             Cargo.lock
             CHANGELOG.md
+            editors/vscode/package.json
+            editors/vscode/package-lock.json
 
   # Attach `annox` binaries to the release.
   binaries:
@@ -146,10 +150,38 @@ jobs:
           fi
           gh release upload "$TAG" "$asset" --clobber
 
+  # Attach the VS Code extension to the release.
+  vsix:
+    name: VS Code extension
+    needs: release
+    if: needs.release.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm run package
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          mv annox-*.vsix "annox-vscode-$TAG.vsix"
+          gh release upload "$TAG" "annox-vscode-$TAG.vsix" --clobber
+
   # Checksums of every archive, which install.sh verifies against.
   checksums:
     name: Checksums
-    needs: [release, binaries]
+    needs: [release, binaries, vsix]
     runs-on: ubuntu-latest
     permissions:
       contents: write
