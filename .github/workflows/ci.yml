@@ -60,6 +60,42 @@ jobs:
       - uses: Swatinem/rust-cache@v2.9.2
       - run: cargo test --workspace --locked
 
+  # Runs install.ps1 against the latest release, in both Windows PowerShell and PowerShell 7.
+  install-windows:
+    name: install.ps1 (${{ matrix.shell }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Install
+        run: ./install.ps1 -Dir "$env:RUNNER_TEMP\bin" -Skill -SkillDir "$env:RUNNER_TEMP\skills" -NoModifyPath
+      - name: Reinstall over the running binary
+        run: |
+          # A hub runs until stopped, which keeps annox.exe locked during the reinstall.
+          $hub = Start-Process "$env:RUNNER_TEMP\bin\annox.exe" -ArgumentList 'hub', '--data', "$env:RUNNER_TEMP\hub" -PassThru
+          try { ./install.ps1 -Dir "$env:RUNNER_TEMP\bin" -NoModifyPath } finally { Stop-Process $hub }
+      - name: Check
+        run: |
+          & "$env:RUNNER_TEMP\bin\annox.exe" --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if (-not (Test-Path "$env:RUNNER_TEMP\skills\annox\SKILL.md")) { throw 'skill not installed' }
+      - name: Install through irm | iex, adding to PATH
+        run: |
+          $env:ANNOX_INSTALL_DIR = "$env:RUNNER_TEMP\iex"
+          $env:ANNOX_SKILL = '1'
+          Get-Content -Raw ./install.ps1 | Invoke-Expression
+          annox --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          foreach ($d in '.claude', '.agents') {
+            if (-not (Test-Path "$HOME\$d\skills\annox\SKILL.md")) { throw "skill not installed in ~\$d\skills" }
+          }
+
   nvim:
     name: Neovim ${{ matrix.neovim }}
     runs-on: ubuntu-latest

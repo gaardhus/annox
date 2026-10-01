@@ -100,16 +100,23 @@
         <div>
           <h2 id="install">Install</h2>
           <p>
-            Linux and macOS. The agent skill teaches Claude Code to use the CLI.
+            Linux, macOS, and Windows. The agent skill teaches Claude Code, Codex,
+            Gemini CLI, and other agents to use the CLI.
           </p>
-          <div class="tabs">
-            <button aria-pressed="true" data-cmd="| sh">CLI</button>
-            <button aria-pressed="false" data-cmd="| sh -s -- --skill">
-              CLI and agent skill
-            </button>
+          <div class="install-options">
+            <div class="tabs" data-option="os">
+              <button aria-pressed="true" data-value="unix">macOS and Linux</button>
+              <button aria-pressed="false" data-value="windows">Windows</button>
+            </div>
+            <div class="tabs" data-option="skill">
+              <button aria-pressed="true" data-value="">CLI</button>
+              <button aria-pressed="false" data-value="skill">
+                CLI and agent skill
+              </button>
+            </div>
           </div>
           <div class="copyable">
-            <pre><span class="prompt" aria-hidden="true">$ </span><code id="install-cmd">curl -fsSL https://gaardhus.github.io/annox/install.sh <span id="install-pipe">| sh</span></code></pre>
+            <pre><span class="prompt" id="install-prompt" aria-hidden="true">$ </span><code id="install-cmd">curl -fsSL https://gaardhus.github.io/annox/install.sh | sh</code></pre>
             <button class="copy" data-copy="install-cmd" aria-label="Copy install command" title="Copy">
               <svg class="icon-copy" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg>
               <svg class="icon-done" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
@@ -205,13 +212,43 @@ A good annotation should behave like a pencil mark: it belongs to the document, 
         .getElementById("reset")
         .addEventListener("click", () => demo.reset());
 
-      const tabs = document.querySelectorAll(".tabs button");
-      for (const tab of tabs) {
-        tab.addEventListener("click", () => {
-          for (const t of tabs) t.setAttribute("aria-pressed", t === tab);
-          document.getElementById("install-pipe").textContent = tab.dataset.cmd;
-        });
+      const site = "https://gaardhus.github.io/annox";
+      const install = {
+        unix: {
+          prompt: "$ ",
+          "": `curl -fsSL ${site}/install.sh | sh`,
+          skill: `curl -fsSL ${site}/install.sh | sh -s -- --skill`,
+        },
+        // No `$` inside the quotes: PowerShell would expand it before the inner shell sees it.
+        windows: {
+          prompt: "PS> ",
+          "": `powershell -ExecutionPolicy ByPass -c "irm ${site}/install.ps1 | iex"`,
+          skill: `powershell -ExecutionPolicy ByPass -c "& ([scriptblock]::Create((irm ${site}/install.ps1))) -Skill"`,
+        },
+      };
+      const choice = { os: "unix", skill: "" };
+      const groups = document.querySelectorAll(".tabs[data-option]");
+      function select(option, value) {
+        choice[option] = value;
+        for (const group of groups) {
+          if (group.dataset.option !== option) continue;
+          for (const t of group.querySelectorAll("button")) {
+            t.setAttribute("aria-pressed", t.dataset.value === value);
+          }
+        }
+        const os = install[choice.os];
+        document.getElementById("install-prompt").textContent = os.prompt;
+        document.getElementById("install-cmd").textContent = os[choice.skill];
       }
+      for (const group of groups) {
+        for (const tab of group.querySelectorAll("button")) {
+          tab.addEventListener("click", () =>
+            select(group.dataset.option, tab.dataset.value),
+          );
+        }
+      }
+      const platform = navigator.userAgentData?.platform ?? navigator.platform;
+      if (/^win/i.test(platform)) select("os", "windows");
 
       for (const button of document.querySelectorAll("button.copy")) {
         button.addEventListener("click", async () => {

@@ -48,9 +48,10 @@ enum Command {
         #[arg(long, value_name = "NAME")]
         name: Option<String>,
     },
-    /// Install the latest release over this binary, and the Claude Code skill if it's installed
+    /// Install the latest release over this binary, and the agent skill wherever it's installed
     ///
-    /// Runs the release's install.sh, so it needs curl and sh.
+    /// Runs the release's install.sh, so it needs curl and sh; on Windows, its install.ps1, with
+    /// curl and PowerShell.
     Update {
         /// Install this release instead of the latest
         #[arg(long, value_name = "vX.Y.Z")]
@@ -104,17 +105,9 @@ fn main() -> anyhow::Result<()> {
 
 const REPO: &str = "gaardhus/annox";
 
-/// Reinstalls this binary with the release's own `install.sh`, so the download and checksum logic
-/// lives in one place.
+/// Reinstalls this binary with the release's own `install.sh`, or `install.ps1` on Windows, so the
+/// download and checksum logic lives in one place.
 fn update(version: Option<String>) -> anyhow::Result<()> {
-    use std::io::Write;
-    use std::process::Stdio;
-
-    if cfg!(windows) {
-        anyhow::bail!(
-            "annox update doesn't support Windows; download the .zip from https://github.com/{REPO}/releases"
-        );
-    }
     let current = concat!("v", env!("CARGO_PKG_VERSION"));
     let version = match version {
         Some(v) => format!("v{}", v.trim_start_matches('v')),
@@ -123,7 +116,7 @@ fn update(version: Option<String>) -> anyhow::Result<()> {
             let url = curl(&[
                 "-fsSLI",
                 "-o",
-                "/dev/null",
+                if cfg!(windows) { "NUL" } else { "/dev/null" },
                 "-w",
                 "%{url_effective}",
                 &format!("https://github.com/{REPO}/releases/latest"),
@@ -139,23 +132,87 @@ fn update(version: Option<String>) -> anyhow::Result<()> {
 
     let exe = std::env::current_exe()?;
     let dir = exe.parent().ok_or_else(|| anyhow::anyhow!("can't tell which directory {} is in", exe.display()))?;
-    let mut install = vec!["--version".to_owned(), version.clone(), "--dir".to_owned(), dir.display().to_string()];
-    let skills = match std::env::var("ANNOX_SKILL_DIR") {
-        Ok(d) if !d.is_empty() => Some(PathBuf::from(d)),
-        _ => std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".claude/skills")),
-    };
-    if let Some(skills) = skills.filter(|d| d.join("annox").is_dir()) {
-        install.extend(["--skill".to_owned(), "--skill-dir".to_owned(), skills.display().to_string()]);
-    }
+    let skills = installed_skills();
 
-    let script = curl(&["-fsSL", &format!("https://raw.githubusercontent.com/{REPO}/{version}/install.sh")])?;
     eprintln!("annox: updating {current} -> {version}");
-    let mut sh = std::process::Command::new("sh").arg("-s").arg("--").args(&install).stdin(Stdio::piped()).spawn()?;
-    sh.stdin.take().expect("piped stdin").write_all(&script)?;
-    if !sh.wait()?.success() {
+    let ok = if cfg!(windows) { update_windows(&version, dir, skills)? } else { update_unix(&version, dir, skills)? };
+    if !ok {
         std::process::exit(1);
     }
     Ok(())
+}
+
+/// Where the installer should put the skill, to update the copies that are already installed.
+enum Skills {
+    None,
+    /// Both of the installer's default directories.
+    Defaults,
+    Only(PathBuf),
+}
+
+fn installed_skills() -> Skills {
+    let has = |d: &PathBuf| d.join("annox").is_dir();
+    if let Ok(d) = std::env::var("ANNOX_SKILL_DIR") {
+        if !d.is_empty() {
+            let d = PathBuf::from(d);
+            return if has(&d) { Skills::Only(d) } else { Skills::None };
+        }
+    }
+    let Some(home) = std::env::home_dir() else { return Skills::None };
+    // The installer's defaults: Claude Code's directory, and the one most other agents share.
+    let claude = home.join(".claude").join("skills");
+    let agents = home.join(".agents").join("skills");
+    match (has(&claude), has(&agents)) {
+        (true, true) => Skills::Defaults,
+        (true, false) => Skills::Only(claude),
+        (false, true) => Skills::Only(agents),
+        (false, false) => Skills::None,
+    }
+}
+
+fn update_unix(version: &str, dir: &std::path::Path, skills: Skills) -> anyhow::Result<bool> {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let mut install = vec!["--version".to_owned(), version.to_owned(), "--dir".to_owned(), dir.display().to_string()];
+    match skills {
+        Skills::None => {}
+        Skills::Defaults => install.push("--skill".to_owned()),
+        Skills::Only(d) => install.extend(["--skill".to_owned(), "--skill-dir".to_owned(), d.display().to_string()]),
+    }
+    let script = curl(&["-fsSL", &format!("https://raw.githubusercontent.com/{REPO}/{version}/install.sh")])?;
+    let mut sh = std::process::Command::new("sh").arg("-s").arg("--").args(&install).stdin(Stdio::piped()).spawn()?;
+    sh.stdin.take().expect("piped stdin").write_all(&script)?;
+    Ok(sh.wait()?.success())
+}
+
+/// install.ps1 renames the running annox.exe out of the way, since Windows won't overwrite it, and
+/// leaves it behind as annox.exe.old for the next update to remove.
+fn update_windows(version: &str, dir: &std::path::Path, skills: Skills) -> anyhow::Result<bool> {
+    let url = format!("https://raw.githubusercontent.com/{REPO}/{version}/install.ps1");
+    let script = curl(&["-fsSL", &url]).map_err(|e| {
+        anyhow::anyhow!(
+            "{e}\n{version} may predate Windows support; download the .zip from https://github.com/{REPO}/releases"
+        )
+    })?;
+    // PowerShell only takes parameters for a script it runs from a file.
+    let file = std::env::temp_dir().join(format!("annox-install-{}.ps1", std::process::id()));
+    std::fs::write(&file, script)?;
+    let mut ps = std::process::Command::new("powershell");
+    ps.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]).arg(&file);
+    ps.arg("-Version").arg(version).arg("-Dir").arg(dir).arg("-NoModifyPath");
+    match skills {
+        Skills::None => {}
+        Skills::Defaults => {
+            ps.arg("-Skill");
+        }
+        Skills::Only(d) => {
+            ps.arg("-Skill").arg("-SkillDir").arg(d);
+        }
+    }
+    let status = ps.status();
+    let _ = std::fs::remove_file(&file);
+    Ok(status.map_err(|e| anyhow::anyhow!("annox update needs PowerShell: {e}"))?.success())
 }
 
 fn curl(args: &[&str]) -> anyhow::Result<Vec<u8>> {

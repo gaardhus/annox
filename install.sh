@@ -7,8 +7,9 @@
 # Options (or environment variables):
 #   --version vX.Y.Z   ANNOX_VERSION      release to install (default: the latest)
 #   --dir DIR          ANNOX_INSTALL_DIR  where to put `annox` (default: ~/.local/bin)
-#   --skill            ANNOX_SKILL=1      also install the skill for Claude Code
-#   --skill-dir DIR    ANNOX_SKILL_DIR    where skills go (default: ~/.claude/skills)
+#   --skill            ANNOX_SKILL=1      also install the agent skill, in ~/.claude/skills for
+#                                         Claude Code and ~/.agents/skills for other agents
+#   --skill-dir DIR    ANNOX_SKILL_DIR    install the skill only in DIR
 
 set -eu
 
@@ -16,7 +17,7 @@ repo="gaardhus/annox"
 version="${ANNOX_VERSION:-}"
 bin_dir="${ANNOX_INSTALL_DIR:-$HOME/.local/bin}"
 skill="${ANNOX_SKILL:-0}"
-skill_dir="${ANNOX_SKILL_DIR:-$HOME/.claude/skills}"
+skill_dir="${ANNOX_SKILL_DIR:-}"
 
 say() { printf 'annox: %s\n' "$*" >&2; }
 die() {
@@ -30,8 +31,9 @@ Usage: install.sh [--version vX.Y.Z] [--dir DIR] [--skill] [--skill-dir DIR]
 
   --version vX.Y.Z  release to install (default: the latest; or ANNOX_VERSION)
   --dir DIR         where to put `annox` (default: ~/.local/bin; or ANNOX_INSTALL_DIR)
-  --skill           also install the skill for Claude Code (or ANNOX_SKILL=1)
-  --skill-dir DIR   where skills go (default: ~/.claude/skills; or ANNOX_SKILL_DIR)
+  --skill           also install the agent skill, in ~/.claude/skills for Claude Code
+                    and ~/.agents/skills for other agents (or ANNOX_SKILL=1)
+  --skill-dir DIR   install the skill only in DIR (or ANNOX_SKILL_DIR)
 EOF
 }
 
@@ -52,7 +54,7 @@ command -v tar > /dev/null || die "tar is required"
 case "$(uname -s)" in
   Linux) os="unknown-linux-gnu" ;;
   Darwin) os="apple-darwin" ;;
-  *) die "unsupported OS: $(uname -s). On Windows, download the .zip from https://github.com/$repo/releases" ;;
+  *) die "unsupported OS: $(uname -s). On Windows, use install.ps1: https://gaardhus.github.io/annox/#install" ;;
 esac
 case "$(uname -m)" in
   x86_64 | amd64) arch="x86_64" ;;
@@ -104,12 +106,22 @@ chmod 755 "$bin_dir/annox.tmp"
 mv -f "$bin_dir/annox.tmp" "$bin_dir/annox"
 say "installed $bin_dir/annox ($version)"
 
+install_skill() {
+  mkdir -p "$1"
+  rm -rf "${1:?}/annox"
+  cp -R "$tmp/$name/skills/annox" "$1/annox"
+  say "installed the skill in $1/annox$2"
+}
+
 if [ "$skill" = 1 ]; then
   [ -d "$tmp/$name/skills/annox" ] || die "$version has no skill in its release archive"
-  mkdir -p "$skill_dir"
-  rm -rf "${skill_dir:?}/annox"
-  cp -R "$tmp/$name/skills/annox" "$skill_dir/annox"
-  say "installed the skill in $skill_dir/annox"
+  if [ -n "$skill_dir" ]; then
+    install_skill "$skill_dir" ""
+  else
+    # Claude Code reads only its own directory; most other agents read the shared one.
+    install_skill "$HOME/.claude/skills" " (Claude Code)"
+    install_skill "$HOME/.agents/skills" " (Codex, Gemini CLI, Copilot CLI, Cursor, OpenCode, ...)"
+  fi
 fi
 
 case ":$PATH:" in

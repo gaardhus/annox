@@ -3,3 +3,4 @@ target/
 site/annox-demo/pkg/
 site/assets/
 site/install.sh
+site/install.ps1

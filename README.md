@@ -32,11 +32,18 @@ Crates:
 - **`annox-sync`** has the sync hub and replica (§7).
 - **`annox-lsp`** builds the `annox` binary. `annox lsp` runs the language server (§6) over stdio, and `annox hub` runs a sync hub.
 
-Install the latest `annox` binary on Linux or macOS (Apple silicon) into `~/.local/bin`. Add `--skill` to also install the [agent skill](#agents), and see `--help` for the version and directories. It verifies the download against the release's `SHA256SUMS`. On Windows, download the `.zip` from the [releases](https://github.com/gaardhus/annox/releases).
+Install the latest `annox` binary on Linux or macOS (Apple silicon) into `~/.local/bin`. Add `--skill` to also install the [agent skill](#agents) for Claude Code and other agents, and see `--help` for the version and directories. It verifies the download against the release's `SHA256SUMS`.
 
 ```sh
 curl -fsSL https://gaardhus.github.io/annox/install.sh | sh
 curl -fsSL https://gaardhus.github.io/annox/install.sh | sh -s -- --skill
+```
+
+On Windows, `install.ps1` does the same, and also adds `~\.local\bin` to your user `PATH` (unless you pass `-NoModifyPath`). See `-Help` for its options.
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://gaardhus.github.io/annox/install.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "& ([scriptblock]::Create((irm https://gaardhus.github.io/annox/install.ps1))) -Skill"
 ```
 
 Later, `annox update` installs the newest release over the binary you run it from, and also updates the skill if it's installed. Pass `--version vX.Y.Z` to pick a release.
@@ -81,10 +88,11 @@ Write commands use `--author`/`--name`, or `ANNOX_AUTHOR`/`ANNOX_AUTHOR_NAME`, a
 
 ### Agents
 
-[`skills/annox/`](skills/annox/SKILL.md) is a skill that teaches an agent the CLI and how to use it well: suggest instead of editing text you own, and answer comments in their threads. For Claude Code, install it with `install.sh --skill` (see [above](#reference-implementation)), or link it into your skills from a checkout:
+[`skills/annox/`](skills/annox/SKILL.md) is a skill that teaches an agent the CLI and how to use it well: suggest instead of editing text you own, and answer comments in their threads. Install it with `install.sh --skill` (see [above](#reference-implementation)). That puts it in `~/.claude/skills` for Claude Code, and in `~/.agents/skills`, which Codex, Gemini CLI, Copilot CLI, Cursor, and OpenCode read. Pass `--skill-dir DIR` to install it only in `DIR`. Or link it into your skills from a checkout:
 
 ```sh
 ln -s "$PWD/skills/annox" ~/.claude/skills/annox
+ln -s "$PWD/skills/annox" ~/.agents/skills/annox
 ```
 
 For agents that can't run shell commands, `annox mcp` serves the same commands as MCP tools over stdio:

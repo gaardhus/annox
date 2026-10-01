@@ -253,10 +253,16 @@ annox-demo {
 .copyable {
   position: relative;
 }
+.install-options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1.25rem;
+  margin: 1rem 0 0.6rem;
+}
 .tabs {
   display: flex;
   gap: 1.25rem;
-  margin: 1rem 0 0.6rem;
 }
 .tabs button {
   font: 500 0.85rem var(--sans);
