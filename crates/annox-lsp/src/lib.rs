@@ -1063,7 +1063,8 @@ fn thread_markdown(item: &Item, replies: Option<&Vec<Value>>) -> String {
         None => parts.push(header),
     }
     for reply in replies.into_iter().flatten().filter(|r| r["deleted"] == json!(false)) {
-        parts.push(format!("{}\n\n{}", author_line(reply), reply["body"].as_str().unwrap_or_default()));
+        // A thematic break renders as a full-width rule between messages.
+        parts.push(format!("---\n\n{}\n\n{}", author_line(reply), reply["body"].as_str().unwrap_or_default()));
     }
     parts.join("\n\n")
 }
