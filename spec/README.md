@@ -20,4 +20,6 @@ Conformance test vectors are in [tests/](tests/). [`anchoring.json`](tests/ancho
 
 Version 0.1 is a complete first draft: every section is written, and a reference implementation covers all of it. See the [changelog](CHANGELOG.md) for what 0.1 specifies and what's deferred.
 
+Nothing depends on the format yet: the reference implementation is its only consumer, and it's just starting to be used in practice. Any rule or decision, including the ones [decisions.md](decisions.md) scopes to "v1" (such as no compaction), can still change, incompatibly if the better design needs it.
+
 The test vectors were generated with a throwaway reference implementation. They're checked against the worked examples in §3.9 and §4.5, and pass in the Rust reference implementation (`crates/annox-core`).
