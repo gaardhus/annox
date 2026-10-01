@@ -62,6 +62,8 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
   padding: 1.25rem 0;
 }
 .brand {
@@ -79,6 +81,7 @@ h2 {
   font-size: 0.95rem;
 }
 .top nav a {
+  white-space: nowrap;
   text-decoration: none;
   color: var(--muted);
 }
@@ -127,6 +130,15 @@ h2 {
   color: var(--muted);
   margin: 1.5rem 0 0;
 }
+.hero-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.75rem;
+}
+.hero-actions .button {
+  font-size: 1rem;
+  padding: 0.6rem 1.2rem;
+}
 
 .demo {
   padding-bottom: 4rem;
@@ -143,14 +155,15 @@ h2 {
   margin: 0;
   color: var(--muted);
   font-size: 0.95rem;
-  max-width: 34em;
 }
 .demo-actions {
   display: flex;
   gap: 0.5rem;
 }
-.demo-actions button {
+.button {
+  display: inline-block;
   font: 500 0.9rem var(--sans);
+  text-decoration: none;
   color: var(--ink);
   cursor: pointer;
   background: var(--paper);
@@ -158,13 +171,17 @@ h2 {
   border-radius: 8px;
   padding: 0.45rem 0.9rem;
 }
-.demo-actions button:hover {
+.button:hover {
   border-color: var(--muted);
 }
-#rewrite {
+.button.primary {
   background: var(--ink);
   color: var(--page);
   border-color: var(--ink);
+}
+.button.primary:hover {
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 annox-demo {
@@ -199,10 +216,18 @@ annox-demo {
   margin: 0;
   color: var(--muted);
 }
+.points p code,
+.use p code {
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.05em 0.3em;
+}
 
 .use {
   display: grid;
-  grid-template-columns: 1fr 1.4fr;
+  grid-template-columns: 1.4fr 1fr;
   gap: 2.5rem;
   padding: 3rem 0 4rem;
   border-top: 1px solid var(--line);
@@ -221,6 +246,84 @@ annox-demo {
 }
 .use pre code {
   font: inherit;
+}
+.use pre .comment {
+  color: var(--muted);
+}
+.copyable {
+  position: relative;
+}
+.tabs {
+  display: flex;
+  gap: 1.25rem;
+  margin: 1rem 0 0.6rem;
+}
+.tabs button {
+  font: 500 0.85rem var(--sans);
+  color: var(--muted);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.2rem 0;
+}
+.tabs button:hover {
+  color: var(--ink);
+}
+.tabs button[aria-pressed="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+.copyable pre {
+  margin: 0;
+  padding-right: 3.75rem;
+}
+.prompt {
+  color: var(--accent);
+  user-select: none;
+}
+/* Covers the code that scrolls under the button, fading in from the left. */
+.copyable::after {
+  content: "";
+  position: absolute;
+  inset: 1px 1px 1px auto;
+  width: 3.75rem;
+  border-radius: 0 7px 7px 0;
+  background: linear-gradient(to right, transparent, var(--paper) 1.5rem);
+  pointer-events: none;
+}
+.copy {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 0.6rem;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  padding: 0.4rem;
+  color: var(--muted);
+  cursor: pointer;
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.copy:hover {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+.copy svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.copy .icon-done,
+.copy.done .icon-copy {
+  display: none;
+}
+.copy.done .icon-done {
+  display: block;
 }
 
 footer {
@@ -244,5 +347,11 @@ footer p {
   }
   .top nav {
     gap: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
   }
 }

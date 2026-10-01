@@ -78,22 +78,33 @@ button {
 button:hover:not(:disabled) { border-color: var(--annox-muted); }
 button:disabled { cursor: default; opacity: .45; }
 button.primary { background: var(--annox-accent); border-color: var(--annox-accent); color: var(--annox-on-accent); }
+/* Primary buttons shift toward the text color: lighter in dark mode, deeper in light mode. */
+button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--annox-accent) 78%, var(--annox-ink));
+  border-color: color-mix(in srgb, var(--annox-accent) 78%, var(--annox-ink));
+}
 :focus-visible { outline: 2px solid var(--annox-accent); outline-offset: 2px; }
 
 .frame {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
   border: 1px solid var(--annox-line); border-radius: var(--annox-radius);
   background: var(--annox-surface); overflow: hidden;
+  /* A fixed height side by side, so switching tabs doesn't resize the demo. */
+  height: var(--annox-height, 40rem);
 }
-@container (max-width: 44rem) { .frame { grid-template-columns: 1fr; } .margin { border-left: 0; border-top: 1px solid var(--annox-line); } }
+@container (max-width: 44rem) {
+  .frame { grid-template-columns: 1fr; height: auto; }
+  .editor { overflow: visible; }
+  .margin { border-left: 0; border-top: 1px solid var(--annox-line); height: var(--annox-height, 40rem); }
+}
 
-.doc { background: var(--annox-paper); display: flex; flex-direction: column; min-width: 0; }
+.doc { background: var(--annox-paper); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .bar { display: flex; gap: .5rem; align-items: center; padding: .6rem .9rem; border-bottom: 1px solid var(--annox-line); }
 .bar .hint { color: var(--annox-muted); font-size: .8125rem; margin-left: auto; }
 .bar button { white-space: nowrap; }
 @container (max-width: 30rem) { .bar .hint { display: none; } }
 
-.editor { display: grid; flex: 1; }
+.editor { display: grid; flex: 1; min-height: 0; overflow: auto; }
 .editor > * {
   grid-area: 1 / 1; margin: 0; border: 0; padding: 1.4rem 1.6rem 1.8rem;
   font: 1.0625rem/1.7 var(--annox-doc-font); letter-spacing: normal; tab-size: 4;
@@ -112,7 +123,7 @@ mark.suggestion.active { background: color-mix(in srgb, var(--annox-accent) 40%,
 
 .meta { padding: .5rem .9rem; border-top: 1px solid var(--annox-line); color: var(--annox-muted); font: .75rem var(--annox-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.margin { border-left: 1px solid var(--annox-line); display: flex; flex-direction: column; min-width: 0; max-height: var(--annox-height, 40rem); }
+.margin { border-left: 1px solid var(--annox-line); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .tabs { display: flex; border-bottom: 1px solid var(--annox-line); }
 .tabs button { flex: 1; border: 0; border-radius: 0; background: none; padding: .7rem; color: var(--annox-muted); box-shadow: inset 0 -2px transparent; }
 .tabs button[aria-selected="true"] { color: var(--annox-ink); box-shadow: inset 0 -2px var(--annox-accent); }
