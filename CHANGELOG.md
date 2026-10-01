@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/gaardhus/annox/compare/v0.4.0...v0.5.0) - 2026-10-01
+
+### Added
+
+- *(vscode)* Add a VS Code extension ([#5](https://github.com/gaardhus/annox/pull/5))
+- *(nvim)* Separate thread replies with a horizontal rule
+- *(nvim)* Show the thread while typing a reply
+- *(lsp)* Show a suggestion's change as a diff block in hover
+- *(nvim)* Show a suggestion's change as a diff block in threads
+- *(lsp)* Separate thread replies with a horizontal rule in hover
+- *(cli)* Add list filters and a show command
+- *(cli)* Add init --local to keep a workspace out of git
+- *(cli)* Add a report command summarizing annotations per document
+- *(site)* Serve install.sh from the site for a shorter install URL
+- *(site)* Polish the landing page
+
+### Fixed
+
+- *(nvim)* Guard thread view against JSON null fields
+
+### Documentation
+
+- *(skill)* Tell agents to quote as little as possible in suggestions
+- *(nvim)* Add normal mode suggestion keymap
+- Flag the spec as unstable and note nothing depends on it yet
+
 ## [0.4.0](https://github.com/gaardhus/annox/compare/v0.3.0...v0.4.0) - 2026-09-30
 
 ### Added
