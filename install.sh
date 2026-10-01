@@ -52,7 +52,7 @@ command -v tar > /dev/null || die "tar is required"
 case "$(uname -s)" in
   Linux) os="unknown-linux-gnu" ;;
   Darwin) os="apple-darwin" ;;
-  *) die "unsupported OS: $(uname -s). On Windows, download the .zip from https://github.com/$repo/releases" ;;
+  *) die "unsupported OS: $(uname -s). On Windows, use install.ps1: https://gaardhus.github.io/annox/#install" ;;
 esac
 case "$(uname -m)" in
   x86_64 | amd64) arch="x86_64" ;;
