@@ -1026,6 +1026,22 @@ fn author_line(state: &Value) -> String {
     format!("**{name}** · {}", state["created"].as_str().unwrap_or_default())
 }
 
+/// A change as a fenced `diff` block, so editors color the old text red and
+/// the new text green.
+fn diff_block(old: &str, new: &str) -> String {
+    let longest = [old, new].iter().flat_map(|t| t.split(|c| c != '`')).map(str::len).max().unwrap_or(0);
+    let fence = "`".repeat(longest.max(2) + 1);
+    let mut out = format!("{fence}diff\n");
+    for (sign, text) in [('-', old), ('+', new)] {
+        if !text.is_empty() {
+            for line in text.split('\n') {
+                out.push_str(&format!("{sign} {line}\n"));
+            }
+        }
+    }
+    out + &fence
+}
+
 /// A thread as Markdown (§6.5.2): the proposed change first for suggestions,
 /// then the root and its replies.
 fn thread_markdown(item: &Item, replies: Option<&Vec<Value>>) -> String {
@@ -1033,7 +1049,7 @@ fn thread_markdown(item: &Item, replies: Option<&Vec<Value>>) -> String {
     if item.kind() == "suggestion" {
         let r = item.state["edit"]["replacement"].as_str().unwrap_or_default();
         let stale = if item.applicable() { "" } else { " (stale)" };
-        parts.push(format!("**Suggestion{stale}:** `{}` → `{r}`", item.target.selectors.quote.exact));
+        parts.push(format!("**Suggestion{stale}:**\n{}", diff_block(&item.target.selectors.quote.exact, r)));
     }
     if item.conflicted() {
         parts.push("⚠ **This annotation has conflicting changes.**".into());

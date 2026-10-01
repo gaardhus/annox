@@ -116,7 +116,7 @@ fn diagnostics_hover_and_accept() {
     );
     let hover = client.response(&hover).unwrap();
     let markdown = hover["contents"]["value"].as_str().unwrap();
-    assert!(markdown.contains("`we prove that` → `we show that`"), "{markdown}");
+    assert!(markdown.contains("```diff\n- we prove that\n+ we show that\n```"), "{markdown}");
 
     let actions = client.request(
         "textDocument/codeAction",
