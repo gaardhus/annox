@@ -4,7 +4,7 @@ resolver = "2"
 
 [workspace.package]
 # The one version of annox; releases bump it (see .github/workflows/release.yml).
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 license = "MIT"
 publish = false
