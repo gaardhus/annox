@@ -670,7 +670,7 @@
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
     "check": "tsc --noEmit",
-    "test:unit": "node --test test/unit/",
+    "test:unit": "node --test \"test/unit/*.test.ts\"",
     "test:e2e": "node test/e2e/run.mjs",
     "package": "cp ../../LICENSE . && npm run build -- --minify && npx --yes @vscode/vsce@4 package --no-dependencies"
   },
