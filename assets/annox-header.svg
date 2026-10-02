@@ -6,9 +6,9 @@
     .bubble { fill: #6366f1; stroke: #6366f1; }
     .name { fill: #1f2937; }
     @media (prefers-color-scheme: dark) {
-      .page { fill: #e8eaf0; stroke: #e8eaf0; }
-      .fold { fill: #b4bac7; stroke: #b4bac7; stroke-width: 6; }
-      .crease { stroke: #b4bac7; stroke-width: 2; }
+      .page { fill: #e8eaf0; stroke: #e8eaf0; stroke-linejoin: miter; }
+      .fold { fill: #b4bac7; stroke: none; }
+      .crease { stroke: none; }
       .bubble { fill: #8b8ff7; stroke: #8b8ff7; }
       .name { fill: #f3f4f6; }
     }
@@ -24,16 +24,16 @@
   <g mask="url(#annox-gap)">
     <!-- Document with folded corner: outlined in light mode, a solid light shape in dark mode -->
     <path class="page" d="M27 12H66L88 34V101a15 15 0 0 1-15 15H27a15 15 0 0 1-15-15V27a15 15 0 0 1 15-15Z" stroke-width="6" stroke-linejoin="round"/>
-    <path class="fold" d="M66 12V24a10 10 0 0 0 10 10H88Z" stroke-linejoin="round"/>
+    <path class="fold" d="M67.24 9L91 32.76V37H79.24A12 12 0 0 1 67.24 25Z"/>
     <path class="crease" d="M66 12V24a10 10 0 0 0 10 10H88" fill="none" stroke-linejoin="round"/>
     <!-- Text lines -->
     <g stroke="#9ca3af" stroke-width="7" stroke-linecap="round">
-      <path d="M28 40H52"/>
-      <path d="M28 58H48"/>
+      <path d="M23 40H56"/>
+      <path d="M23 62H50"/>
     </g>
     <!-- Highlighted span -->
-    <rect x="23" y="77" width="54" height="18" rx="7" fill="#facc15"/>
-    <path d="M28 86H70" stroke="#1f2937" stroke-width="7" stroke-linecap="round"/>
+    <rect x="18" y="75" width="59" height="18" rx="7" fill="#facc15"/>
+    <path d="M23 84H70" stroke="#1f2937" stroke-width="7" stroke-linecap="round"/>
   </g>
   <!-- Comment bubble -->
   <path class="bubble" d="M81 36H107a13 13 0 0 1 13 13V59a13 13 0 0 1-13 13H92.2L74.5 83.5L78.1 72H81a13 13 0 0 1-13-13V49a13 13 0 0 1 13-13Z" stroke-width="2" stroke-linejoin="round"/>

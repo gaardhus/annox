@@ -40,6 +40,10 @@ test-vscode:
 vsix:
     cd editors/vscode && npm ci && npm run package
 
+# Render the VS Code extension icon from assets/annox.svg (light version; rsvg-convert ignores the dark-mode styles).
+vscode-icon:
+    rsvg-convert -w 128 -h 128 assets/annox.svg -o editors/vscode/icon.png
+
 # Install the packaged extension for the version in editors/vscode/package.json.
 code-install:
     code --install-extension "editors/vscode/annox-$(node -p "require('./editors/vscode/package.json').version").vsix"
