@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Protocol (§6.6.2).** An optional `annox/commit` request commits the workspace's uncommitted annotation files to version control, or with `dryRun` reports what it would commit.
+
 ## 0.1 — 2026-09-29
 
 The first complete draft. The reasons behind each design choice are recorded as D1–D45 in [decisions.md](decisions.md).

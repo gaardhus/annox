@@ -256,5 +256,29 @@ local presence =
   vim.api.nvim_buf_get_extmarks(buf, vim.api.nvim_get_namespaces().annox_presence, 0, -1, { details = true })
 check(#presence == 1 and presence[1][4].virt_text[1][1] == "▏Bob", "peer cursor drawn with name")
 
+-- Commit: a dry run fills the prompt, and only annotation files are committed.
+local function git(args)
+  local out = vim.system(vim.list_extend({ "git", "-C", root }, args), { text = true }):wait()
+  check(out.code == 0, "git " .. table.concat(args, " ") .. ": " .. out.stderr)
+  return out.stdout
+end
+git({ "init", "--quiet" })
+git({ "config", "user.email", "ada@example.org" })
+git({ "config", "user.name", "Ada" })
+git({ "config", "commit.gpgsign", "false" })
+local prompted
+vim.ui.input = function(opts, on_confirm)
+  prompted = opts
+  on_confirm(opts.default)
+end
+annox.commit()
+wait("commit", function()
+  return vim.system({ "git", "-C", root, "rev-parse", "--verify", "--quiet", "HEAD" }):wait().code == 0
+end)
+vim.ui.input = input
+check(prompted.default:match("^chore%(annox%): "), "commit message summarized: " .. prompted.default)
+check(vim.trim(git({ "status", "--porcelain", "--", ".annox" })) == "", "annotation files committed")
+check(git({ "status", "--porcelain", "paper.tex" }):match("paper.tex"), "the document is left alone")
+
 print("annox nvim e2e: OK")
 vim.cmd.qall({ bang = true })

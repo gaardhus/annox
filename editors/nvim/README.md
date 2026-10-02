@@ -52,6 +52,7 @@ Changes others make to `.annox/`, such as a `git pull`, show up within a second 
 | `:Annox conflicts`                        | Resolve a conflicting field by picking one of the competing values or writing a merged version. Run it again for any other conflicting fields. If an accepted suggestion loses, you're offered to revert its edit.                                                                       |
 | `:Annox history`                          | Show every event of the annotation under the cursor.                                                                                                                                                                                                                                     |
 | `:Annox list`                             | Put the buffer's annotations in the quickfix list.                                                                                                                                                                                                                                       |
+| `:Annox commit`                           | Commit the workspace's annotation files to git, and nothing else. It shows how many there are and asks you to confirm or edit the message, which summarizes them. It doesn't push.                                                                                                       |
 
 Suggested keymaps:
 
@@ -96,6 +97,7 @@ return {
       { "<leader>ah", "<cmd>Annox history<cr>", desc = "History" },
       { "<leader>aO", "<cmd>Annox orphans<cr>", desc = "Orphans" },
       { "<leader>aC", "<cmd>Annox conflicts<cr>", desc = "Resolve conflicts" },
+      { "<leader>ag", "<cmd>Annox commit<cr>", desc = "Commit annotations" },
     },
   },
   {
@@ -120,6 +122,7 @@ return {
         { "<leader>ah", icon = "\u{f1da}" },
         { "<leader>aO", icon = { icon = "\u{f127}", color = "yellow" } },
         { "<leader>aC", icon = { icon = "\u{f126}", color = "orange" } },
+        { "<leader>ag", icon = { icon = "\u{e729}", color = "orange" } },
       },
     },
   },

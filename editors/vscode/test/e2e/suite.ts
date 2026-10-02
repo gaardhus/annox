@@ -2,6 +2,7 @@
 // (see run.mjs). Steps run in order, like editors/nvim/tests/e2e.lua.
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -347,6 +348,19 @@ export async function run(): Promise<void> {
 
     await exec("annox.toggleSuggesting");
     assert.ok(!api.suggesting.isOn(doc.uri), "off");
+  });
+
+  step("committing annotations", async () => {
+    const git = (...args: string[]) => execFileSync("git", ["-C", root, ...args], { encoding: "utf8" });
+    git("init", "--quiet");
+    git("config", "user.email", "ada@example.org");
+    git("config", "user.name", "Ada");
+    git("config", "commit.gpgsign", "false");
+    await focus();
+    await exec("annox.commit", { message: "Review round 1" });
+    assert.equal(git("log", "--format=%s").trim(), "Review round 1");
+    assert.equal(git("status", "--porcelain", "--", ".annox").trim(), "", "annotation files committed");
+    assert.match(git("status", "--porcelain", "paper.tex"), /paper\.tex/, "the document is left alone");
   });
 
   step("initializing a workspace", async () => {

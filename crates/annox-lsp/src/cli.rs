@@ -2,7 +2,7 @@
 //! Commands read and write `.annox/` directly through `annox-core`, and print
 //! JSON. Text is targeted by quoting it rather than by offsets.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use annox_core::anchor::{self, Anchor, State};
@@ -155,6 +155,15 @@ pub enum Command {
         id: String,
         #[command(flatten)]
         author: Author,
+    },
+    /// Commit the uncommitted annotation events to git, and nothing else
+    Commit {
+        /// The commit message [default: a summary of what's being committed]
+        #[arg(long, short, value_name = "TEXT", allow_hyphen_values = true)]
+        message: Option<String>,
+        /// Print what would be committed, without committing
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -315,7 +324,102 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
         Command::Reattach { id, at, author } => move_target(&id, &at, None, &author, &cwd),
         Command::Delete { id, author } => set_deleted(&id, true, &author, &cwd),
         Command::Restore { id, author } => set_deleted(&id, false, &author, &cwd),
+        Command::Commit { message, dry_run } => commit(message.as_deref(), dry_run, &cwd),
     }
+}
+
+fn commit(message: Option<&str>, dry_run: bool, cwd: &Path) -> anyhow::Result<Value> {
+    let (ws, index) = open_workspace(cwd)?;
+    commit_workspace(&ws, &index, message, dry_run)
+}
+
+/// Commits everything under `.annox/` that git doesn't ignore, leaving
+/// whatever else is staged alone. `cache/`, `local/` and `synced/` are
+/// ignored (§5.10), so this commits the shared events written here. With
+/// `dry_run`, it only reports what it would commit.
+pub fn commit_workspace(ws: &Workspace, index: &Index, message: Option<&str>, dry_run: bool) -> anyhow::Result<Value> {
+    let files = uncommitted(&ws.root)?;
+    if files.is_empty() {
+        return Ok(json!({ "commit": null, "files": 0, "documents": {}, "message": null }));
+    }
+    let summary = summarize(index, &files);
+    let message = message.map_or_else(|| commit_message(&summary), str::to_owned);
+    let documents: Map<String, Value> = summary
+        .iter()
+        .map(|(path, counts)| {
+            let doc = CHANGES.iter().zip(counts).map(|((_, many), n)| (many.to_string(), json!(n)));
+            (path.to_string(), Value::Object(doc.collect()))
+        })
+        .collect();
+    let mut result = json!({ "commit": null, "files": files.len(), "documents": documents, "message": message });
+    if !dry_run {
+        git(&ws.root, &["add", "--all", "--", ".annox"])?;
+        // Naming the paths commits only them, not the rest of the index.
+        git(&ws.root, &["commit", "--quiet", "--message", &message, "--", ".annox"])?;
+        result["commit"] = json!(git(&ws.root, &["rev-parse", "HEAD"])?.trim());
+    }
+    Ok(result)
+}
+
+/// The files under `.annox/` that differ from the last commit and that git
+/// doesn't ignore, relative to the workspace root.
+fn uncommitted(root: &Path) -> anyhow::Result<Vec<String>> {
+    let changed =
+        git(root, &["ls-files", "--modified", "--deleted", "--others", "--exclude-standard", "--", ".annox"])?;
+    let staged = git(root, &["diff", "--cached", "--name-only", "--relative", "--no-renames", "--", ".annox"])?;
+    let files: BTreeSet<&str> = changed.lines().chain(staged.lines()).collect();
+    Ok(files.into_iter().map(str::to_owned).collect())
+}
+
+/// What uncommitted events do, singular and plural, in the order they're
+/// counted in.
+const CHANGES: [(&str, &str); 4] =
+    [("comment", "comments"), ("suggestion", "suggestions"), ("reply", "replies"), ("update", "updates")];
+
+/// Counts the events among `files` by document path and by [`CHANGES`].
+/// Other files, such as document events, aren't counted.
+fn summarize<'a>(index: &'a Index, files: &[String]) -> BTreeMap<&'a str, [usize; 4]> {
+    let mut counts = BTreeMap::new();
+    for (event, location) in files.iter().filter_map(|f| index.events.get(event_id(f)?)) {
+        let kind = if event.kind == "create" { event.field("kind").and_then(Value::as_str) } else { Some("update") };
+        let document = index.documents.get(index.canonical(&location.document));
+        let (Some(path), Some(i)) =
+            (document.and_then(|d| d.path.as_deref()), CHANGES.iter().position(|(k, _)| Some(*k) == kind))
+        else {
+            continue;
+        };
+        counts.entry(path).or_insert([0; 4])[i] += 1;
+    }
+    counts
+}
+
+/// A Conventional Commits message for `summary`, such as
+/// `chore(annox): 2 comments, 1 reply on paper.md`.
+fn commit_message(summary: &BTreeMap<&str, [usize; 4]>) -> String {
+    let parts: Vec<String> = CHANGES
+        .iter()
+        .enumerate()
+        .map(|(i, (one, many))| (summary.values().map(|c| c[i]).sum::<usize>(), one, many))
+        .filter(|(n, ..)| *n > 0)
+        .map(|(n, one, many)| format!("{n} {}", if n == 1 { one } else { many }))
+        .collect();
+    let what = if parts.is_empty() { "update annotations".to_owned() } else { parts.join(", ") };
+    match summary.len() {
+        0 => format!("chore(annox): {what}"),
+        1 => format!("chore(annox): {what} on {}", summary.keys().next().expect("one path")),
+        n => format!("chore(annox): {what} on {n} documents"),
+    }
+}
+
+/// Runs git in `root`, returning its output, or its error message if it fails.
+fn git(root: &Path, args: &[&str]) -> anyhow::Result<String> {
+    let out = std::process::Command::new("git").arg("-C").arg(root).args(args).output().context("running git")?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        bail!("git {}: {}", args[0], if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() });
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 fn set_deleted(id: &str, deleted: bool, who: &Author, cwd: &Path) -> anyhow::Result<Value> {
@@ -490,9 +594,12 @@ fn is_broken(view: &Value) -> bool {
 }
 
 /// Counts of each document's annotations, without deleted ones. A missing
-/// document's open annotations count as orphaned (§5.10).
+/// document's open annotations count as orphaned (§5.10). In a git
+/// repository, also the events `annox commit` would commit.
 fn report(file: Option<&str>, cwd: &Path) -> anyhow::Result<Value> {
-    let ws = Workspace::find(cwd).ok_or_else(|| no_workspace(cwd))?;
+    let (ws, index) = open_workspace(cwd)?;
+    let files = uncommitted(&ws.root).ok();
+    let uncommitted = files.as_ref().map(|files| summarize(&index, files));
     let views = list(file, true, Filter::default(), cwd)?;
     let mut documents: Vec<Value> = Vec::new();
     for view in views.as_array().into_iter().flatten().filter(|v| v["deleted"] != json!(true)) {
@@ -507,6 +614,10 @@ fn report(file: Option<&str>, cwd: &Path) -> anyhow::Result<Value> {
                 "stale": 0,
                 "conflicted": 0,
             }));
+            if let Some(counts) = &uncommitted {
+                let n: usize = counts.get(path).map_or(0, |c| c.iter().sum());
+                documents.last_mut().expect("pushed above")["uncommitted"] = json!(n);
+            }
         }
         let doc = documents.last_mut().expect("pushed above");
         let missing = doc["missing"] == json!(true);
@@ -524,17 +635,30 @@ fn report(file: Option<&str>, cwd: &Path) -> anyhow::Result<Value> {
             bump(&mut doc["conflicted"]);
         }
     }
-    Ok(json!({ "documents": documents }))
+    let mut report = json!({ "documents": documents });
+    if let Some(files) = files {
+        report["uncommitted"] = json!(files.len());
+    }
+    Ok(report)
+}
+
+/// The event id of an event file's path.
+fn event_id(file: &str) -> Option<&str> {
+    file.rsplit('/').next()?.strip_suffix(".json")
 }
 
 /// `report`'s output as text, one line per document.
 pub fn render_report(report: &Value) -> String {
     let documents = report["documents"].as_array().map_or(&[][..], Vec::as_slice);
-    if documents.is_empty() {
-        return "no annotations\n".into();
-    }
     let count = |v: &Value| v.as_u64().unwrap_or(0);
     let plural = |n: u64, what: &str| format!("{n} {what}{}", if n == 1 { "" } else { "s" });
+    let uncommitted = match count(&report["uncommitted"]) {
+        0 => String::new(),
+        n => format!("{} to commit; see `annox commit --dry-run`\n", plural(n, "file")),
+    };
+    if documents.is_empty() {
+        return format!("no annotations\n{uncommitted}");
+    }
     let width = documents.iter().map(|d| d["path"].as_str().unwrap_or_default().chars().count()).max().unwrap_or(0);
     let mut out = String::new();
     for doc in documents {
@@ -560,9 +684,12 @@ pub fn render_report(report: &Value) -> String {
         if closed > 0 {
             parts.push(format!("{closed} closed"));
         }
+        if count(&doc["uncommitted"]) > 0 {
+            parts.push(plural(count(&doc["uncommitted"]), "uncommitted change"));
+        }
         out.push_str(&format!("{:width$}  {}\n", doc["path"].as_str().unwrap_or_default(), parts.join(" · ")));
     }
-    out
+    out + &uncommitted
 }
 
 fn show(id: &str, cwd: &Path) -> anyhow::Result<Value> {

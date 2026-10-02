@@ -78,3 +78,14 @@ export interface HistoryEvent {
 }
 
 export type AcceptResult = { annotation: string; accepted: true } | { annotation: string; error: unknown };
+
+/** The result of `annox/commit`. */
+export interface CommitResult {
+  /** The new commit, or null if nothing was committed. */
+  commit: string | null;
+  /** How many files were or would be committed. */
+  files: number;
+  /** What the events among them do, by document path. */
+  documents: Record<string, { comments: number; suggestions: number; replies: number; updates: number }>;
+  message: string | null;
+}

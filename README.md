@@ -80,11 +80,12 @@ annox suggest paper.md --quote "teh" --replace "the" --body "typo"
 annox reply ID --body "Fixed."
 annox status ID resolved
 annox accept ID
+annox commit [-m TEXT] [--dry-run]
 ```
 
 Write commands use `--author`/`--name`, or `ANNOX_AUTHOR`/`ANNOX_AUTHOR_NAME`, and otherwise your [configured identity](#configuration). Give an agent its own id, for example `ANNOX_AUTHOR=urn:agent:claude`, so its annotations are distinguishable from yours. A running `annox lsp` picks up the changes, so they appear in the editor. Run `annox help` for every command.
 
-`annox init` creates `.annox/` at the project root, which is meant to be committed so collaborators see the annotations. To keep them to yourself, use `annox init --local`. It adds `*` to `.annox/.gitignore`, so git ignores the whole folder. To share them later, delete that line.
+`annox init` creates `.annox/` at the project root, which is meant to be committed so collaborators see the annotations. Every change is a new file there, so they add up between commits. `annox report` counts them, and `annox commit` commits just those files, with a message summarizing them, and leaves anything else you've staged alone. It doesn't push. `--dry-run` prints what it would commit. The editor plugins have the same command, which lets you edit the message first. To keep them to yourself, use `annox init --local`. It adds `*` to `.annox/.gitignore`, so git ignores the whole folder. To share them later, delete that line.
 
 ### Agents
 

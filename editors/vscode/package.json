@@ -163,6 +163,12 @@
         "icon": "$(history)"
       },
       {
+        "command": "annox.commit",
+        "title": "Commit Annotations",
+        "category": "annox",
+        "icon": "$(git-commit)"
+      },
+      {
         "command": "annox.restartServer",
         "title": "Restart Server",
         "category": "annox"

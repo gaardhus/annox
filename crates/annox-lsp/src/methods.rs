@@ -56,9 +56,10 @@ impl Server<'_> {
             "annox/restore" => self.m_simple(&params, "restore"),
             "annox/moveDocument" => self.m_move_document(&params),
             "annox/history" => self.m_history(&params),
+            "annox/commit" => self.m_commit(&params),
             _ => fail(-32601, format!("unknown method {method}")),
         };
-        let changed = !matches!(method.as_str(), "annox/annotations" | "annox/history");
+        let changed = !matches!(method.as_str(), "annox/annotations" | "annox/history" | "annox/commit");
         self.reply(id, result);
         if changed {
             self.refresh_all();
@@ -307,6 +308,17 @@ impl Server<'_> {
         let id = str_param(params, "annotation")?;
         let (_, a) = self.locate(id)?;
         Ok(json!(replay::ordered_events(&a.loaded.events, id)))
+    }
+
+    fn m_commit(&self, params: &Value) -> Result<Value, Failure> {
+        let uri = uri_param(&params["textDocument"], "uri")?;
+        let message = params["message"].as_str().filter(|m| !m.trim().is_empty());
+        let dry_run = params["dryRun"].as_bool().unwrap_or(false);
+        // Summarize what's in storage now, not a cached index.
+        self.invalidate();
+        let a = self.analyze_uri(&uri)?;
+        crate::cli::commit_workspace(&a.ws, &a.index, message, dry_run)
+            .map_err(|e| (INVALID_OPERATION, format!("{e:#}")))
     }
 
     fn m_accept(&mut self, command: RequestId, params: &Value) {

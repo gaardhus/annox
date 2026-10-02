@@ -76,6 +76,7 @@ annox delete ID / annox restore ID
 - **Use comments for questions and for problems you can't fix yourself.** Use suggestions for concrete replacement text.
 - **Answer review comments in their thread.** When the user asks you to address comments, run `annox list --kind comment --others`, then handle each one. Either make the change (as a suggestion, or as a direct edit if asked) and `reply` saying what you did, or `reply` explaining why not. Resolve a comment (`annox status ID resolved`) only when you've fully addressed it and it's addressed to you.
 - **Don't accept suggestions unless the user asks you to.** `annox accept ID` writes the change into the file and is final. If it says the suggestion was relocated, check the text at the reported line before passing `--confirmed`.
+- **Don't commit unless the user asks.** `annox commit` commits the annotation files under `.annox/` and nothing else.
 - **Don't change other people's annotations.** Don't edit, withdraw, or delete them. Reply instead.
 - **Suggestions you make go stale if you then edit the same text yourself.** Finish your direct edits first, or check `annox list --mine --broken` afterwards and retarget what it lists.
 

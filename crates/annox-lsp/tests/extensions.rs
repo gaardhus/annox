@@ -280,3 +280,33 @@ fn walk(dir: &std::path::Path) -> Vec<String> {
     }
     out
 }
+
+#[test]
+fn commit_previews_then_commits() {
+    let mut f = setup();
+    let uri = f.uri.clone();
+    let root = f.ws.root.clone();
+    let commit = json!({ "textDocument": { "uri": uri }, "dryRun": true });
+    assert_eq!(f.client.call_err("annox/commit", commit.clone()), 1003, "not a git repository");
+
+    let git = |args: &[&str]| {
+        assert!(std::process::Command::new("git").arg("-C").arg(&root).args(args).status().unwrap().success())
+    };
+    git(&["init", "--quiet"]);
+    git(&["config", "user.email", "ada@example.org"]);
+    git(&["config", "user.name", "Ada"]);
+    git(&["config", "commit.gpgsign", "false"]);
+    f.client.call(
+        "annox/create",
+        json!({ "textDocument": { "uri": uri }, "kind": "comment", "range": range(1, 0, 12), "body": "Which section?" }),
+    );
+    let planned = f.client.call("annox/commit", commit);
+    assert_eq!(planned["commit"], Value::Null);
+    assert_eq!(planned["message"], "chore(annox): 1 comment on paper.tex");
+
+    let committed = f.client.call("annox/commit", json!({ "textDocument": { "uri": uri }, "message": "Review" }));
+    assert!(committed["commit"].is_string());
+    assert_eq!((&committed["message"], &committed["files"]), (&"Review".into(), &planned["files"]));
+    let nothing = f.client.call("annox/commit", json!({ "textDocument": { "uri": uri } }));
+    assert_eq!(nothing["files"], 0);
+}

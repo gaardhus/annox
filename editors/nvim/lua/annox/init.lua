@@ -885,6 +885,31 @@ function M.publish(opts)
   end)
 end
 
+--- Commits the workspace's annotation files to git (`annox/commit`), after
+--- showing how many there are and letting you edit the message.
+function M.commit()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local doc = { uri = vim.uri_from_bufnr(bufnr) }
+  request(bufnr, "annox/commit", { textDocument = doc, dryRun = true }, function(planned)
+    local n = planned.files
+    if n == 0 then
+      return vim.notify("annox: no annotation changes to commit", vim.log.levels.INFO)
+    end
+    local prompt = string.format("Commit %d annotation file%s: ", n, n == 1 and "" or "s")
+    vim.ui.input({ prompt = prompt, default = planned.message }, function(message)
+      if not message or vim.trim(message) == "" then
+        return
+      end
+      request(bufnr, "annox/commit", { textDocument = doc, message = message }, function(result)
+        if result.commit == vim.NIL then
+          return vim.notify("annox: no annotation changes to commit", vim.log.levels.INFO)
+        end
+        vim.notify(string.format("annox: committed %s %s", result.commit:sub(1, 7), message), vim.log.levels.INFO)
+      end)
+    end)
+  end)
+end
+
 --- Edits the replacement of the suggestion under the cursor, or the text of
 --- the comment, in a floating window. Esc saves and closes, `:q!` discards.
 --- opts: { annotation? }
@@ -1554,6 +1579,9 @@ local subcommands = {
   end,
   list = function()
     M.list()
+  end,
+  commit = function()
+    M.commit()
   end,
 }
 

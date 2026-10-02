@@ -23,7 +23,14 @@ import {
   rangeOf,
 } from "./store.ts";
 import type { Suggesting } from "./suggesting.ts";
-import type { AcceptResult, AnnotationView, ConflictEntry, HistoryEvent, Range } from "./types.ts";
+import type {
+  AcceptResult,
+  AnnotationView,
+  CommitResult,
+  ConflictEntry,
+  HistoryEvent,
+  Range,
+} from "./types.ts";
 
 /** Options a command accepts when run with arguments. */
 export interface Options {
@@ -41,6 +48,8 @@ export interface Options {
   revert?: boolean;
   root?: string;
   confirm?: boolean;
+  /** A commit message, which skips the prompt. */
+  message?: string;
 }
 
 type Arg = vscode.CommentThread | AnnoxComment | vscode.CommentReply | Options | undefined;
@@ -108,6 +117,7 @@ export class Actions {
       "annox.resolveConflicts": (arg) => this.resolveConflict(arg),
       "annox.history": (arg) => this.showHistory(arg),
       "annox.open": (arg) => this.open(arg),
+      "annox.commit": (arg) => this.commit(options(arg)),
       "annox.restartServer": () => this.annox.restart(),
     };
     return Object.entries(commands).map(([id, fn]) => vscode.commands.registerCommand(id, fn));
@@ -542,6 +552,32 @@ export class Actions {
     }
     const t = await this.target(arg, (a) => !!a.local, "draft");
     if (t) await this.annox.request("annox/publish", { annotations: [t.view.id] });
+  }
+
+  /** Commits the workspace's annotation files to git (`annox/commit`), after
+   * showing how many there are and letting the user edit the message. */
+  private async commit(opts: Options): Promise<void> {
+    const editor = await this.editor();
+    if (!editor) return;
+    const textDocument = { uri: this.annox.uri(editor.document.uri) };
+    const planned = await this.annox.request<CommitResult>("annox/commit", { textDocument, dryRun: true });
+    if (!planned) return;
+    const n = planned.files;
+    if (n === 0) {
+      info("no annotation changes to commit");
+      return;
+    }
+    const message =
+      opts.message ??
+      (await vscode.window.showInputBox({
+        prompt: `Commit ${n} annotation file${n === 1 ? "" : "s"} to git`,
+        value: planned.message ?? "",
+      }));
+    if (!message?.trim()) return;
+    const result = await this.annox.request<CommitResult>("annox/commit", { textDocument, message });
+    if (!result) return;
+    if (!result.commit) info("no annotation changes to commit");
+    else info(`committed ${result.commit.slice(0, 7)} ${message}`);
   }
 
   // Viewing -----------------------------------------------------------------

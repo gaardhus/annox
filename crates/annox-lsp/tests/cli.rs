@@ -16,7 +16,7 @@ fn setup(doc: &str) -> tempfile::TempDir {
 
 fn try_annox(cwd: &Path, args: &[&str]) -> anyhow::Result<Value> {
     let mut args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    if !matches!(args[0].as_str(), "init" | "list" | "show" | "report") {
+    if !matches!(args[0].as_str(), "init" | "list" | "show" | "report" | "commit") {
         args.extend(["--author".into(), "urn:test:agent".into(), "--name".into(), "Agent".into()]);
     }
     cli::run(&args, cwd)
@@ -269,4 +269,57 @@ fn report_counts_each_document() {
         "notes.md  file missing · 1 open comment · 1 orphaned\npaper.md  1 open comment · 1 open suggestion · 1 closed\n"
     );
     assert_eq!(cli::render_report(&serde_json::json!({ "documents": [] })), "no annotations\n");
+}
+
+fn git(dir: &Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().unwrap();
+    assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    String::from_utf8(out.stdout).unwrap()
+}
+
+#[test]
+fn commit_takes_only_annotation_events() {
+    let dir = setup(DOC);
+    assert!(error(dir.path(), &["commit"]).contains("not a git repository"));
+    assert!(annox(dir.path(), &["report"]).get("uncommitted").is_none());
+
+    git(dir.path(), &["init", "--quiet"]);
+    git(dir.path(), &["config", "user.email", "ada@example.org"]);
+    git(dir.path(), &["config", "user.name", "Ada"]);
+    git(dir.path(), &["config", "commit.gpgsign", "false"]);
+    let c = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "Section 3", "--body", "Which one?"]));
+    annox(dir.path(), &["reply", &c, "--body", "The third."]);
+    annox(dir.path(), &["comment", "paper.md", "--quote", "teh", "--body", "draft", "--local"]);
+    git(dir.path(), &["add", "paper.md"]);
+
+    let report = annox(dir.path(), &["report"]);
+    // annox.json, .gitignore, the document event, and two annotation events.
+    assert_eq!((&report["uncommitted"], &report["documents"][0]["uncommitted"]), (&5.into(), &2.into()));
+    assert!(cli::render_report(&report).contains("2 uncommitted changes"));
+    assert!(cli::render_report(&report).ends_with("5 files to commit; see `annox commit --dry-run`\n"));
+
+    let planned = annox(dir.path(), &["commit", "--dry-run"]);
+    assert_eq!(planned["commit"], Value::Null);
+    assert_eq!(planned["message"], "chore(annox): 1 comment, 1 reply on paper.md");
+    assert_eq!(planned["files"], 5);
+    assert_eq!(
+        planned["documents"],
+        serde_json::json!({ "paper.md": { "comments": 1, "suggestions": 0, "replies": 1, "updates": 0 } })
+    );
+    assert_eq!(git(dir.path(), &["diff", "--cached", "--name-only"]), "paper.md\n", "a dry run stages nothing");
+
+    let committed = annox(dir.path(), &["commit"]);
+    assert_eq!((&committed["message"], &committed["files"]), (&planned["message"], &planned["files"]));
+    let files = git(dir.path(), &["show", "--name-only", "--format=", "HEAD"]);
+    assert_eq!(files.lines().count(), 5);
+    assert!(files.lines().all(|f| f.starts_with(".annox/") && !f.starts_with(".annox/local/")), "{files}");
+    // What the user had staged stays staged, and out of the commit.
+    assert_eq!(git(dir.path(), &["diff", "--cached", "--name-only"]), "paper.md\n");
+    assert_eq!(annox(dir.path(), &["report"])["uncommitted"], 0);
+
+    assert_eq!(annox(dir.path(), &["commit"])["commit"], Value::Null);
+    annox(dir.path(), &["status", &c, "resolved"]);
+    let committed = annox(dir.path(), &["commit", "-m", "Resolve review"]);
+    assert_eq!(committed["message"], "Resolve review");
+    assert_eq!(committed["files"], 1);
 }
