@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/gaardhus/annox/compare/v0.6.0...v0.7.0) - 2026-10-02
+
+### Added
+
+- Modernize the icon
+- Add annox commit for committing annotation files
+
 ## [0.6.0](https://github.com/gaardhus/annox/compare/v0.5.0...v0.6.0) - 2026-10-01
 
 ### Added
