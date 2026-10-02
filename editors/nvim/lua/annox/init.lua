@@ -8,6 +8,9 @@
 local M = {}
 
 local ns = vim.api.nvim_create_namespace("annox")
+-- Diff blocks styled in floats, some opened by other code: kept apart from
+-- `ns`, so clearing them never touches the marks of an annotated buffer.
+local diff_ns = vim.api.nvim_create_namespace("annox_diff")
 
 M.config = {
   cmd = { "annox", "lsp" },
@@ -27,6 +30,11 @@ M.config = {
   suggest_undo_key = "u",
   --- Tint the line numbers and cursor line of windows in suggestion mode.
   suggest_tint = true,
+  --- Mark the words that changed within a suggestion, diff-so-fancy style,
+  --- inline and in the thread, hover and edit windows.
+  word_diff = true,
+  --- Strike through the deleted text of inline suggestions.
+  strikethrough = true,
 }
 
 local presence_ns = vim.api.nvim_create_namespace("annox_presence")
@@ -76,13 +84,26 @@ local function set_highlights()
     vim.api.nvim_set_hl(0, group, { default = true, link = link })
   end
   local removed = vim.api.nvim_get_hl(0, { name = "Removed", link = false })
-  vim.api.nvim_set_hl(0, "AnnoxDeletion", { default = true, strikethrough = true, fg = removed.fg })
+  vim.api.nvim_set_hl(0, "AnnoxDeletion", { default = true, strikethrough = M.config.strikethrough, fg = removed.fg })
+  -- The old text above the suggestion edit window.
+  vim.api.nvim_set_hl(0, "AnnoxEditOriginal", { default = true, fg = removed.fg })
   -- A suggestion's lines in the thread's diff block: plain text over the diff
   -- background, instead of the code block's color.
   local text = vim.api.nvim_get_hl(0, { name = "NormalFloat", link = false }).fg
     or vim.api.nvim_get_hl(0, { name = "Normal", link = false }).fg
   vim.api.nvim_set_hl(0, "AnnoxThreadDeletion", { default = true, fg = text })
   vim.api.nvim_set_hl(0, "AnnoxThreadInsertion", { default = true, fg = text })
+  -- The words that changed within a suggestion, diff-so-fancy style. Only a
+  -- background, so the text keeps its color, and a light one, as inline that
+  -- text is red or green itself.
+  local added_fg = vim.api.nvim_get_hl(0, { name = "Added", link = false }).fg
+  if vim.o.termguicolors and removed.fg and added_fg then
+    vim.api.nvim_set_hl(0, "AnnoxWordDeletion", { default = true, bg = tint(removed.fg, 0.3) })
+    vim.api.nvim_set_hl(0, "AnnoxWordInsertion", { default = true, bg = tint(added_fg, 0.3) })
+  else
+    vim.api.nvim_set_hl(0, "AnnoxWordDeletion", { default = true, link = "DiffDelete" })
+    vim.api.nvim_set_hl(0, "AnnoxWordInsertion", { default = true, link = "DiffAdd" })
+  end
   -- Suggestion mode tints the number column and cursor line toward "Added".
   local added = vim.api.nvim_get_hl(0, { name = "Added", link = false }).fg
   vim.api.nvim_set_hl(0, "AnnoxSuggestingCursorLineNr", { default = true, link = "Added" })
@@ -143,6 +164,123 @@ function M.orphan_count(bufnr)
   return n
 end
 
+--- `s` split into words, runs of spaces, newlines, and single other bytes,
+--- with the 0-based byte offset of each.
+local function tokens(s)
+  local toks, offs, pos = {}, {}, 1
+  while pos <= #s do
+    local tok = s:match("^[%w_\128-\255]+", pos) or s:match("^[ \t]+", pos) or s:sub(pos, pos)
+    table.insert(toks, tok)
+    table.insert(offs, pos - 1)
+    pos = pos + #tok
+  end
+  return toks, offs
+end
+
+--- The words that differ between `old` and `new`, diff-so-fancy style:
+--- { del, add }, each a list of { row, start_col, end_col } (0-based, bytes)
+--- into the lines of that text. Empty when the two share no word, as then
+--- everything changed.
+local function word_changes(old, new)
+  local del, add = {}, {}
+  if not M.config.word_diff or old == "" or new == "" then
+    return del, add
+  end
+  local ta, oa = tokens(old)
+  local tb, ob = tokens(new)
+  -- One token per line for the line diff; a newline token can't be a line.
+  local function joined(toks)
+    return table.concat(
+      vim.tbl_map(function(t)
+        return t == "\n" and "\1" or t
+      end, toks),
+      "\n"
+    ) .. "\n"
+  end
+  local function add_range(out, s, toks, offs, first, count)
+    if count == 0 then
+      return
+    end
+    local a0, a1 = offs[first], offs[first + count - 1] + #toks[first + count - 1]
+    -- Join with the previous change when only spaces separate them.
+    local last = out[#out]
+    if last and s:sub(last[2] + 1, a0):match("^[ \t]*$") then
+      last[2] = a1
+    else
+      table.insert(out, { a0, a1 })
+    end
+  end
+  local ra, rb = {}, {}
+  local diff = vim.text.diff or vim.diff
+  local hunks = diff(joined(ta), joined(tb), { result_type = "indices" })
+  -- Without a word in common everything changed, and marking it all is noise.
+  local changed = {}
+  for _, h in ipairs(hunks) do
+    for i = h[1], h[1] + h[2] - 1 do
+      changed[i] = true
+    end
+  end
+  local shared = false
+  for i, t in ipairs(ta) do
+    shared = shared or (not changed[i] and t:find("^[%w_\128-\255]") ~= nil)
+  end
+  if not shared then
+    return del, add
+  end
+  for _, h in ipairs(hunks) do
+    add_range(ra, old, ta, oa, h[1], h[2])
+    add_range(rb, new, tb, ob, h[3], h[4])
+  end
+  -- Byte ranges to per-line column ranges.
+  local function split(s, ranges, out)
+    local lines = vim.split(s, "\n")
+    local starts = { 0 }
+    for i, l in ipairs(lines) do
+      starts[i + 1] = starts[i] + #l + 1
+    end
+    local row = 1
+    for _, r in ipairs(ranges) do
+      while starts[row + 1] <= r[1] do
+        row = row + 1
+      end
+      local i = row
+      while i <= #lines and starts[i] < r[2] do
+        local s0, s1 = math.max(r[1], starts[i]) - starts[i], math.min(r[2], starts[i] + #lines[i]) - starts[i]
+        if s1 > s0 then
+          table.insert(out, { i - 1, s0, s1 })
+        end
+        i = i + 1
+      end
+    end
+  end
+  split(old, ra, del)
+  split(new, rb, add)
+  return del, add
+end
+
+--- `text` as inline virtual text chunks, newlines as "↵", with the changed
+--- words `add` (from `word_changes`) tinted.
+local function inserted_chunks(text, add)
+  local chunks = {}
+  for row, line in ipairs(vim.split(text, "\n")) do
+    if row > 1 then
+      table.insert(chunks, { "↵", "AnnoxInsertion" })
+    end
+    local col = 0
+    for _, c in ipairs(add) do
+      if c[1] == row - 1 then
+        table.insert(chunks, { line:sub(col + 1, c[2]), "AnnoxInsertion" })
+        table.insert(chunks, { line:sub(c[2] + 1, c[3]), { "AnnoxInsertion", "AnnoxWordInsertion" } })
+        col = c[3]
+      end
+    end
+    table.insert(chunks, { line:sub(col + 1), "AnnoxInsertion" })
+  end
+  return vim.tbl_filter(function(c)
+    return c[1] ~= ""
+  end, chunks)
+end
+
 --- Draws the annotations of `bufnr` as extmarks.
 function M.render(bufnr)
   vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
@@ -187,9 +325,19 @@ function M.render(bufnr)
         end
         pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, sl, sc, mark)
         local replacement = a.edit and a.edit.replacement or ""
+        -- The words that changed get a stronger tint on both sides.
+        local ok, old = pcall(vim.api.nvim_buf_get_text, bufnr, sl, sc, el, ec, {})
+        local del, add = word_changes(ok and table.concat(old, "\n") or "", replacement)
+        for _, c in ipairs(del) do
+          pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, sl + c[1], (c[1] == 0 and sc or 0) + c[2], {
+            end_col = (c[1] == 0 and sc or 0) + c[3],
+            hl_group = "AnnoxWordDeletion",
+            priority = 160,
+          })
+        end
         if replacement ~= "" then
           pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, el, ec, {
-            virt_text = { { (replacement:gsub("\n", "↵")), "AnnoxInsertion" } },
+            virt_text = inserted_chunks(replacement, add),
             virt_text_pos = "inline",
             right_gravity = false,
           })
@@ -479,7 +627,7 @@ function M.suggest(opts)
   end)
 end
 
-local thread_lines, open_thread
+local thread_lines, open_thread, style_hover
 
 local function find_annotation(bufnr, id)
   for _, a in ipairs((M.state[bufnr] or {}).annotations or {}) do
@@ -696,6 +844,37 @@ end
 M.reject = bulk_status_action("suggestion", "rejected", "Reject")
 M.resolve = bulk_status_action("comment", "resolved", "Resolve")
 
+--- The buffer text `a` resolves to, or "" when it has no range.
+local function resolved_text(a, bufnr)
+  local r = type(a.resolution) == "table" and a.resolution.range
+  local client = client_for(bufnr)
+  if type(r) ~= "table" or not client then
+    return ""
+  end
+  local enc = client.offset_encoding
+  local ok, text = pcall(
+    vim.api.nvim_buf_get_text,
+    bufnr,
+    r.start.line,
+    byte_col(bufnr, r.start, enc),
+    r["end"].line,
+    byte_col(bufnr, r["end"], enc),
+    {}
+  )
+  return ok and table.concat(text, "\n") or ""
+end
+
+--- Highlights `changes` (from `word_changes`) in `buf`, offset by `row`/`col`.
+local function mark_words(buf, nsid, changes, group, row, col)
+  for _, c in ipairs(changes) do
+    pcall(vim.api.nvim_buf_set_extmark, buf, nsid, row + c[1], col + c[2], {
+      end_col = col + c[3],
+      hl_group = group,
+      priority = 210,
+    })
+  end
+end
+
 --- A change as a fenced `diff` block, so the old text shows red and the new
 --- text green, like the server's hover.
 local function diff_block(old, new)
@@ -729,22 +908,7 @@ function thread_lines(a, bufnr)
   if a.kind == "suggestion" then
     local stale = a.applicable and "" or " (stale)"
     table.insert(lines, string.format("**Suggestion%s:**", stale))
-    local old = ""
-    local r = type(a.resolution) == "table" and a.resolution.range
-    local client = bufnr and client_for(bufnr)
-    if type(r) == "table" and client then
-      local enc = client.offset_encoding
-      local ok, text = pcall(
-        vim.api.nvim_buf_get_text,
-        bufnr,
-        r.start.line,
-        byte_col(bufnr, r.start, enc),
-        r["end"].line,
-        byte_col(bufnr, r["end"], enc),
-        {}
-      )
-      old = ok and table.concat(text, "\n") or ""
-    end
+    local old = bufnr and resolved_text(a, bufnr) or ""
     vim.list_extend(lines, diff_block(old, type(a.edit) == "table" and str(a.edit.replacement) or ""))
     -- LSP decodes JSON null as vim.NIL, which is truthy.
     local by = type(a.retargetedBy) == "table" and a.retargetedBy.author
@@ -768,6 +932,57 @@ function thread_lines(a, bufnr)
   return lines
 end
 
+--- The old and new text of suggestion `a`, as shown in its diff block.
+local function suggestion_change(a, bufnr)
+  local new = type(a.edit) == "table" and a.edit.replacement
+  return { old = resolved_text(a, bufnr), new = type(new) == "string" and new or "" }
+end
+
+--- Styles the diff blocks of `changes` ({ old, new }) wherever they show in
+--- `fbuf`, as "- " and "+ " lines: the changed lines in plain text, and the
+--- words that changed in a stronger tint. Found by content, so it works on
+--- floats other plugins render, whose code fences may be gone.
+local function style_diff_blocks(fbuf, changes)
+  local lines = vim.api.nvim_buf_get_lines(fbuf, 0, -1, false)
+  for _, c in ipairs(changes) do
+    -- The diff colors only the background; the code block's own text color
+    -- would show through, so the changed lines get theirs.
+    local want, groups = {}, {}
+    for _, side in ipairs({ { "- ", c.old, "AnnoxThreadDeletion" }, { "+ ", c.new, "AnnoxThreadInsertion" } }) do
+      if side[2] ~= "" then
+        for _, l in ipairs(vim.split(side[2], "\n")) do
+          table.insert(want, side[1] .. l)
+          table.insert(groups, side[3])
+        end
+      end
+    end
+    for row = 0, #lines - #want do
+      local found = #want > 0
+      for i, w in ipairs(want) do
+        if lines[row + i] ~= w then
+          found = false
+          break
+        end
+      end
+      if found then
+        for i, w in ipairs(want) do
+          vim.api.nvim_buf_set_extmark(
+            fbuf,
+            diff_ns,
+            row + i - 1,
+            0,
+            { end_col = #w, hl_group = groups[i], priority = 200 }
+          )
+        end
+        local del, add = word_changes(c.old, c.new)
+        local old_rows = c.old == "" and 0 or #vim.split(c.old, "\n")
+        mark_words(fbuf, diff_ns, del, "AnnoxWordDeletion", row, 2)
+        mark_words(fbuf, diff_ns, add, "AnnoxWordInsertion", row + old_rows, 2)
+      end
+    end
+  end
+end
+
 --- Opens `a`'s thread in a floating window.
 function open_thread(a, bufnr, opts)
   local fbuf, win = vim.lsp.util.open_floating_preview(
@@ -775,24 +990,36 @@ function open_thread(a, bufnr, opts)
     "markdown",
     vim.tbl_extend("force", { border = "rounded" }, opts or {})
   )
-  -- The diff colors only the background; the code block's own text color
-  -- would show through, so the changed lines get theirs.
-  local groups = { ["-"] = "AnnoxThreadDeletion", ["+"] = "AnnoxThreadInsertion" }
-  local fence
-  for i, line in ipairs(vim.api.nvim_buf_get_lines(fbuf, 0, -1, false)) do
-    if fence then
-      if line == fence then
-        break
-      end
-      local group = groups[line:sub(1, 1)]
-      if group then
-        vim.api.nvim_buf_set_extmark(fbuf, ns, i - 1, 0, { end_col = #line, hl_group = group, priority = 200 })
-      end
-    else
-      fence = line:match("^(```+)diff$")
-    end
+  -- Styled here, for `a`, which needn't be under the cursor.
+  vim.b[fbuf].annox_own_float = true
+  if a.kind == "suggestion" and bufnr then
+    style_diff_blocks(fbuf, { suggestion_change(a, bufnr) })
   end
   return fbuf, win
+end
+
+--- Styles the diff blocks of the suggestions under the cursor in float
+--- `win`, which some other code opened, such as the LSP hover.
+function style_hover(win, fbuf)
+  local source = vim.api.nvim_get_current_buf()
+  if
+    not vim.api.nvim_win_is_valid(win)
+    or vim.api.nvim_win_get_buf(win) ~= fbuf
+    or vim.b[fbuf].annox_own_float
+    or M.state[fbuf]
+    or source == fbuf
+    or not client_for(source)
+  then
+    return
+  end
+  local changes = {}
+  for _, a in ipairs(under_cursor(source)) do
+    if a.kind == "suggestion" and a.status == "open" then
+      table.insert(changes, suggestion_change(a, source))
+    end
+  end
+  vim.api.nvim_buf_clear_namespace(fbuf, diff_ns, 0, -1)
+  style_diff_blocks(fbuf, changes)
 end
 
 --- Shows the thread under the cursor in a floating window.
@@ -910,6 +1137,99 @@ function M.commit()
   end)
 end
 
+local word_ns = vim.api.nvim_create_namespace("annox_words")
+
+--- Opens `edit_buf` in a float by the cursor, sized to its wrapped text, with
+--- `old` (if any) shown read-only in red in a float stacked above it, the
+--- changed words marked in both. Closing the edit window closes both. Returns
+--- a function that re-sizes and re-marks them.
+local function open_edit_windows(edit_buf, title, old)
+  local anchor = vim.fn.screenpos(0, vim.fn.line("."), vim.fn.col("."))
+  local old_buf
+  if old ~= "" then
+    old_buf = vim.api.nvim_create_buf(false, true)
+    vim.bo[old_buf].bufhidden = "wipe"
+    vim.api.nvim_buf_set_lines(old_buf, 0, -1, false, vim.split(old, "\n"))
+    for i, line in ipairs(vim.api.nvim_buf_get_lines(old_buf, 0, -1, false)) do
+      vim.api.nvim_buf_set_extmark(old_buf, ns, i - 1, 0, { end_col = #line, hl_group = "AnnoxEditOriginal" })
+    end
+    vim.bo[old_buf].modifiable = false
+    vim.b[old_buf].annox_own_float = true
+  end
+  vim.b[edit_buf].annox_own_float = true
+
+  local function width()
+    local w = 20
+    for _, buf in ipairs({ edit_buf, old_buf }) do
+      for _, l in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+        w = math.max(w, vim.fn.strdisplaywidth(l) + 2)
+      end
+    end
+    return math.min(w, math.floor(vim.o.columns * 0.8))
+  end
+  local base = { relative = "editor", row = 0, col = 0, width = width(), height = 1, border = "rounded" }
+  local old_win = old_buf
+    and vim.api.nvim_open_win(
+      old_buf,
+      false,
+      vim.tbl_extend("force", base, { title = " Original ", focusable = false })
+    )
+  local edit_win = vim.api.nvim_open_win(edit_buf, true, vim.tbl_extend("force", base, { title = title }))
+  for _, win in pairs({ old_win, edit_win }) do
+    vim.wo[win].wrap = true
+    vim.wo[win].linebreak = true
+  end
+
+  local function layout()
+    if not vim.api.nvim_win_is_valid(edit_win) then
+      return
+    end
+    if old_buf then
+      local new = table.concat(vim.api.nvim_buf_get_lines(edit_buf, 0, -1, false), "\n")
+      local del, add = word_changes(old, new)
+      vim.api.nvim_buf_clear_namespace(old_buf, word_ns, 0, -1)
+      vim.api.nvim_buf_clear_namespace(edit_buf, word_ns, 0, -1)
+      mark_words(old_buf, word_ns, del, "AnnoxWordDeletion", 0, 0)
+      mark_words(edit_buf, word_ns, add, "AnnoxWordInsertion", 0, 0)
+    end
+    local w = width()
+    local avail = vim.o.lines - vim.o.cmdheight - 1
+    local function fit(win, extra, cap)
+      vim.api.nvim_win_set_width(win, w)
+      return math.max(3, math.min(vim.api.nvim_win_text_height(win, {}).all + extra, cap))
+    end
+    -- One spare row in the edit window to type into.
+    local edit_h = fit(edit_win, 1, math.max(3, math.floor(avail * 0.4)))
+    local old_h = old_win and fit(old_win, 0, math.max(3, math.floor(avail * 0.25))) or 0
+    local total = edit_h + 2 + (old_win and old_h + 2 or 0)
+    -- Below the cursor line if it fits, else above it, else as low as fits.
+    local row = anchor.row
+    if row + total > avail then
+      row = anchor.row - 1 - total >= 0 and anchor.row - 1 - total or math.max(0, avail - total)
+    end
+    local col = math.max(0, math.min(anchor.col - 1, vim.o.columns - w - 2))
+    if old_win then
+      vim.api.nvim_win_set_config(old_win, { relative = "editor", row = row, col = col, width = w, height = old_h })
+      row = row + old_h + 2
+    end
+    vim.api.nvim_win_set_config(edit_win, { relative = "editor", row = row, col = col, width = w, height = edit_h })
+  end
+  layout()
+  if old_win then
+    vim.api.nvim_create_autocmd("WinClosed", {
+      pattern = tostring(edit_win),
+      once = true,
+      -- Closing a window from WinClosed is not allowed.
+      callback = vim.schedule_wrap(function()
+        if vim.api.nvim_win_is_valid(old_win) then
+          vim.api.nvim_win_close(old_win, true)
+        end
+      end),
+    })
+  end
+  return layout
+end
+
 --- Edits the replacement of the suggestion under the cursor, or the text of
 --- the comment, in a floating window. Esc saves and closes, `:q!` discards.
 --- opts: { annotation? }
@@ -937,20 +1257,12 @@ function M.edit(opts)
       vim.bo[edit_buf].bufhidden = "wipe"
       vim.bo[edit_buf].filetype = field == "body" and "markdown" or vim.bo[bufnr].filetype
       vim.bo[edit_buf].modified = false
-      local width = 20
-      for _, l in ipairs(lines) do
-        width = math.max(width, vim.fn.strdisplaywidth(l) + 2)
-      end
-      vim.api.nvim_open_win(edit_buf, true, {
-        relative = "cursor",
-        row = 1,
-        col = 0,
-        width = math.min(width, math.floor(vim.o.columns * 0.8)),
-        height = math.min(math.max(#lines, 3), 20),
-        border = "rounded",
-        title = field == "replacement" and " Suggested text (Esc saves and closes) "
-          or " Comment (Esc saves and closes) ",
-      })
+      local layout = open_edit_windows(
+        edit_buf,
+        field == "replacement" and " Suggested text (Esc saves and closes) " or " Comment (Esc saves and closes) ",
+        field == "replacement" and resolved_text(a, bufnr) or ""
+      )
+      vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, { buffer = edit_buf, callback = layout })
       vim.keymap.set("n", "<Esc>", function()
         if vim.bo[edit_buf].modified then
           vim.cmd.write()
@@ -1615,6 +1927,23 @@ function M.setup(opts)
     group = vim.api.nvim_create_augroup("annox_suggesting_tint", { clear = true }),
     callback = function()
       sync_tint(vim.api.nvim_get_current_win())
+    end,
+  })
+  -- The hover (`K`) merges every server's answer into one float, with no
+  -- hook per server, and plugins like noice.nvim draw it in windows opened
+  -- without autocommands. So check each float as it is drawn, once per
+  -- change, for the diff of a suggestion under the cursor.
+  local seen = {}
+  vim.api.nvim_set_decoration_provider(vim.api.nvim_create_namespace("annox_hover"), {
+    on_win = function(_, win, fbuf)
+      local tick = vim.api.nvim_buf_get_changedtick(fbuf)
+      if seen[fbuf] ~= tick and vim.api.nvim_win_get_config(win).relative ~= "" then
+        seen[fbuf] = tick
+        vim.schedule(function()
+          style_hover(win, fbuf)
+        end)
+      end
+      return false
     end,
   })
   vim.api.nvim_create_user_command("Annox", function(o)

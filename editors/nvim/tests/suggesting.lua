@@ -124,7 +124,12 @@ for _, m in ipairs(marks) do
     struck = struck + 1
   end
   if m[4].virt_text and m[4].virt_text[1][2] == "AnnoxInsertion" then
-    table.insert(inserted, m[4].virt_text[1][1])
+    table.insert(
+      inserted,
+      table.concat(vim.tbl_map(function(c)
+        return c[1]
+      end, m[4].virt_text))
+    )
   end
 end
 check(struck == 2, "two struck-through ranges, got " .. struck)
@@ -222,6 +227,47 @@ annox.suggest({ range = line_range(24, 27), replacement = "dog" })
 wait("three suggestions", function()
   return #suggestions() == 3
 end)
+-- Editing a replacement shows the old text read-only above it.
+local doc_win = vim.api.nvim_get_current_win()
+vim.api.nvim_win_set_cursor(0, { 1, 4 })
+annox.edit()
+local edit_win = vim.api.nvim_get_current_win()
+local old_win
+for _, w in ipairs(vim.api.nvim_list_wins()) do
+  local c = vim.api.nvim_win_get_config(w)
+  if c.relative ~= "" and not c.focusable then
+    old_win = w
+  end
+end
+check(old_win ~= nil, "original window opened")
+check(
+  vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(old_win), 0, -1, false)[1] == "slow",
+  "original holds old text"
+)
+check(vim.api.nvim_buf_get_lines(0, 0, -1, false)[1] == "fast", "edit holds the replacement")
+local word_ns = vim.api.nvim_get_namespaces().annox_words
+local function words(b)
+  return vim.tbl_map(function(m)
+    return { m[2], m[3], m[4].end_col }
+  end, vim.api.nvim_buf_get_extmarks(b, word_ns, 0, -1, { details = true }))
+end
+check(#words(vim.api.nvim_win_get_buf(old_win)) == 0, "no word in common, nothing marked")
+-- The marks follow the edit.
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "slow and steady" })
+vim.api.nvim_exec_autocmds("TextChanged", { buffer = 0 })
+check(vim.deep_equal(words(0), { { 0, 4, 15 } }), "new words marked: " .. vim.inspect(words(0)))
+check(#words(vim.api.nvim_win_get_buf(old_win)) == 0, "old word kept")
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "fast" })
+vim.bo.modified = false
+check(
+  vim.api.nvim_win_get_position(old_win)[1] < vim.api.nvim_win_get_position(edit_win)[1],
+  "original sits above the edit window"
+)
+vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "xt", false)
+wait("original window closed", function()
+  return not vim.api.nvim_win_is_valid(old_win)
+end)
+check(vim.api.nvim_get_current_win() == doc_win, "back in the document")
 prompts = {}
 vim.fn.setpos("'<", { buf, 1, 1, 0 })
 vim.fn.setpos("'>", { buf, 1, 6, 0 })
@@ -249,6 +295,77 @@ wait("comments resolved", function()
   return #annox.state[buf].annotations == 0
 end)
 check(#prompts == 1 and prompts[1] == "Resolve 2 comments?", "one prompt: " .. vim.inspect(prompts))
+
+-- Inline, the changed words get a stronger tint on both sides.
+annox.config.inline_suggestions = true
+annox.suggest({ range = line_range(3, 12), replacement = "slow and steady" })
+wait("partial suggestion", function()
+  return #suggestions() == 1
+end)
+local tinted, chunks = {}, nil
+wait("inline word marks", function()
+  tinted, chunks = {}, nil
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, vim.api.nvim_get_namespaces().annox, 0, -1, { details = true })) do
+    if m[4].hl_group == "AnnoxWordDeletion" then
+      table.insert(tinted, { m[3], m[4].end_col })
+    end
+    chunks = m[4].virt_text and m[4].virt_text[1][2] == "AnnoxInsertion" and m[4].virt_text or chunks
+  end
+  return chunks ~= nil
+end)
+-- "slow very" -> "slow and steady": "very" is struck and tinted, "and steady" tinted.
+check(vim.deep_equal(tinted, { { 8, 12 } }), "deleted word tinted: " .. vim.inspect(tinted))
+check(
+  vim.deep_equal(chunks, {
+    { "slow ", "AnnoxInsertion" },
+    { "and steady", { "AnnoxInsertion", "AnnoxWordInsertion" } },
+  }),
+  "inserted words tinted: " .. vim.inspect(chunks)
+)
+vim.cmd("Annox! reject")
+wait("partial suggestion rejected", function()
+  return #suggestions() == 0
+end)
+
+-- Across lines: a change past the first line is marked from column 0.
+local before_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "one two three", "four five six" })
+annox.suggest({
+  range = { start = { line = 0, character = 4 }, ["end"] = { line = 1, character = 9 } },
+  replacement = "two 3\nfor five",
+})
+wait("multi-line suggestion", function()
+  return #suggestions() == 1
+end)
+wait("multi-line word marks", function()
+  tinted, chunks = {}, nil
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, vim.api.nvim_get_namespaces().annox, 0, -1, { details = true })) do
+    if m[4].hl_group == "AnnoxWordDeletion" then
+      table.insert(tinted, { m[2], m[3], m[4].end_col })
+    end
+    chunks = m[4].virt_text and m[4].virt_text[1][2] == "AnnoxInsertion" and m[4].virt_text or chunks
+  end
+  return chunks ~= nil
+end)
+-- "two three\nfour five" -> "two 3\nfor five": "three" after the range's
+-- start column, "four" at the start of the next line.
+check(vim.deep_equal(tinted, { { 0, 8, 13 }, { 1, 0, 4 } }), "deleted words tinted: " .. vim.inspect(tinted))
+check(
+  vim.deep_equal(chunks, {
+    { "two ", "AnnoxInsertion" },
+    { "3", { "AnnoxInsertion", "AnnoxWordInsertion" } },
+    { "↵", "AnnoxInsertion" },
+    { "for", { "AnnoxInsertion", "AnnoxWordInsertion" } },
+    { " five", "AnnoxInsertion" },
+  }),
+  "inserted words tinted: " .. vim.inspect(chunks)
+)
+vim.cmd("Annox! reject")
+wait("multi-line suggestion rejected", function()
+  return #suggestions() == 0
+end)
+vim.api.nvim_buf_set_lines(buf, 0, -1, false, before_lines)
+annox.config.inline_suggestions = false
 
 -- Orphaned annotations are announced above the text, not silently dropped.
 annox.comment({ range = { start = { line = 0, character = 4 }, ["end"] = { line = 0, character = 9 } }, body = "Fast?" })

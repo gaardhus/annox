@@ -116,6 +116,33 @@ check(
   vim.tbl_contains(groups, "AnnoxThreadDeletion") and vim.tbl_contains(groups, "AnnoxThreadInsertion"),
   "diff lines get their text color: " .. vim.inspect(groups)
 )
+--- The changed words marked in `win`, as "group start-end".
+local function word_marks(win)
+  local out = {}
+  local b = vim.api.nvim_win_get_buf(win)
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(b, -1, 0, -1, { details = true })) do
+    if (m[4].hl_group or ""):find("^AnnoxWord") then
+      out[#out + 1] = string.format("%s %d-%d", m[4].hl_group, m[3], m[4].end_col)
+    end
+  end
+  table.sort(out)
+  return out
+end
+-- "- we prove that" / "+ we show that": only the verbs.
+local function words_match(win)
+  return vim.deep_equal(word_marks(win), { "AnnoxWordDeletion 5-10", "AnnoxWordInsertion 5-9" })
+end
+check(words_match(floats()[1]), "changed words marked: " .. vim.inspect(word_marks(floats()[1])))
+vim.api.nvim_win_close(floats()[1], true)
+
+-- The LSP hover gets the same marks.
+vim.api.nvim_win_set_cursor(0, { 2, 16 })
+vim.lsp.buf.hover()
+wait("hover with marked words", function()
+  -- Floats are styled as they're drawn, which headless Neovim doesn't do.
+  vim.cmd.redraw()
+  return #floats() == 1 and words_match(floats()[1])
+end)
 vim.api.nvim_win_close(floats()[1], true)
 
 -- Accept: the server's workspace/applyEdit edits the buffer.

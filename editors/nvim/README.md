@@ -19,6 +19,8 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim), pointing at this directory
       -- inline_suggestions = true,  -- always draw suggestions inline, not only in suggestion mode
       -- suggest_undo_key = false,  -- keep `u` as plain undo in suggestion mode
       -- suggest_tint = false,  -- don't tint line numbers and cursor line in suggestion mode
+      -- word_diff = false,  -- don't mark the words that changed within a suggestion
+      -- strikethrough = false,  -- show deleted text of inline suggestions in red, not struck through
     })
   end,
 }
@@ -35,7 +37,7 @@ Changes others make to `.annox/`, such as a `git pull`, show up within a second 
 | `:Annox init`                             | Create an annox workspace for this project and attach the server.                                                                                                                                                                                                                        |
 | `:Annox comment`                          | Comment on the cursor position, or on the selection when run from visual mode (`:'<,'>Annox comment`).                                                                                                                                                                                   |
 | `:Annox suggest`                          | Suggest a replacement for the selection. The prompt is pre-filled with the current text.                                                                                                                                                                                                 |
-| `:Annox edit`                             | Edit the suggested text of the suggestion under the cursor, or the text of a comment, in a floating window. Esc (in normal mode) saves and closes, `:w` saves, `:q!` discards.                                                                                                           |
+| `:Annox edit`                             | Edit the suggested text of the suggestion under the cursor, or the text of a comment, in a floating window, with the suggestion's original text shown read-only above it. Esc (in normal mode) saves and closes, `:w` saves, `:q!` discards.                                                                                                           |
 | `:Annox suggesting`                       | Turn suggestion mode on or off for the buffer (see below).                                                                                                                                                                                                                               |
 | `:Annox reply`                            | Reply to the thread under the cursor.                                                                                                                                                                                                                                                    |
 | `:Annox thread`                           | Show the thread under the cursor in a floating window.                                                                                                                                                                                                                                   |
@@ -133,7 +135,7 @@ return {
 
 `:Annox suggesting` turns the buffer into suggestion mode, like "Suggesting" in online editors. You edit as usual, and each time you leave insert mode or finish a normal-mode change such as `dw`, your edits become suggestions and the buffer goes back to its original text. The file never contains suggested text, so saving is always safe.
 
-- Suggestions are drawn inline: deleted text struck through, inserted text after it in green.
+- Suggestions are drawn inline: deleted text struck through, inserted text after it in green. The words that changed get a stronger tint, diff-so-fancy style, here and in the thread, hover (`K`) and edit windows. Set `word_diff = false` to turn that off, or `strikethrough = false` to keep the deleted text red but not struck through.
 - Changes are widened to whole words: changing `pd` to `pl` suggests `pd` → `pl`, not `d` → `l`.
 - Typing next to a suggestion you made in this session extends it. Delete a word and type its replacement right there, and you get one suggestion.
 - To change text you've already suggested, run `:Annox edit` on it. The inline green text can't hold the cursor.
@@ -159,7 +161,7 @@ set statusline+=%{get(b:,'annox_suggesting',0)?'SUGGESTING\ ':''}
 
 When the workspace syncs through a hub, collaborators' cursors appear as `▏Name` tags, and your own cursor is shared unless `presence = false`.
 
-Highlight groups: `AnnoxComment`, `AnnoxSuggestion`, and `AnnoxLocal` tint the background of annotated text in the matching diagnostic color, and `AnnoxStale` and `AnnoxConflict` undercurl it. The full list: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, `AnnoxPresenceRange`, for inline suggestions, `AnnoxDeletion` and `AnnoxInsertion`, `AnnoxOrphans` for the notice about annotations that could not be located, and `AnnoxSuggestingLineNr`, `AnnoxSuggestingCursorLineNr` and `AnnoxSuggestingCursorLine` for the suggestion mode tint.
+Highlight groups: `AnnoxComment`, `AnnoxSuggestion`, and `AnnoxLocal` tint the background of annotated text in the matching diagnostic color, and `AnnoxStale` and `AnnoxConflict` undercurl it. The full list: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, `AnnoxPresenceRange`, for inline suggestions, `AnnoxDeletion` and `AnnoxInsertion`, `AnnoxWordDeletion` and `AnnoxWordInsertion` for the words that changed within a suggestion (a background only, so the text keeps its color), `AnnoxEditOriginal` for the old text above the suggestion edit window, `AnnoxOrphans` for the notice about annotations that could not be located, and `AnnoxSuggestingLineNr`, `AnnoxSuggestingCursorLineNr` and `AnnoxSuggestingCursorLine` for the suggestion mode tint.
 
 ## Tests
 

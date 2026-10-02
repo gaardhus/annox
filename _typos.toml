@@ -4,3 +4,5 @@ teh = "teh"
 tha = "tha"
 # Vim's :enew.
 enew = "enew"
+# The noice.nvim plugin.
+noice = "noice"
