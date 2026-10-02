@@ -1,34 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 128" width="400" height="128" role="img" aria-label="annox">
   <style>
+    .page { fill: #ffffff; stroke: #1f2937; }
+    .fold { fill: none; stroke: none; }
+    .crease { stroke: #1f2937; stroke-width: 6; }
+    .bubble { fill: #6366f1; stroke: #6366f1; }
     .name { fill: #1f2937; }
-    @media (prefers-color-scheme: dark) { .name { fill: #f3f4f6; } }
+    @media (prefers-color-scheme: dark) {
+      .page { fill: #e8eaf0; stroke: #e8eaf0; }
+      .fold { fill: #b4bac7; stroke: #b4bac7; stroke-width: 6; }
+      .crease { stroke: #b4bac7; stroke-width: 2; }
+      .bubble { fill: #8b8ff7; stroke: #8b8ff7; }
+      .name { fill: #f3f4f6; }
+    }
   </style>
   <!-- Icon, same as annox.svg -->
-  <!-- White halo keeps the dark outline visible on dark backgrounds -->
-  <path d="M26 10 h44 l20 20 v74 a10 10 0 0 1 -10 10 h-54 a10 10 0 0 1 -10 -10 v-84 a10 10 0 0 1 10 -10 z"
-        fill="#ffffff" stroke="#ffffff" stroke-width="11" stroke-linejoin="round"/>
-  <!-- Document with folded corner -->
-  <path d="M26 10 h44 l20 20 v74 a10 10 0 0 1 -10 10 h-54 a10 10 0 0 1 -10 -10 v-84 a10 10 0 0 1 10 -10 z"
-        fill="#ffffff" stroke="#1f2937" stroke-width="5" stroke-linejoin="round"/>
-  <path d="M70 10 v12 a8 8 0 0 0 8 8 h12" fill="none" stroke="#1f2937" stroke-width="5" stroke-linejoin="round"/>
-  <!-- Highlighted span -->
-  <rect x="25" y="82" width="54" height="16" rx="4" fill="#facc15"/>
-  <!-- Text lines -->
-  <g stroke="#9ca3af" stroke-width="5" stroke-linecap="round">
-    <line x1="31" y1="33" x2="58" y2="33"/>
-    <line x1="31" y1="50" x2="54" y2="50"/>
-    <line x1="31" y1="67" x2="54" y2="67"/>
-    <line x1="31" y1="90" x2="73" y2="90" stroke="#1f2937"/>
+  <defs>
+    <!-- Cuts a gap around the bubble so it separates from the page on any background -->
+    <mask id="annox-gap" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
+      <rect width="128" height="128" fill="#fff"/>
+      <path d="M81 36H107a13 13 0 0 1 13 13V59a13 13 0 0 1-13 13H92.2L74.5 83.5L78.1 72H81a13 13 0 0 1-13-13V49a13 13 0 0 1 13-13Z" fill="#000" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <g mask="url(#annox-gap)">
+    <!-- Document with folded corner: outlined in light mode, a solid light shape in dark mode -->
+    <path class="page" d="M27 12H66L88 34V101a15 15 0 0 1-15 15H27a15 15 0 0 1-15-15V27a15 15 0 0 1 15-15Z" stroke-width="6" stroke-linejoin="round"/>
+    <path class="fold" d="M66 12V24a10 10 0 0 0 10 10H88Z" stroke-linejoin="round"/>
+    <path class="crease" d="M66 12V24a10 10 0 0 0 10 10H88" fill="none" stroke-linejoin="round"/>
+    <!-- Text lines -->
+    <g stroke="#9ca3af" stroke-width="7" stroke-linecap="round">
+      <path d="M28 40H52"/>
+      <path d="M28 58H48"/>
+    </g>
+    <!-- Highlighted span -->
+    <rect x="23" y="77" width="54" height="18" rx="7" fill="#facc15"/>
+    <path d="M28 86H70" stroke="#1f2937" stroke-width="7" stroke-linecap="round"/>
   </g>
-  <!-- Comment bubble, tail curving down to the highlight -->
-  <path d="M74 38 H108 a10 10 0 0 1 10 10 v12 a10 10 0 0 1 -10 10 H90 Q82 72 71 78 Q75 74 76 70 H74 a10 10 0 0 1 -10 -10 v-12 a10 10 0 0 1 10 -10 z"
-        fill="#ffffff" stroke="#ffffff" stroke-width="11" stroke-linejoin="round"/>
-  <path d="M74 38 H108 a10 10 0 0 1 10 10 v12 a10 10 0 0 1 -10 10 H90 Q82 72 71 78 Q75 74 76 70 H74 a10 10 0 0 1 -10 -10 v-12 a10 10 0 0 1 10 -10 z"
-        fill="#6366f1" stroke="#1f2937" stroke-width="5" stroke-linejoin="round"/>
+  <!-- Comment bubble -->
+  <path class="bubble" d="M81 36H107a13 13 0 0 1 13 13V59a13 13 0 0 1-13 13H92.2L74.5 83.5L78.1 72H81a13 13 0 0 1-13-13V49a13 13 0 0 1 13-13Z" stroke-width="2" stroke-linejoin="round"/>
   <g fill="#ffffff">
-    <circle cx="79" cy="54" r="4"/>
-    <circle cx="91" cy="54" r="4"/>
-    <circle cx="103" cy="54" r="4"/>
+    <circle cx="82" cy="54" r="4.5"/>
+    <circle cx="94" cy="54" r="4.5"/>
+    <circle cx="106" cy="54" r="4.5"/>
   </g>
   <!-- Name -->
   <text class="name" x="142" y="92" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
