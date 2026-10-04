@@ -225,6 +225,38 @@ annox-demo {
   padding: 0.05em 0.3em;
 }
 
+.hero.sub h1 {
+  font-size: clamp(2rem, 4.5vw, 3rem);
+}
+.top nav a[aria-current="page"] {
+  color: var(--ink);
+}
+
+.workflow {
+  padding-bottom: 3rem;
+}
+.workflow figure {
+  margin: 0;
+  overflow-x: auto;
+}
+.workflow img,
+.workflow svg {
+  display: block;
+  width: 100%;
+  min-width: 44rem;
+  height: auto;
+}
+
+.steps {
+  grid-template-columns: repeat(2, 1fr);
+}
+.steps p a {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
 .use {
   display: grid;
   grid-template-columns: 1.4fr 1fr;

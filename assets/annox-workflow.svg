@@ -1,0 +1,210 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 972 460" width="972" height="460" role="img" aria-labelledby="wf-title wf-desc">
+  <title id="wf-title">The annox review workflow</title>
+  <desc id="wf-desc">Four steps. Annotate: highlight, comment on, or suggest edits to a plain-text file, from an editor or an agent. Discuss: reply in threads, while anchors follow edits to the text. Decide: resolve or reopen comments, and accept, reject, or withdraw suggestions; accepting applies the edit, and a reverting suggestion undoes it. Share: commit the event files with git, or sync them live through a hub. Every action writes one immutable event file to .annox/.</desc>
+  <style>
+    text { font-family: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1f2937; }
+    .h { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+    .t { font-size: 13px; }
+    .s { font-size: 12px; }
+    .b { font-weight: 600; }
+    .cap { font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; }
+    .mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px; }
+    .muted { fill: #5b6474; }
+    .accent { fill: #6366f1; }
+    .on-accent { fill: #ffffff; }
+    .panel { fill: #ffffff; stroke: #d4d8e1; }
+    .inset { fill: #f5f6f9; stroke: #d4d8e1; }
+    .soft { fill: #6366f1; fill-opacity: 0.08; stroke: #6366f1; stroke-opacity: 0.35; }
+    .band { fill: #6366f1; fill-opacity: 0.08; stroke: #6366f1; stroke-dasharray: 5 4; }
+    .pill { fill: #ffffff; stroke: #b9bfcb; }
+    .pill-on { fill: #6366f1; stroke: #6366f1; }
+    .num { fill: #6366f1; }
+    .rule { stroke: #e3e6ec; }
+    .flow { stroke: #6366f1; stroke-width: 2; fill: none; }
+    .step { stroke: #8a92a3; stroke-width: 1.5; fill: none; }
+    .tie { stroke: #6366f1; stroke-opacity: 0.5; stroke-dasharray: 2 4; stroke-linecap: round; }
+    .bar { stroke: #c3c8d2; }
+    .bar-on { stroke: #8a92a3; }
+    .mark { fill: #facc15; fill-opacity: 0.45; }
+    .mark-line { stroke: #ca8a04; }
+    .sug { fill: #6366f1; fill-opacity: 0.22; }
+    .sug-line { stroke: #6366f1; }
+    .av-a { fill: #6366f1; }
+    .av-b { fill: #16a34a; }
+    .head-a { fill: #6366f1; }
+    .head-m { fill: #8a92a3; }
+    @media (prefers-color-scheme: dark) {
+      text { fill: #e8eaf0; }
+      .muted { fill: #9aa3b5; }
+      .accent { fill: #8b8ff7; }
+      .on-accent { fill: #12151c; }
+      .panel { fill: #1b1f27; stroke: #2f3542; }
+      .inset { fill: #12151c; stroke: #2f3542; }
+      .soft { fill: #8b8ff7; fill-opacity: 0.1; stroke: #8b8ff7; stroke-opacity: 0.4; }
+      .band { fill: #8b8ff7; fill-opacity: 0.1; stroke: #8b8ff7; }
+      .pill { fill: #1b1f27; stroke: #4a5160; }
+      .pill-on { fill: #8b8ff7; stroke: #8b8ff7; }
+      .num { fill: #8b8ff7; }
+      .rule { stroke: #2f3542; }
+      .flow { stroke: #8b8ff7; }
+      .step { stroke: #7d8698; }
+      .tie { stroke: #8b8ff7; }
+      .bar { stroke: #4a5160; }
+      .bar-on { stroke: #9aa3b5; }
+      .sug { fill: #8b8ff7; fill-opacity: 0.3; }
+      .mark-line { stroke: #facc15; }
+      .sug-line { stroke: #8b8ff7; }
+      .av-a, .head-a { fill: #8b8ff7; }
+      .av-b { fill: #4ade80; }
+      .head-m { fill: #7d8698; }
+    }
+  </style>
+  <defs>
+    <marker id="wf-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="head-a" d="M0 0L10 5L0 10z"/>
+    </marker>
+    <marker id="wf-step" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path class="head-m" d="M0 0L10 5L0 10z"/>
+    </marker>
+  </defs>
+
+  <!-- Step headers -->
+  <g>
+    <circle class="num" cx="22" cy="26" r="13"/>
+    <text class="t b on-accent" x="22" y="30.5" text-anchor="middle">1</text>
+    <text class="h" x="44" y="32">Annotate</text>
+    <text class="s muted" x="8" y="60">Mark up any plain-text file</text>
+
+    <circle class="num" cx="274" cy="26" r="13"/>
+    <text class="t b on-accent" x="274" y="30.5" text-anchor="middle">2</text>
+    <text class="h" x="296" y="32">Discuss</text>
+    <text class="s muted" x="260" y="60">Reply in threads beside the text</text>
+
+    <circle class="num" cx="526" cy="26" r="13"/>
+    <text class="t b on-accent" x="526" y="30.5" text-anchor="middle">3</text>
+    <text class="h" x="548" y="32">Decide</text>
+    <text class="s muted" x="512" y="60">Resolve threads, settle edits</text>
+
+    <circle class="num" cx="778" cy="26" r="13"/>
+    <text class="t b on-accent" x="778" y="30.5" text-anchor="middle">4</text>
+    <text class="h" x="800" y="32">Share</text>
+    <text class="s muted" x="764" y="60">Through git, or live</text>
+  </g>
+
+  <!-- Panels -->
+  <rect class="panel" x="8" y="74" width="200" height="300" rx="12"/>
+  <rect class="panel" x="260" y="74" width="200" height="300" rx="12"/>
+  <rect class="panel" x="512" y="74" width="200" height="300" rx="12"/>
+  <rect class="panel" x="764" y="74" width="200" height="300" rx="12"/>
+
+  <!-- Flow between steps -->
+  <path class="flow" d="M214 224H252" marker-end="url(#wf-arrow)"/>
+  <path class="flow" d="M466 224H504" marker-end="url(#wf-arrow)"/>
+  <path class="flow" d="M718 224H756" marker-end="url(#wf-arrow)"/>
+
+  <!-- 1. Annotate -->
+  <g>
+    <rect class="inset" x="24" y="90" width="168" height="92" rx="6"/>
+    <!-- In legend order: a highlight, a comment, a suggestion -->
+    <rect class="mark" x="31" y="115" width="70" height="17" rx="3"/>
+    <rect class="mark" x="31" y="133" width="96" height="18" rx="3"/>
+    <path class="mark-line" d="M31 150H127" stroke-width="2"/>
+    <rect class="sug" x="85" y="152" width="62" height="17" rx="3"/>
+    <path class="sug-line" d="M85 168H147" stroke-width="2"/>
+    <g stroke-width="6" stroke-linecap="round">
+      <path class="bar" d="M38 106H176"/>
+      <path class="bar-on" d="M38 124H94"/>
+      <path class="bar" d="M110 124H176"/>
+      <path class="bar-on" d="M38 142H120"/>
+      <path class="bar" d="M136 142H176"/>
+      <path class="bar" d="M38 160H76"/>
+      <path class="bar-on" d="M92 160H140"/>
+      <path class="bar" d="M156 160H176"/>
+    </g>
+    <rect class="mark" x="24" y="194" width="14" height="14" rx="3"/>
+    <text class="t" x="46" y="206">highlight</text>
+    <rect class="mark" x="24" y="217" width="14" height="14" rx="3"/>
+    <path class="mark-line" d="M24 230H38" stroke-width="2"/>
+    <text class="t" x="46" y="229">comment</text>
+    <rect class="sug" x="24" y="240" width="14" height="14" rx="3"/>
+    <path class="sug-line" d="M24 253H38" stroke-width="2"/>
+    <text class="t" x="46" y="252">suggested edit</text>
+    <path class="rule" d="M24 272H192"/>
+    <text class="cap muted" x="24" y="294">FROM</text>
+    <text class="s" x="24" y="314"><tspan class="b">You</tspan> in Neovim, VS Code,</text>
+    <text class="s" x="24" y="330">or any LSP editor</text>
+    <text class="s" x="24" y="352"><tspan class="b">Agents</tspan> via the CLI or MCP</text>
+  </g>
+
+  <!-- 2. Discuss -->
+  <g>
+    <rect class="soft" x="276" y="90" width="168" height="56" rx="8"/>
+    <circle class="av-a" cx="292" cy="107" r="8"/>
+    <text class="s b on-accent" x="292" y="111" text-anchor="middle" font-size="10">A</text>
+    <text class="s b" x="306" y="111">Ada</text>
+    <text class="t" x="286" y="134">Cite Lemma 4 here?</text>
+    <rect class="soft" x="292" y="154" width="152" height="56" rx="8"/>
+    <circle class="av-b" cx="308" cy="171" r="8"/>
+    <text class="s b on-accent" x="308" y="175" text-anchor="middle" font-size="10">C</text>
+    <text class="s b" x="322" y="175">Claude</text>
+    <text class="t" x="302" y="198">Added, see Section 3.</text>
+    <path class="rule" d="M276 228H444"/>
+    <text class="t b" x="276" y="252">Anchors follow edits</text>
+    <text class="s muted" x="276" y="272">When the text changes, each</text>
+    <text class="s muted" x="276" y="288">note finds its quote again,</text>
+    <text class="s muted" x="276" y="304">or is flagged as orphaned.</text>
+    <text class="t b" x="276" y="332">Nothing is lost</text>
+    <text class="s muted" x="276" y="352">History keeps every change</text>
+  </g>
+
+  <!-- 3. Decide -->
+  <g>
+    <text class="cap muted" x="528" y="98">COMMENT</text>
+    <rect class="pill" x="528" y="108" width="56" height="22" rx="11"/>
+    <text class="s" x="556" y="123" text-anchor="middle">open</text>
+    <rect class="pill" x="624" y="108" width="72" height="22" rx="11"/>
+    <text class="s" x="660" y="123" text-anchor="middle">resolved</text>
+    <path class="step" d="M588 115H618" marker-end="url(#wf-step)"/>
+    <path class="step" d="M620 123H590" marker-end="url(#wf-step)"/>
+    <text class="s muted" x="604" y="150" text-anchor="middle">resolve · reopen</text>
+    <path class="rule" d="M528 168H696"/>
+    <text class="cap muted" x="528" y="190">SUGGESTION</text>
+    <rect class="pill" x="528" y="232" width="56" height="22" rx="11"/>
+    <text class="s" x="556" y="247" text-anchor="middle">open</text>
+    <rect class="pill-on" x="620" y="202" width="76" height="22" rx="11"/>
+    <text class="s b on-accent" x="658" y="217" text-anchor="middle">accepted</text>
+    <rect class="pill" x="620" y="232" width="76" height="22" rx="11"/>
+    <text class="s" x="658" y="247" text-anchor="middle">rejected</text>
+    <rect class="pill" x="620" y="262" width="76" height="22" rx="11"/>
+    <text class="s" x="658" y="277" text-anchor="middle">withdrawn</text>
+    <path class="step" d="M588 239L614 217" marker-end="url(#wf-step)"/>
+    <path class="step" d="M588 243H614" marker-end="url(#wf-step)"/>
+    <path class="step" d="M588 247L614 269" marker-end="url(#wf-step)"/>
+    <text class="s muted" x="528" y="314">Accepting applies the edit.</text>
+    <text class="s muted" x="528" y="330">Undo it later with a</text>
+    <text class="s muted" x="528" y="346">suggestion that reverts it.</text>
+  </g>
+
+  <!-- 4. Share -->
+  <g>
+    <rect class="inset" x="780" y="90" width="168" height="98" rx="6"/>
+    <text class="mono b" x="792" y="110">.annox/</text>
+    <text xml:space="preserve" class="mono muted" x="792" y="128">  docs/paper.md~…/</text>
+    <text xml:space="preserve" class="mono muted" x="792" y="146">    0192f0d1-….json</text>
+    <text xml:space="preserve" class="mono muted" x="792" y="164">    0192f0e2-….json</text>
+    <text xml:space="preserve" class="mono" x="792" y="182"><tspan class="accent b">+</tspan>   0192f2b7-….json</text>
+    <text class="t b" x="780" y="216">Commit</text>
+    <text class="mono accent" x="780" y="236">annox commit</text>
+    <text class="s muted" x="780" y="254">then push them like code</text>
+    <path class="rule" d="M780 270H948"/>
+    <text class="t b" x="780" y="294">Sync live</text>
+    <text class="mono accent" x="780" y="314">annox hub</text>
+    <text class="s muted" x="780" y="332">Events and cursors arrive</text>
+    <text class="s muted" x="780" y="348">as collaborators type</text>
+  </g>
+
+  <!-- Every step writes events -->
+  <path class="tie" d="M108 378V398M360 378V398M612 378V398M864 378V398" stroke-width="2"/>
+  <rect class="band" x="8" y="400" width="956" height="48" rx="10"/>
+  <text class="t" x="486" y="428.5" text-anchor="middle">Every action writes one immutable event file to <tspan class="mono b">.annox/</tspan>. Nothing is rewritten, so merges never conflict.</text>
+</svg>

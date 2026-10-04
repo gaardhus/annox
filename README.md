@@ -13,6 +13,37 @@ annox splits the problem the way LSP does: a portable **data format** that tools
 > [!WARNING]
 > **Status:** spec version 0.1, a complete first draft. Expect incompatible changes before 1.0. See [`spec/`](spec/README.md) and the [changelog](spec/CHANGELOG.md).
 
+## How it works
+
+A review goes through four steps. Whoever acts, a person in an editor or an agent at the command line, each action writes one event file to `.annox/`.
+
+<p align="center">
+  <img src="assets/annox-workflow.svg" alt="The annox review workflow: annotate, discuss, decide, and share. Every action writes one immutable event file to .annox/." width="972">
+</p>
+
+Under the hood, editors talk to one server, and the CLI and agents work on the files directly:
+
+```mermaid
+flowchart LR
+  subgraph editors [Editors]
+    direction TB
+    nvim[Neovim plugin]
+    vscode[VS Code extension]
+    other[Any LSP editor]
+  end
+  subgraph tools [Scripts and agents]
+    direction TB
+    cli[annox CLI]
+    mcp[annox mcp]
+  end
+  editors -->|"LSP + annox/* (§6)"| lsp[annox lsp]
+  lsp -->|events| store[(".annox/ (§5)")]
+  tools -->|events| store
+  store <-->|commit, pull| git[(git remote)]
+  lsp <-->|"WebSocket (§7)"| hub[annox hub]
+  hub <--> peers[Collaborators' servers]
+```
+
 ## Reference implementation
 
 A Rust reference implementation lives in [`crates/`](crates/). It covers every section:

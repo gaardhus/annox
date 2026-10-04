@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How it works: annox</title>
+    <meta
+      name="description"
+      content="How a review goes with annox: annotate, discuss, decide, and share, with every action stored as one event file next to your document."
+    />
+    <link rel="icon" href="assets/annox.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="top wrap">
+      <a class="brand" href="./"
+        ><img src="assets/annox.svg" alt="" width="32" height="32" />annox</a
+      >
+      <nav>
+        <a href="how-it-works.html" aria-current="page">How it works</a>
+        <a href="https://github.com/gaardhus/annox/tree/main/spec">Spec</a>
+        <a href="https://github.com/gaardhus/annox/tree/main/editors/nvim"
+          >Neovim</a
+        >
+        <a href="https://github.com/gaardhus/annox/tree/main/editors/vscode"
+          >VS Code</a
+        >
+        <a href="https://github.com/gaardhus/annox">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero sub wrap">
+        <h1>How a review goes</h1>
+        <p class="lede">
+          Whoever takes part, a person in their editor or an agent at the
+          command line, works on the same plain files. Every action writes one
+          event to <code>.annox/</code>, next to the document.
+        </p>
+      </section>
+
+      <section class="workflow wrap">
+        <figure id="workflow">
+          <img
+            src="assets/annox-workflow.svg"
+            width="972"
+            height="460"
+            alt="The annox review workflow: annotate, discuss, decide, and share. Every action writes one immutable event file to .annox/."
+          />
+        </figure>
+      </section>
+
+      <section class="points steps wrap">
+        <div>
+          <h2>1. Annotate</h2>
+          <p>
+            Highlight a passage, comment on it, or suggest replacing it. Each
+            note is anchored by its position and the quoted text. Drafts can
+            stay local until you publish them.
+            <a href="https://github.com/gaardhus/annox/blob/main/spec/03-anchoring.md">Anchoring (§3)</a>
+          </p>
+        </div>
+        <div>
+          <h2>2. Discuss</h2>
+          <p>
+            Reply in a thread beside the text. When the document changes, each
+            note finds its quote again, or is flagged as orphaned instead of
+            guessing. Every edit to a note stays in its history.
+            <a href="https://github.com/gaardhus/annox/blob/main/spec/02-data-model.md">Data model (§2)</a>
+          </p>
+        </div>
+        <div>
+          <h2>3. Decide</h2>
+          <p>
+            Resolve a comment, or reopen it. Accept a suggestion to apply the
+            edit, or reject or withdraw it. An accepted edit is undone with a
+            new suggestion that reverts it, so the record stays intact.
+            <a href="https://github.com/gaardhus/annox/blob/main/spec/04-suggestions.md">Suggestions (§4)</a>
+          </p>
+        </div>
+        <div>
+          <h2>4. Share</h2>
+          <p>
+            <code>annox commit</code> commits the new event files, and you push
+            them like code. Or point the workspace at a hub, and events and
+            cursors arrive as collaborators type.
+            <a href="https://github.com/gaardhus/annox/blob/main/spec/07-sync.md">Sync (§7)</a>
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="wrap">
+      <p>
+        annox is MIT licensed. The spec is at version 0.1, a first draft, so
+        expect changes before 1.0.
+      </p>
+    </footer>
+
+    <script type="module">
+      // Inline the diagram so it uses the page's fonts. The <img> stays if this fails.
+      const figure = document.getElementById("workflow");
+      try {
+        const response = await fetch("assets/annox-workflow.svg");
+        if (response.ok) {
+          const svg = new DOMParser()
+            .parseFromString(await response.text(), "image/svg+xml")
+            .documentElement;
+          if (svg.localName === "svg") figure.replaceChildren(svg);
+        }
+      } catch {}
+    </script>
+  </body>
+</html>
