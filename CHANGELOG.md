@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/gaardhus/annox/compare/v0.7.0...v0.8.0) - 2026-10-04
+
+### Added
+
+- *(nvim)* Mark the words that changed within a suggestion
+- Revert accepted suggestions, and show a thread's whole history
+- *(site)* Add a how-it-works page with the review workflow
+- *(site)* Revert accepted suggestions in the demo
+- Add highlighting, a comment with no body
+
+### Fixed
+
+- *(install)* Find the latest release without the rate-limited GitHub API
+
 ## [0.7.0](https://github.com/gaardhus/annox/compare/v0.6.0...v0.7.0) - 2026-10-02
 
 ### Added
