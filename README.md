@@ -21,7 +21,15 @@ A review goes through four steps. Whoever acts, a person in an editor or an agen
   <img src="assets/annox-workflow.svg" alt="The annox review workflow: annotate, discuss, decide, and share. Every action writes one immutable event file to .annox/." width="972">
 </p>
 
-Under the hood, editors talk to one server, and the CLI and agents work on the files directly:
+Here it is in Neovim: replying to a comment, commenting on a selection, accepting a suggestion, and suggesting edits as you type.
+
+<p align="center">
+  <img src="assets/nvim-demo.gif" alt="annox in Neovim: replying to a comment, commenting on a selection, accepting a suggestion, and suggesting edits in suggestion mode" width="972">
+</p>
+
+## Reference implementation
+
+Editors talk to one server, and the CLI and agents work on the files directly:
 
 ```mermaid
 flowchart LR
@@ -43,8 +51,6 @@ flowchart LR
   lsp <-->|"WebSocket (§7)"| hub[annox hub]
   hub <--> peers[Collaborators' servers]
 ```
-
-## Reference implementation
 
 A Rust reference implementation lives in [`crates/`](crates/). It covers every section:
 

@@ -30,6 +30,11 @@ test-nvim:
     cargo build -p annox-lsp --locked
     for t in editors/nvim/tests/*.lua; do ANNOX_BIN="$PWD/target/debug/annox" nvim --headless --clean -l "$t" || exit 1; done
 
+# Record the Neovim demo in assets/nvim-demo.gif. Needs asciinema 3 and agg.
+nvim-demo:
+    cargo build -p annox-lsp --locked
+    ANNOX_BIN="$PWD/target/debug/annox" editors/nvim/demo/record.sh assets/nvim-demo.gif
+
 # Type check and test the VS Code extension. The end-to-end test downloads VS Code.
 test-vscode:
     cargo build -p annox-lsp --locked

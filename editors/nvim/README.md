@@ -2,6 +2,8 @@
 
 A thin Neovim client for the annox language server. The server does all the annox work: storage, replay, anchoring, and conflicts. The plugin draws annotations and sends your actions.
 
+![Replying to a comment, commenting on a selection, accepting a suggestion, and suggesting edits in suggestion mode](../../assets/nvim-demo.gif)
+
 Requires Neovim 0.11+ and the `annox` binary (`cargo build --release` at the repository root).
 
 ## Setup
@@ -167,6 +169,10 @@ set statusline+=%{get(b:,'annox_suggesting',0)?'SUGGESTING\ ':''}
 When the workspace syncs through a hub, collaborators' cursors appear as `▏Name` tags, and your own cursor is shared unless `presence = false`.
 
 Highlight groups: `AnnoxComment`, `AnnoxHighlight`, `AnnoxSuggestion`, and `AnnoxLocal` tint the background of annotated text in the matching diagnostic color, and `AnnoxStale` and `AnnoxConflict` undercurl it. `AnnoxComment` is also underlined, so you can tell a comment from a highlight (a comment with no body or replies). The full list: `AnnoxComment`, `AnnoxHighlight`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, `AnnoxPresenceRange`, for inline suggestions, `AnnoxDeletion` and `AnnoxInsertion`, `AnnoxWordDeletion` and `AnnoxWordInsertion` for the words that changed within a suggestion (a background only, so the text keeps its color), `AnnoxEditOriginal` for the old text above the suggestion edit window, `AnnoxOrphans` for the notice about annotations that could not be located, and `AnnoxSuggestingLineNr`, `AnnoxSuggestingCursorLineNr` and `AnnoxSuggestingCursorLine` for the suggestion mode tint.
+
+## Demo
+
+`just nvim-demo` re-records the GIF above in `assets/nvim-demo.gif`, from the script in `demo/demo.lua`. It needs [asciinema](https://asciinema.org) 3 and [agg](https://github.com/asciinema/agg).
 
 ## Tests
 
