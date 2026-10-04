@@ -37,6 +37,12 @@ export ANNOX_AUTHOR=mailto:ada@example.org ANNOX_AUTHOR_NAME=Ada
 # answer Neovim's startup queries, so skip them (else E1568 shows).
 NVIM_NOTTYFAST=1 asciinema rec --headless -q -f asciicast-v2 --window-size 112x16 \
   -c "nvim -u '$here/demo.lua' essay.md" "$tmp/demo.cast"
-"${AGG:-agg}" --font-family "BlexMono Nerd Font Mono,JetBrains Mono,DejaVu Sans Mono" \
-  --font-size 20 --last-frame-duration 1 "$tmp/demo.cast" "$out" >/dev/null 2>&1
+# The theme is Neovim's default colors, so agg's padding matches the editor
+# background. The font size makes the GIF about twice the 972px the README
+# shows it at, so it stays sharp on high-DPI screens.
+theme=14161b,e0e2ea,07080d,ffc0b9,b3f6c0,fce094,a6dbff,ffcaff,8cf8f7,eef1f8
+theme=$theme,4f5258,ffc0b9,b3f6c0,fce094,a6dbff,ffcaff,8cf8f7,eef1f8
+"${AGG:-agg}" --theme "$theme" --font-size 28 --last-frame-duration 1 \
+  --font-family "BlexMono Nerd Font Mono,JetBrains Mono,DejaVu Sans Mono" \
+  "$tmp/demo.cast" "$out" >/dev/null 2>&1
 echo "wrote $out"
