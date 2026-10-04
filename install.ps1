@@ -41,8 +41,15 @@ function Install-Annox {
   # ARM64 Windows runs the x64 binary under emulation.
 
   if (-not $Version) {
+    # The latest release page redirects to its tag. Unlike the GitHub API, it isn't rate limited
+    # per IP, which shared IPs like CI runners run into. WebRequest reports where the redirect
+    # ended the same way in Windows PowerShell and PowerShell 7, which Invoke-WebRequest doesn't.
     try {
-      $Version = (Invoke-RestMethod -UseBasicParsing "https://api.github.com/repos/$repo/releases/latest").tag_name
+      $request = [Net.WebRequest]::Create("https://github.com/$repo/releases/latest")
+      $request.Method = 'HEAD'
+      $response = $request.GetResponse()
+      try { $Version = $response.ResponseUri.Segments[-1] } finally { $response.Close() }
+      if ($Version -notmatch '^v\d') { throw "no release tag in $($response.ResponseUri)" }
     } catch {
       throw "annox: could not find the latest release: $_"
     }
