@@ -291,10 +291,11 @@ class AnnoxDemo extends HTMLElement {
     return id;
   }
 
-  #create(kind, target, body, replacement, author) {
+  #create(kind, target, body, replacement, author, reverts) {
     const fields = { kind, target };
     if (body) fields.body = body;
     if (kind === "suggestion") fields.edit = { replacement: replacement ?? "" };
+    if (reverts) fields.reverts = reverts;
     return this.#append(annox.newId(), "create", fields, author);
   }
 
@@ -324,6 +325,24 @@ class AnnoxDemo extends HTMLElement {
       fields.appliedVersion = r.version;
     }
     this.#append(id, "status", fields, author);
+  }
+
+  /** Suggests putting back the text an accepted suggestion replaced (§4.3.4). */
+  #revert(id) {
+    const n = this.#notes.find((x) => x.id === id);
+    const found = annox.appliedTextSearch(this.text, n.target, n.edit.replacement);
+    if (!found) return this.#active;
+    const target = annox.createAnchor(this.text, found.start, found.end, this.path);
+    const original = n.target.selectors.quote.exact;
+    return this.#create("suggestion", target, "", original, this.you, n.id);
+  }
+
+  /** How far reverting an accepted suggestion has got, if at all. */
+  #revertState(n) {
+    const reverts = this.#notes.filter((x) => x.reverts === n.id);
+    if (reverts.some((x) => x.status === "accepted")) return ", then reverted";
+    if (reverts.some((x) => x.status === "open")) return ", revert suggested";
+    return "";
   }
 
   // Rendering.
@@ -549,9 +568,14 @@ class AnnoxDemo extends HTMLElement {
 
     let actions = "";
     if (n.status !== "open") {
-      actions = `<span class="status">${esc(n.status[0].toUpperCase() + n.status.slice(1))}</span>`;
+      actions = `<span class="status">${esc(n.status[0].toUpperCase() + n.status.slice(1))}${this.#revertState(n)}</span>`;
       if (n.status === "resolved")
         actions += `<button data-action="status" data-status="open">Reopen</button>`;
+      if (n.status === "accepted" && !this.#revertState(n)) {
+        // Reverting needs the applied text, unchanged (§4.3.3).
+        const found = annox.appliedTextSearch(this.text, n.target, n.edit.replacement);
+        actions += `<button data-action="revert" ${found ? "" : 'disabled title="The text changed since it was accepted, so revert it by hand"'}>Revert</button>`;
+      }
     } else if (suggestion) {
       // An orphaned suggestion has nowhere to apply. Step 4 found it, but
       // only with whitespace ignored, so it isn't applicable either (§4.2).
@@ -564,7 +588,7 @@ class AnnoxDemo extends HTMLElement {
     }
 
     return `<article class="note ${n.kind} ${active ? "active" : ""} ${n.status !== "open" ? "closed" : ""} ${r.state === "orphaned" ? "orphan" : ""}" data-id="${esc(n.id)}">
-      <header><strong>${esc(n.author?.name ?? n.author?.id)}</strong> ${suggestion ? "suggested" : "commented"} ${n.status === "open" ? state : ""}</header>
+      <header><strong>${esc(n.author?.name ?? n.author?.id)}</strong> ${suggestion ? (n.reverts ? "suggested a revert" : "suggested") : "commented"} ${n.status === "open" ? state : ""}</header>
       <div class="quote">${target}</div>
       ${n.body ? `<p class="body">${esc(n.body)}</p>` : ""}
       ${n.replies.map((x) => `<div class="reply"><strong>${esc(x.author?.name ?? x.author?.id)}</strong> ${esc(x.body)}</div>`).join("")}
@@ -599,6 +623,9 @@ class AnnoxDemo extends HTMLElement {
       this.shadowRoot
         .querySelector('form[data-form="draft"] textarea')
         ?.focus();
+    } else if (action?.dataset.action === "revert" && note) {
+      this.#active = this.#revert(note.dataset.id);
+      this.#changed();
     } else if (action?.dataset.action === "cancel") {
       this.#draft = null;
       this.#renderPanel();

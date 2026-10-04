@@ -27,6 +27,10 @@ export const resolve = (text, anchor) =>
 export const applySuggestion = (text, anchor, replacement) =>
   JSON.parse(wasm.applySuggestion(text, JSON.stringify(anchor), replacement));
 
+/** Finds the text an accepted suggestion put in `text` (§4.3.3): `{ start, end }`, or `null`. */
+export const appliedTextSearch = (text, anchor, replacement) =>
+  JSON.parse(wasm.appliedTextSearch(text, JSON.stringify(anchor), replacement));
+
 /** Derives every annotation from a list of events (§2.5.6), each with its `heads`. */
 export const derive = (events) =>
   JSON.parse(wasm.derive(JSON.stringify(events)));

@@ -90,6 +90,15 @@ pub fn apply_suggestion_json(raw: &str, anchor: &str, replacement: &str) -> Resu
     Ok(out.to_string())
 }
 
+pub fn applied_text_search_json(raw: &str, anchor: &str, replacement: &str) -> Result<String, String> {
+    let text = Text::from_raw(raw);
+    let anchor: Anchor = parse("anchor", anchor)?;
+    let found = suggestion::applied_text_search(&text, &anchor, replacement);
+    Ok(found
+        .map_or(Value::Null, |(s, e)| json!({ "start": to_utf16(&text, s), "end": to_utf16(&text, e) }))
+        .to_string())
+}
+
 pub fn derive_json(events: &str) -> Result<String, String> {
     let events: Vec<Event> = parse("events", events)?;
     let mut ids: Vec<&str> = events.iter().filter_map(|e| e.annotation.as_deref()).collect();
@@ -131,6 +140,13 @@ pub fn apply_suggestion(text: &str, anchor: &str, replacement: &str) -> Result<S
     apply_suggestion_json(text, anchor, replacement).map_err(|e| JsError::new(&e))
 }
 
+/// Finds the text an accepted suggestion put in `text` (§4.3.3):
+/// `{ start, end }`, or `null` if it has changed since.
+#[wasm_bindgen(js_name = appliedTextSearch)]
+pub fn applied_text_search(text: &str, anchor: &str, replacement: &str) -> Result<String, JsError> {
+    applied_text_search_json(text, anchor, replacement).map_err(|e| JsError::new(&e))
+}
+
 /// Derives every annotation in a JSON array of events (§2.5.6), each with
 /// its `heads` for the `after` of the next event.
 #[wasm_bindgen]
@@ -162,6 +178,11 @@ mod tests {
         let anchor = create_anchor_json("teh cat", 0, 3, "a.md").unwrap();
         let r: Value = serde_json::from_str(&apply_suggestion_json("teh cat", &anchor, "the").unwrap()).unwrap();
         assert_eq!((r["applied"].as_bool(), r["text"].as_str()), (Some(true), Some("the cat")));
+
+        let found =
+            applied_text_search_json("😀 the cat", &create_anchor_json("😀 teh cat", 3, 6, "a.md").unwrap(), "the");
+        assert_eq!(found.unwrap(), r#"{"end":6,"start":3}"#);
+        assert_eq!(applied_text_search_json("😀 a cat", &anchor, "the").unwrap(), "null");
 
         let events = json!([{
             "id": "01", "annotation": "01", "after": [], "type": "create",
