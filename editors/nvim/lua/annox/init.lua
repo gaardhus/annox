@@ -61,11 +61,18 @@ local function set_highlights()
   -- Annotated text gets a background tint in the diagnostic color, so it
   -- isn't mistaken for a diagnostic. Problems (stale, conflict) keep the
   -- undercurl. Without true colors, fall back to the underlines.
-  local tinted = { AnnoxComment = "Info", AnnoxSuggestion = "Hint", AnnoxLocal = "Ok" }
+  -- A comment is also underlined, to say there's a note to read; a highlight
+  -- (a comment with nothing to read) is only tinted.
+  local tinted = { AnnoxComment = "Info", AnnoxHighlight = "Info", AnnoxSuggestion = "Hint", AnnoxLocal = "Ok" }
   for group, severity in pairs(tinted) do
     local fg = vim.api.nvim_get_hl(0, { name = "Diagnostic" .. severity, link = false }).fg
     if vim.o.termguicolors and fg then
-      vim.api.nvim_set_hl(0, group, { default = true, bg = tint(fg, 0.2) })
+      local underline = group == "AnnoxComment"
+      vim.api.nvim_set_hl(
+        0,
+        group,
+        { default = true, bg = tint(fg, 0.2), underline = underline, sp = underline and fg or nil }
+      )
     else
       vim.api.nvim_set_hl(0, group, { default = true, link = "DiagnosticUnderline" .. severity })
     end
@@ -138,6 +145,8 @@ local function highlight_group(a)
     return "AnnoxLocal"
   elseif a.kind == "suggestion" then
     return a.applicable and "AnnoxSuggestion" or "AnnoxStale"
+  elseif first_line(a.body) == nil and #(a.replies or {}) == 0 then
+    return "AnnoxHighlight"
   end
   return "AnnoxComment"
 end
@@ -603,6 +612,25 @@ function M.comment(opts)
       ["local"] = opts["local"] or false,
     })
   end)
+end
+
+--- Highlights `opts.range` or the visual selection: a comment with no body.
+--- opts: { range?, visual?, ["local"]? }
+function M.highlight(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  if not client_for(bufnr) then
+    return request(bufnr)
+  end
+  if not opts.range and not opts.visual then
+    return vim.notify("annox: select the text to highlight", vim.log.levels.WARN)
+  end
+  request(bufnr, "annox/create", {
+    textDocument = { uri = vim.uri_from_bufnr(bufnr) },
+    kind = "comment",
+    range = target_range(bufnr, opts),
+    ["local"] = opts["local"] or false,
+  })
 end
 
 --- Suggests replacing the selection (or inserting at the cursor).
@@ -1945,6 +1973,9 @@ local subcommands = {
   end,
   draft = function(o)
     M.comment({ visual = o.range > 0, ["local"] = true })
+  end,
+  highlight = function(o)
+    M.highlight({ visual = o.range > 0 })
   end,
   publish = function(o)
     M.publish({ all = o.bang })

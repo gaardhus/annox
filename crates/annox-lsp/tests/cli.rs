@@ -60,6 +60,16 @@ fn ambiguous_quotes_need_an_occurrence() {
 }
 
 #[test]
+fn highlights_are_comments_without_a_body() {
+    let dir = setup(DOC);
+    let h = id(&annox(dir.path(), &["highlight", "paper.md", "--quote", "bound is tight", "--occurrence", "2"]));
+    let shown = annox(dir.path(), &["show", &h]);
+    assert_eq!((&shown["kind"], &shown["body"]), (&"comment".into(), &Value::Null));
+    annox(dir.path(), &["edit", &h, "--body", "Why?"]);
+    assert_eq!(annox(dir.path(), &["show", &h])["body"], "Why?", "adding a body turns it into a comment");
+}
+
+#[test]
 fn threads_and_statuses() {
     let dir = setup(DOC);
     let c = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "Section 3", "--body", "Which one?"]));

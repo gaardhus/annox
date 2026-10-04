@@ -43,7 +43,7 @@ annox list --author ID / --not-author ID
 
 `--mine` and `--others` use your identity (see above).
 
-Each entry has `id`, `path`, `kind` (`comment` or `suggestion`), `status`, `author`, `body`, `quote` (the text it's attached to, as it reads now), `line`, `resolution`, and `replies`. Suggestions also have `replacement` and `applicable`, and `reverts` if they undo an accepted suggestion.
+Each entry has `id`, `path`, `kind` (`comment` or `suggestion`), `status`, `author`, `body` (null for a highlight), `quote` (the text it's attached to, as it reads now), `line`, `resolution`, and `replies`. Suggestions also have `replacement` and `applicable`, and `reverts` if they undo an accepted suggestion.
 
 - `resolution: "orphaned"` means the quoted text is gone from the file. Fix it with `reattach` or `retarget` (below), or tell the user.
 - `applicable: false` means the suggestion can't be applied as is. Use `retarget` to fix it.
@@ -54,6 +54,7 @@ You target text by **quoting it exactly** as it appears in the file, including p
 
 ```sh
 annox comment paper.md --quote "the bound is tight" --body "Is this proved? Cite Lemma 4."
+annox highlight paper.md --quote "the bound is tight"   # a comment with no body
 annox suggest paper.md --quote "teh bound" --replace "the bound" --body "Typo."
 annox reply ID --body "Done in §3."
 annox status ID resolved            # comments: open | resolved

@@ -49,6 +49,12 @@
         "icon": "$(comment-draft)"
       },
       {
+        "command": "annox.highlight",
+        "title": "Highlight",
+        "category": "annox",
+        "icon": "$(paintcan)"
+      },
+      {
         "command": "annox.suggest",
         "title": "Suggest Replacement",
         "category": "annox",
@@ -290,6 +296,10 @@
           "when": "annox.inWorkspace"
         },
         {
+          "command": "annox.highlight",
+          "when": "annox.inWorkspace && editorHasSelection"
+        },
+        {
           "command": "annox.suggest",
           "when": "annox.inWorkspace"
         },
@@ -493,12 +503,17 @@
           "group": "1_write@2"
         },
         {
+          "command": "annox.highlight",
+          "group": "1_write@3",
+          "when": "editorHasSelection"
+        },
+        {
           "command": "annox.suggest",
-          "group": "1_write@3"
+          "group": "1_write@4"
         },
         {
           "command": "annox.toggleSuggesting",
-          "group": "1_write@4"
+          "group": "1_write@5"
         },
         {
           "command": "annox.showThread",
@@ -609,6 +624,16 @@
           "light": "#1a85ff1f",
           "highContrast": "#3794ff26",
           "highContrastLight": "#1a85ff1f"
+        }
+      },
+      {
+        "id": "annox.commentUnderline",
+        "description": "Underline of text with a comment. Highlights, comments with no body, aren't underlined.",
+        "defaults": {
+          "dark": "#3794ff",
+          "light": "#1a85ff",
+          "highContrast": "#3794ff",
+          "highContrastLight": "#1a85ff"
         }
       },
       {

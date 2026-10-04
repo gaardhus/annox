@@ -100,6 +100,14 @@ const TOOLS: &[Tool] = &[
         read_only: false,
     },
     Tool {
+        name: "highlight",
+        command: "highlight",
+        description: "Highlight a passage of a file: a comment with no body.",
+        positional: &["file"],
+        params: &[FILE, QUOTE, OCCURRENCE, LABEL, LOCAL],
+        read_only: false,
+    },
+    Tool {
         name: "suggest",
         command: "suggest",
         description: "Suggest replacing a passage of a file. The file is not changed until someone accepts the suggestion.",

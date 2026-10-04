@@ -25,6 +25,7 @@ Changes others make to `.annox/`, such as a `git pull`, show up without reloadin
 Annotations are comment threads, under their own **annox** comment provider, so they sit beside threads from other extensions such as GitHub Pull Requests. They also appear in the **Comments** panel.
 
 - **To comment,** select text and click the **+** in the gutter, or run **annox: Comment**. Write the comment in the thread that opens, then press **Comment**, or **Save Draft** for a local-only draft.
+- **To highlight,** select text and run **annox: Highlight**. A highlight is a comment with no body.
 - **To reply,** type in a thread's reply box.
 - **To edit a comment,** use the pencil on it.
 - **The buttons in a thread's header** act on the thread. A suggestion has *Accept*, *Reject*, and *Edit*, or *Re-target* once it's stale. A comment has *Resolve*, a closed thread *Reopen*, an accepted suggestion *Revert*, and a draft *Publish*. An orphaned comment has *Re-attach*, a conflicted annotation *Resolve Conflicts*, and every thread *History*.
@@ -33,7 +34,7 @@ Resolved threads and closed suggestions stay in the panel, marked resolved. Once
 
 The **annox** view in the panel lists the annotations of the open files: open ones in document order, then closed ones, newest first. Click one to go to it, or, if its text is gone, to read its thread and history.
 
-In the editor, annotated text is tinted. Comments are blue, suggestions purple, and drafts green. A stale suggestion has a wavy yellow underline, and a conflicted annotation a red one. An annotation on a point between two characters shows as ◆. The first line of each comment, or each suggested replacement, is shown at the end of its line. Annotations whose text could not be found are counted in a notice at the top of the file. Click it to pick one.
+In the editor, annotated text is tinted. Comments are blue and underlined, highlights (comments with no body) blue without the underline, suggestions purple, and drafts green. A stale suggestion has a wavy yellow underline, and a conflicted annotation a red one. An annotation on a point between two characters shows as ◆. The first line of each comment, or each suggested replacement, is shown at the end of its line. Annotations whose text could not be found are counted in a notice at the top of the file. Click it to pick one.
 
 ## Commands
 
@@ -43,6 +44,7 @@ Every command is in the command palette under **annox:**, and the common ones ar
 | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Initialize Workspace                                               | Create an annox workspace for this project and restart the server.                                                                                                                                                                                       |
 | Comment / Draft Comment                                            | Open a thread on the selection, or the cursor, to write a comment or a local-only draft in. Drafts are stored in the git-ignored `.annox/local/` and marked *draft*.                                                                                      |
+| Highlight                                                          | Highlight the selection: a comment with no body. Add a body later with the pencil on it.                                                                                                                                                                  |
 | Suggest Replacement                                                | Suggest a replacement for the selection, or an insertion at the cursor. The prompt is pre-filled with the current text. For a selection spanning lines, the replacement opens in an editor. Save it (Ctrl+S) to send it.                                 |
 | Toggle Suggestion Mode                                             | Turn suggestion mode on or off for the file (see below).                                                                                                                                                                                                  |
 | Reply / Show Thread                                                | Open the thread under the cursor.                                                                                                                                                                                                                         |

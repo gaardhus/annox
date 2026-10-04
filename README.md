@@ -108,6 +108,7 @@ annox show ID
 annox history ID [--json]
 annox report [FILE] [--json]
 annox comment paper.md --quote "the bound is tight" --body "Cite Lemma 4?"
+annox highlight paper.md --quote "the bound is tight"
 annox suggest paper.md --quote "teh" --replace "the" --body "typo"
 annox reply ID --body "Fixed."
 annox status ID resolved

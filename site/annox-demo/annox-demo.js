@@ -13,6 +13,9 @@ import * as annox from "./annox.js";
 
 const YOU = { id: "urn:annox-demo:you", name: "You" };
 
+/** A comment with nothing to read yet: no body and no replies (§2.2). */
+const isHighlight = (n) => n.kind === "comment" && !n.body && !n.replies.length;
+
 const esc = (s) =>
   String(s ?? "").replace(
     /[&<>"']/g,
@@ -46,6 +49,7 @@ const STYLE = `
   --annox-muted: #5b6474;
   --annox-line: #d9dde5;
   --annox-comment: #facc15;
+  --annox-comment-line: #ca8a04;
   --annox-accent: #6366f1;
   --annox-on-accent: #ffffff;
   --annox-del: #c2410c;
@@ -67,6 +71,7 @@ const STYLE = `
     --annox-on-accent: #12151c;
     --annox-del: #fb923c;
     --annox-ins: #4ade80;
+    --annox-comment-line: #facc15;
   }
 }
 * { box-sizing: border-box; }
@@ -115,7 +120,8 @@ button.primary:hover:not(:disabled) {
 .editor:focus-within { box-shadow: inset 3px 0 var(--annox-accent); }
 .editor textarea:focus-visible { outline: none; }
 textarea { resize: none; overflow: hidden; background: transparent; outline: none; min-height: 12rem; caret-color: var(--annox-accent); }
-mark { color: transparent; border-radius: 2px; background: color-mix(in srgb, var(--annox-comment) 45%, transparent); }
+mark { color: transparent; border-radius: 2px; background: color-mix(in srgb, var(--annox-comment) 45%, transparent); box-shadow: inset 0 -2px var(--annox-comment-line); }
+mark.highlight { box-shadow: none; }
 mark.suggestion { background: color-mix(in srgb, var(--annox-accent) 22%, transparent); box-shadow: inset 0 -2px var(--annox-accent); }
 mark.active { background: color-mix(in srgb, var(--annox-comment) 85%, transparent); }
 mark.suggestion.active { background: color-mix(in srgb, var(--annox-accent) 40%, transparent); }
@@ -356,9 +362,10 @@ class AnnoxDemo extends HTMLElement {
       <div class="frame">
         <div class="doc">
           <div class="bar">
+            <button data-action="highlight" disabled>Highlight</button>
             <button data-action="draft" data-kind="comment" disabled>Comment</button>
             <button data-action="draft" data-kind="suggestion" disabled>Suggest edit</button>
-            <span class="hint">Select text to comment or suggest an edit</span>
+            <span class="hint">Select text to annotate it</span>
           </div>
           <div class="editor">
             <div class="backdrop" aria-hidden="true"></div>
@@ -428,7 +435,9 @@ class AnnoxDemo extends HTMLElement {
 
   #selectionChanged() {
     const { selectionStart: s, selectionEnd: e } = this.#editor;
-    for (const b of this.shadowRoot.querySelectorAll('[data-action="draft"]'))
+    for (const b of this.shadowRoot.querySelectorAll(
+      '[data-action="draft"], [data-action="highlight"]',
+    ))
       b.disabled = s === e;
     if (s !== e) return;
     const hit = this.#notes
@@ -462,7 +471,7 @@ class AnnoxDemo extends HTMLElement {
       .filter((n) => n.status === "open" && n.resolution.start !== undefined)
       .map((n) => ({
         id: n.id,
-        kind: n.kind,
+        kind: isHighlight(n) ? "highlight" : n.kind,
         start: n.resolution.start,
         end: n.resolution.end,
       }));
@@ -483,9 +492,10 @@ class AnnoxDemo extends HTMLElement {
         html += chunk;
         continue;
       }
-      const kind = cover.some((s) => s.kind === "suggestion")
-        ? "suggestion"
-        : "comment";
+      // A note to read wins over a bare highlight.
+      const kind = ["suggestion", "comment", "highlight"].find((k) =>
+        cover.some((s) => s.kind === k),
+      );
       const active = cover.some((s) => s.id === this.#active) ? " active" : "";
       html += `<mark class="${kind}${active}">${chunk}</mark>`;
     }
@@ -588,7 +598,7 @@ class AnnoxDemo extends HTMLElement {
     }
 
     return `<article class="note ${n.kind} ${active ? "active" : ""} ${n.status !== "open" ? "closed" : ""} ${r.state === "orphaned" ? "orphan" : ""}" data-id="${esc(n.id)}">
-      <header><strong>${esc(n.author?.name ?? n.author?.id)}</strong> ${suggestion ? (n.reverts ? "suggested a revert" : "suggested") : "commented"} ${n.status === "open" ? state : ""}</header>
+      <header><strong>${esc(n.author?.name ?? n.author?.id)}</strong> ${suggestion ? (n.reverts ? "suggested a revert" : "suggested") : n.body ? "commented" : "highlighted"} ${n.status === "open" ? state : ""}</header>
       <div class="quote">${target}</div>
       ${n.body ? `<p class="body">${esc(n.body)}</p>` : ""}
       ${n.replies.map((x) => `<div class="reply"><strong>${esc(x.author?.name ?? x.author?.id)}</strong> ${esc(x.body)}</div>`).join("")}
@@ -605,7 +615,15 @@ class AnnoxDemo extends HTMLElement {
     }
     const action = e.target.closest("[data-action]");
     const note = e.target.closest(".note[data-id]");
-    if (action?.dataset.action === "draft") {
+    if (action?.dataset.action === "highlight") {
+      const { selectionStart: start, selectionEnd: end } = this.#editor;
+      const target = annox.createAnchor(this.text, start, end, this.path);
+      // A highlight is a comment with no body (§2.2).
+      this.#active = this.#create("comment", target, "", null, this.you);
+      this.#draft = null;
+      this.#tab = "notes";
+      this.#changed();
+    } else if (action?.dataset.action === "draft") {
       const { selectionStart: start, selectionEnd: end } = this.#editor;
       const quote = this.text.slice(start, end);
       // Anchor now: the text may change before the note is submitted.

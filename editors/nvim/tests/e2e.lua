@@ -29,6 +29,8 @@ vim.o.termguicolors = true
 vim.cmd.colorscheme("default")
 local comment_hl = vim.api.nvim_get_hl(0, { name = "AnnoxComment", link = false })
 check(comment_hl.bg ~= nil and not comment_hl.undercurl, "comments tinted: " .. vim.inspect(comment_hl))
+local highlight_hl = vim.api.nvim_get_hl(0, { name = "AnnoxHighlight", link = false })
+check(comment_hl.underline and highlight_hl.bg ~= nil and not highlight_hl.underline, "only comments underlined")
 check(vim.api.nvim_get_hl(0, { name = "AnnoxStale" }).link == "DiagnosticUnderlineWarn", "stale keeps the undercurl")
 vim.o.termguicolors = false
 vim.cmd.colorscheme("default")
@@ -201,6 +203,21 @@ wait("publish", function()
     return x.id == draft.id
   end)
   return a and not a["local"]
+end)
+
+-- A highlight is a comment with no body.
+annox.highlight({ range = range(0, 2, 5) })
+wait("highlight", function()
+  return find(function(a)
+    return a.kind == "comment" and (a.body == nil or a.body == vim.NIL)
+  end) ~= nil
+end)
+wait("highlight drawn without an underline", function()
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, vim.api.nvim_get_namespaces().annox, 0, -1, { details = true })) do
+    if m[4].hl_group == "AnnoxHighlight" then
+      return true
+    end
+  end
 end)
 
 -- A suggestion goes stale when its text changes, then is re-targeted (§4.2.1).

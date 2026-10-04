@@ -91,6 +91,7 @@ export class Actions {
       "annox.init": (arg) => this.init(options(arg)),
       "annox.comment": (arg) => this.comment(arg, false),
       "annox.draft": (arg) => this.comment(arg, true),
+      "annox.highlight": (arg) => this.highlight(options(arg)),
       "annox.submitComment": (arg) => this.submitNew(arg as vscode.CommentReply, false),
       "annox.submitDraft": (arg) => this.submitNew(arg as vscode.CommentReply, true),
       "annox.cancelNewThread": (arg) => this.cancelNew(arg),
@@ -266,7 +267,18 @@ export class Actions {
     return this.create(editor.document.uri, range, opts.body, local || !!opts.local);
   }
 
-  private async create(uri: vscode.Uri, range: Range, body: string, local: boolean) {
+  /** Highlights the selection: a comment with no body. */
+  async highlight(opts: Options): Promise<AnnotationView | undefined> {
+    const editor = await this.editor();
+    if (!editor) return undefined;
+    if (!opts.range && editor.selection.isEmpty) {
+      void vscode.window.showWarningMessage("annox: select the text to highlight");
+      return undefined;
+    }
+    return this.create(editor.document.uri, opts.range ?? fromRange(editor.selection), undefined, !!opts.local);
+  }
+
+  private async create(uri: vscode.Uri, range: Range, body: string | undefined, local: boolean) {
     const view = await this.annox.request<AnnotationView>("annox/create", {
       textDocument: this.textDocument(uri),
       kind: "comment",
@@ -274,7 +286,7 @@ export class Actions {
       body,
       local,
     });
-    if (view) this.threads.reveal(view.id);
+    if (view && body !== undefined) this.threads.reveal(view.id);
     return view;
   }
 

@@ -18,7 +18,15 @@ function underline(themeColor: string): vscode.DecorationRenderOptions {
 
 export class Decorations implements vscode.Disposable {
   private readonly types = {
+    // A comment's text is tinted and underlined: the underline says there's a
+    // note to read. A highlight, a comment with nothing to read, is only tinted.
     comment: vscode.window.createTextEditorDecorationType({
+      backgroundColor: color("annox.commentBackground"),
+      textDecoration: "underline solid var(--vscode-annox-commentUnderline)",
+      overviewRulerColor: color("annox.commentBackground"),
+      overviewRulerLane: vscode.OverviewRulerLane.Center,
+    }),
+    highlight: vscode.window.createTextEditorDecorationType({
       backgroundColor: color("annox.commentBackground"),
       overviewRulerColor: color("annox.commentBackground"),
       overviewRulerLane: vscode.OverviewRulerLane.Center,
@@ -115,6 +123,7 @@ export class Decorations implements vscode.Disposable {
     const inline = this.inline(uri) || config.get<boolean>("inlineSuggestions", false);
     const ranges: Record<keyof typeof this.types, vscode.DecorationOptions[]> = {
       comment: [],
+      highlight: [],
       suggestion: [],
       draft: [],
       stale: [],
@@ -185,11 +194,11 @@ export class Decorations implements vscode.Disposable {
   }
 }
 
-function group(a: AnnotationView): "comment" | "suggestion" | "draft" | "stale" | "conflict" {
+function group(a: AnnotationView): "comment" | "highlight" | "suggestion" | "draft" | "stale" | "conflict" {
   if (isConflicted(a)) return "conflict";
   if (a.local) return "draft";
   if (a.kind === "suggestion") return a.applicable ? "suggestion" : "stale";
-  return "comment";
+  return a.body || a.replies?.length ? "comment" : "highlight";
 }
 
 function truncate(s: string, n: number): string {

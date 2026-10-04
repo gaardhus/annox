@@ -184,6 +184,14 @@ export async function run(): Promise<void> {
     await wait("published", () => get(d.id) && !get(d.id)?.local);
   });
 
+  step("a highlight is a comment with no body", async () => {
+    const h = await exec("annox.highlight", { range: range(0, "Results") });
+    assert.ok(h, "highlight created");
+    const a = await wait("highlight", () => get(h.id));
+    assert.equal(a.kind, "comment");
+    assert.ok(!a.body, "no body");
+  });
+
   step("a stale suggestion is re-targeted", async () => {
     await focus();
     const s = await exec("annox.suggest", { range: range(1, "the bound"), replacement: "this bound" });

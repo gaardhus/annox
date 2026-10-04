@@ -73,6 +73,17 @@ pub enum Command {
         #[command(flatten)]
         author: Author,
     },
+    /// Highlight a quote in FILE: a comment with no body
+    Highlight {
+        /// The document to annotate
+        file: String,
+        #[command(flatten)]
+        at: Quote,
+        #[command(flatten)]
+        meta: Meta,
+        #[command(flatten)]
+        author: Author,
+    },
     /// Suggest a replacement for a quote in FILE
     Suggest {
         /// The document to annotate
@@ -289,6 +300,7 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
         Command::Comment { file, at, body, meta, author } => {
             create(&file, &at, None, Some(&body), &meta, &author, &cwd)
         }
+        Command::Highlight { file, at, meta, author } => create(&file, &at, None, None, &meta, &author, &cwd),
         Command::Suggest { file, at, replace, body, meta, author } => {
             create(&file, &at, Some(&replace), body.as_deref(), &meta, &author, &cwd)
         }

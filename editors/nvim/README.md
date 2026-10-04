@@ -36,6 +36,7 @@ Changes others make to `.annox/`, such as a `git pull`, show up within a second 
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `:Annox init`                             | Create an annox workspace for this project and attach the server.                                                                                                                                                                                                                        |
 | `:Annox comment`                          | Comment on the cursor position, or on the selection when run from visual mode (`:'<,'>Annox comment`).                                                                                                                                                                                   |
+| `:'<,'>Annox highlight`                   | Highlight the selection: a comment with no body. Add a body later with `:Annox edit`.                                                                                                                                                                                                    |
 | `:Annox suggest`                          | Suggest a replacement for the selection. The prompt is pre-filled with the current text.                                                                                                                                                                                                 |
 | `:Annox edit`                             | Edit the suggested text of the suggestion under the cursor, or the text of a comment, in a floating window, with the suggestion's original text shown read-only above it. Esc (in normal mode) saves and closes, `:w` saves, `:q!` discards.                                                                                                           |
 | `:Annox suggesting`                       | Turn suggestion mode on or off for the buffer (see below).                                                                                                                                                                                                                               |
@@ -61,6 +62,7 @@ Suggested keymaps:
 
 ```lua
 vim.keymap.set({ "n", "x" }, "<leader>ac", ":Annox comment<cr>")
+vim.keymap.set("x", "<leader>ah", ":Annox highlight<cr>")
 vim.keymap.set("x", "<leader>as", ":Annox suggest<cr>")
 vim.keymap.set("n", "<leader>at", "<cmd>Annox thread<cr>")
 vim.keymap.set("n", "<leader>ar", "<cmd>Annox reply<cr>")
@@ -82,6 +84,7 @@ return {
     keys = {
       { "<leader>ac", ":Annox comment<cr>", mode = { "n", "x" }, desc = "Comment" },
       { "<leader>ad", ":Annox draft<cr>", mode = { "n", "x" }, desc = "Draft comment" },
+      { "<leader>ah", ":Annox highlight<cr>", mode = "x", desc = "Highlight" },
       { "<leader>as", ":Annox suggest<cr>", mode = "x", desc = "Suggest replacement" },
       { "<leader>as", ":Annox suggest<cr>", desc = "Add suggestion" },
       { "<leader>aS", "<cmd>Annox suggesting<cr>", desc = "Toggle suggestion mode" },
@@ -97,7 +100,7 @@ return {
       { "<leader>ao", "<cmd>Annox reopen<cr>", desc = "Reopen thread" },
       { "<leader>ap", "<cmd>Annox publish<cr>", desc = "Publish draft" },
       { "<leader>al", "<cmd>Annox list<cr>", desc = "List in quickfix" },
-      { "<leader>ah", "<cmd>Annox history<cr>", desc = "History" },
+      { "<leader>aH", "<cmd>Annox history<cr>", desc = "History" },
       { "<leader>aO", "<cmd>Annox orphans<cr>", desc = "Orphans" },
       { "<leader>aC", "<cmd>Annox conflicts<cr>", desc = "Resolve conflicts" },
       { "<leader>ag", "<cmd>Annox commit<cr>", desc = "Commit annotations" },
@@ -110,6 +113,7 @@ return {
         { "<leader>a", group = "annox", icon = { icon = "\u{f086}", color = "green" }, mode = { "n", "x" } },
         { "<leader>ac", icon = "\u{f0e5}", mode = { "n", "x" } },
         { "<leader>ad", icon = "\u{f24a}", mode = { "n", "x" } },
+        { "<leader>ah", icon = { icon = "\u{f0652}", color = "yellow" }, mode = "x" },
         { "<leader>as", icon = "\u{f040}" },
         { "<leader>aS", icon = { icon = "\u{f205}", color = "green" } },
         { "<leader>ae", icon = "\u{f044}" },
@@ -122,7 +126,7 @@ return {
         { "<leader>ao", icon = "\u{f0e2}" },
         { "<leader>ap", icon = "\u{f1d8}" },
         { "<leader>al", icon = "\u{f03a}" },
-        { "<leader>ah", icon = "\u{f1da}" },
+        { "<leader>aH", icon = "\u{f1da}" },
         { "<leader>aO", icon = { icon = "\u{f127}", color = "yellow" } },
         { "<leader>aC", icon = { icon = "\u{f126}", color = "orange" } },
         { "<leader>ag", icon = { icon = "\u{e729}", color = "orange" } },
@@ -162,7 +166,7 @@ set statusline+=%{get(b:,'annox_suggesting',0)?'SUGGESTING\ ':''}
 
 When the workspace syncs through a hub, collaborators' cursors appear as `▏Name` tags, and your own cursor is shared unless `presence = false`.
 
-Highlight groups: `AnnoxComment`, `AnnoxSuggestion`, and `AnnoxLocal` tint the background of annotated text in the matching diagnostic color, and `AnnoxStale` and `AnnoxConflict` undercurl it. The full list: `AnnoxComment`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, `AnnoxPresenceRange`, for inline suggestions, `AnnoxDeletion` and `AnnoxInsertion`, `AnnoxWordDeletion` and `AnnoxWordInsertion` for the words that changed within a suggestion (a background only, so the text keeps its color), `AnnoxEditOriginal` for the old text above the suggestion edit window, `AnnoxOrphans` for the notice about annotations that could not be located, and `AnnoxSuggestingLineNr`, `AnnoxSuggestingCursorLineNr` and `AnnoxSuggestingCursorLine` for the suggestion mode tint.
+Highlight groups: `AnnoxComment`, `AnnoxHighlight`, `AnnoxSuggestion`, and `AnnoxLocal` tint the background of annotated text in the matching diagnostic color, and `AnnoxStale` and `AnnoxConflict` undercurl it. `AnnoxComment` is also underlined, so you can tell a comment from a highlight (a comment with no body or replies). The full list: `AnnoxComment`, `AnnoxHighlight`, `AnnoxSuggestion`, `AnnoxStale`, `AnnoxConflict`, `AnnoxLocal`, `AnnoxVirtualText`, `AnnoxSign`, `AnnoxPresence`, `AnnoxPresenceRange`, for inline suggestions, `AnnoxDeletion` and `AnnoxInsertion`, `AnnoxWordDeletion` and `AnnoxWordInsertion` for the words that changed within a suggestion (a background only, so the text keeps its color), `AnnoxEditOriginal` for the old text above the suggestion edit window, `AnnoxOrphans` for the notice about annotations that could not be located, and `AnnoxSuggestingLineNr`, `AnnoxSuggestingCursorLineNr` and `AnnoxSuggestingCursorLine` for the suggestion mode tint.
 
 ## Tests
 
