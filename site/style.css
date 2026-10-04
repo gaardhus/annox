@@ -257,6 +257,27 @@ annox-demo {
   font-size: 0.9rem;
 }
 
+.editor {
+  padding: 3rem 0;
+  border-top: 1px solid var(--line);
+}
+.editor h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.editor p {
+  margin: 0 0 1.5rem;
+  color: var(--muted);
+}
+.editor img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
 .use {
   display: grid;
   grid-template-columns: 1.4fr 1fr;

@@ -91,8 +91,15 @@
           <h2>One server, any editor</h2>
           <p>
             Like LSP, <code>annox lsp</code> does the work once. Plain LSP
-            editors get diagnostics and code actions. The Neovim plugin and the
-            VS Code extension cover the full workflow.
+            editors get diagnostics and code actions. The
+            <a href="https://github.com/gaardhus/annox/tree/main/editors/nvim"
+              >Neovim plugin</a
+            >
+            and the
+            <a href="https://github.com/gaardhus/annox/tree/main/editors/vscode"
+              >VS Code extension</a
+            >
+            cover the full workflow.
           </p>
         </div>
       </section>
@@ -101,12 +108,14 @@
         <div>
           <h2 id="install">Install</h2>
           <p>
-            Linux, macOS, and Windows. The agent skill teaches Claude Code, Codex,
-            Gemini CLI, and other agents to use the CLI.
+            Linux, macOS, and Windows. The agent skill teaches Claude Code,
+            Codex, Gemini CLI, and other agents to use the CLI.
           </p>
           <div class="install-options">
             <div class="tabs" data-option="os">
-              <button aria-pressed="true" data-value="unix">macOS and Linux</button>
+              <button aria-pressed="true" data-value="unix">
+                macOS and Linux
+              </button>
               <button aria-pressed="false" data-value="windows">Windows</button>
             </div>
             <div class="tabs" data-option="skill">
@@ -118,9 +127,31 @@
           </div>
           <div class="copyable">
             <pre><span class="prompt" id="install-prompt" aria-hidden="true">$ </span><code id="install-cmd">curl -fsSL https://gaardhus.github.io/annox/install.sh | sh</code></pre>
-            <button class="copy" data-copy="install-cmd" aria-label="Copy install command" title="Copy">
-              <svg class="icon-copy" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg>
-              <svg class="icon-done" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+            <button
+              class="copy"
+              data-copy="install-cmd"
+              aria-label="Copy install command"
+              title="Copy"
+            >
+              <svg
+                class="icon-copy"
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                aria-hidden="true"
+              >
+                <rect x="9" y="9" width="11" height="11" rx="2" />
+                <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+              </svg>
+              <svg
+                class="icon-done"
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                aria-hidden="true"
+              >
+                <path d="M5 12.5l4.5 4.5L19 7.5" />
+              </svg>
             </button>
           </div>
         </div>
@@ -257,7 +288,10 @@ A good annotation should behave like a pencil mark: it belongs to the document, 
           await navigator.clipboard.writeText(text);
           button.classList.add("done");
           clearTimeout(button.timer);
-          button.timer = setTimeout(() => button.classList.remove("done"), 1500);
+          button.timer = setTimeout(
+            () => button.classList.remove("done"),
+            1500,
+          );
         });
       }
     </script>

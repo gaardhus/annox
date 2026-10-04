@@ -56,7 +56,7 @@ code-install:
 # Build the website in site/: annox-core as WebAssembly, the logos, and the install scripts.
 site:
     wasm-pack build crates/annox-wasm --target web --no-typescript --no-pack --out-dir ../../site/annox-demo/pkg
-    mkdir -p site/assets && cp assets/*.svg site/assets/
+    mkdir -p site/assets && cp assets/*.svg assets/*.gif site/assets/
     cp install.sh install.ps1 site/
 
 # Build the website and serve it on http://localhost:8000.
