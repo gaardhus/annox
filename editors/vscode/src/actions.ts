@@ -15,7 +15,7 @@ import {
   type Store,
   authorName,
   describe,
-  firstLine,
+  eventActions,
   fromRange,
   isConflicted,
   isOrphaned,
@@ -46,6 +46,8 @@ export interface Options {
   field?: string;
   value?: unknown;
   revert?: boolean;
+  /** For a revert: apply it now (true) or leave it open (false), which skips the prompt. */
+  accept?: boolean;
   root?: string;
   confirm?: boolean;
   /** A commit message, which skips the prompt. */
@@ -107,6 +109,7 @@ export class Actions {
       "annox.resolveThread": (arg) => this.setStatus(arg, "comment", "resolved", "Resolve"),
       "annox.resolveAll": (arg) => this.setStatus({ ...options(arg), all: true }, "comment", "resolved", "Resolve"),
       "annox.reopenThread": (arg) => this.reopen(arg),
+      "annox.revertSuggestion": (arg) => this.revert(arg),
       "annox.publish": (arg) => this.publish(arg),
       "annox.publishAll": (arg) => this.publish({ ...options(arg), all: true }),
       "annox.showThread": (arg) => this.showThread(arg),
@@ -532,6 +535,31 @@ export class Actions {
     if (t) await this.annox.request("annox/setStatus", { annotation: t.view.id, status: "open" });
   }
 
+  /** Undoes an accepted suggestion with a new suggestion that restores the
+   * original text (§4.3.4), applied now or left open for review. */
+  private async revert(arg: Arg): Promise<void> {
+    const t = await this.target(
+      arg,
+      (a) => a.kind === "suggestion" && a.status === "accepted" && !this.store.isReverted(a.id),
+      "accepted suggestion",
+    );
+    if (!t) return;
+    let accept = options(arg).accept;
+    if (accept === undefined) {
+      const choice = await vscode.window.showQuickPick(
+        [
+          { label: "Revert now", description: "Restore the original text", accept: true },
+          { label: "Suggest reverting", description: "Leave it open for review", accept: false },
+        ],
+        { placeHolder: `Revert “${describe(t.view).slice(0, 60)}”` },
+      );
+      if (!choice) return;
+      accept = choice.accept;
+    }
+    await this.suggesting.flush(t.uri);
+    await this.annox.request("annox/revert", { annotation: t.view.id, accept });
+  }
+
   /** Publishes local drafts (§5.11): the one of the thread or under the
    * cursor, or with `all` every draft in the document. */
   private async publish(arg: Arg): Promise<void> {
@@ -605,11 +633,9 @@ export class Actions {
       return;
     }
     const events = (await this.annox.request<HistoryEvent[]>("annox/history", { annotation: t.view.id })) ?? [];
-    const history = events.map((e) => {
-      const detail = e.body ?? e.status ?? e.edit?.replacement ?? "";
-      return `| ${e.time ?? ""} | ${e.type} | ${authorName(e)} | ${(firstLine(String(detail)) ?? "").replace(/\|/g, "\\|")} |`;
-    });
-    const text = [threadMarkdown(t.view), "## History", "", "| Time | Event | Author | |", "| --- | --- | --- | --- |", ...history, ""];
+    const actions = eventActions(events);
+    const history = events.map((e, i) => `| ${e.time ?? ""} | ${authorName(e)} | ${actions[i].replace(/\|/g, "\\|")} |`);
+    const text = [threadMarkdown(t.view, this.store), "## History", "", "| Time | Author | Action |", "| --- | --- | --- |", ...history, ""];
     await this.history.show(`${describe(t.view).slice(0, 40)}.md`, text.join("\n"));
   }
 
@@ -663,10 +689,9 @@ export class Actions {
     if (!t) return;
     const events = await this.annox.request<HistoryEvent[]>("annox/history", { annotation: t.view.id });
     if (!events) return;
-    const lines = events.map((e) => {
-      const detail = e.body ?? e.status ?? e.edit?.replacement ?? "";
-      return `${e.time ?? ""}  ${e.type.padEnd(9)} ${authorName(e)}  ${firstLine(String(detail)) ?? ""}`;
-    });
+    const width = Math.max(0, ...events.map((e) => authorName(e).length));
+    const actions = eventActions(events);
+    const lines = events.map((e, i) => `${e.time ?? ""}  ${authorName(e).padEnd(width)}  ${actions[i]}`);
     await this.history.show(`History of ${describe(t.view).slice(0, 40)}`, lines.join("\n"));
   }
 

@@ -1,7 +1,7 @@
 //! Deriving state from events (§2.5), for annotation logs and document logs
 //! (§5.5.1).
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 use serde_json::{json, Map, Value};
 
@@ -274,6 +274,9 @@ pub fn derive_annotation(events: &[Event], id: &str) -> Option<Value> {
                 Value::Null
             };
             out.insert("retargetedBy".into(), retargeted);
+            if let Some(reverts) = create.field("reverts").filter(|r| r.is_string()) {
+                out.insert("reverts".into(), reverts.clone());
+            }
             if status[0] == "accepted" {
                 out.insert("appliedVersion".into(), status[1].clone());
             }
@@ -352,6 +355,38 @@ pub fn ordered_events(events: &[Event], id: &str) -> Vec<Event> {
         }
     }
     out
+}
+
+/// The events of the thread that annotation `id` belongs to: its root's and
+/// every reply's. Each annotation's events keep the order of
+/// [`ordered_events`], and the annotations are interleaved by ascending event
+/// id (§2.5.5).
+pub fn thread_events(events: &[Event], id: &str) -> Vec<Event> {
+    fn parent(e: &Event) -> Option<&str> {
+        e.field("parent").and_then(Value::as_str)
+    }
+    let is_reply = |e: &&Event| e.kind == "create" && e.field("kind") == Some(&json!("reply"));
+    let root = events.iter().filter(is_reply).find(|e| e.id == id).and_then(|e| parent(e)).unwrap_or(id);
+    let replies: BTreeSet<&str> =
+        events.iter().filter(is_reply).filter(|e| parent(e) == Some(root)).map(|e| e.id.as_str()).collect();
+    let mut logs: Vec<VecDeque<Event>> =
+        std::iter::once(root).chain(replies).map(|a| ordered_events(events, a).into()).collect();
+    let mut out = Vec::new();
+    while let Some(next) = logs.iter_mut().filter(|l| !l.is_empty()).min_by(|a, b| a[0].id.cmp(&b[0].id)) {
+        out.extend(next.pop_front());
+    }
+    out
+}
+
+/// The derived states of the suggestions that revert suggestion `id` (§4.3.4),
+/// leaving out deleted ones.
+pub fn reverts_of(events: &[Event], id: &str) -> Vec<Value> {
+    events
+        .iter()
+        .filter(|e| e.kind == "create" && e.field("reverts").and_then(Value::as_str) == Some(id))
+        .filter_map(|e| derive_annotation(events, &e.id))
+        .filter(|s| s["kind"] == "suggestion" && s["deleted"] == json!(false))
+        .collect()
 }
 
 /// The heads of document record `id`, for the `after` of a new event.

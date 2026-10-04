@@ -1,7 +1,7 @@
 // The latest state pushed by the server, per document.
 
 import * as vscode from "vscode";
-import type { AnnotationView, AnnotationsResult, Peer, Range } from "./types.ts";
+import type { AnnotationView, AnnotationsResult, HistoryEvent, Peer, Range } from "./types.ts";
 
 /** A canonical string for a document URI, so URIs from the server and from
  * VS Code compare equal. */
@@ -58,6 +58,31 @@ export function authorName(a: { author?: { id: string; name?: string } }): strin
   return a.author?.name ?? a.author?.id ?? "unknown";
 }
 
+/** What each event of a thread's history did, as a past-tense verb, with the
+ * first line of its text if it has any. Events that change a reply say so. */
+export function eventActions(events: HistoryEvent[]): string[] {
+  const verbs: Record<string, string> = {
+    edit: "edited",
+    reanchor: "re-anchored (automatic)",
+    retarget: "retargeted",
+    delete: "deleted",
+    restore: "restored",
+  };
+  const statuses: Record<string, string> = { open: "reopened", withdrawn: "withdrew" };
+  const created: Record<string, string> = { comment: "commented", suggestion: "suggested", reply: "replied" };
+  const replies = new Set(events.filter((e) => e.type === "create" && e.kind === "reply").map((e) => e.id));
+  return events.map((e) => {
+    const verb =
+      e.type === "create"
+        ? (created[String(e.kind)] ?? "created")
+        : e.type === "status"
+          ? (statuses[String(e.status)] ?? String(e.status))
+          : (verbs[e.type] ?? e.type) + (replies.has(e.annotation) ? " reply" : "");
+    const detail = firstLine(e.body ?? e.edit?.replacement);
+    return detail ? `${verb}: ${detail}` : verb;
+  });
+}
+
 export class Store implements vscode.Disposable {
   private readonly docs = new Map<string, AnnotationsResult>();
   private readonly changed = new vscode.EventEmitter<string>();
@@ -108,6 +133,34 @@ export class Store implements vscode.Disposable {
       if (view) return { uri, view };
     }
     return undefined;
+  }
+
+  /** The suggestions that revert suggestion `id` (§4.3.4), leaving out
+   * deleted ones. */
+  revertsOf(id: string): AnnotationView[] {
+    return [...this.docs.values()].flatMap((s) => s.annotations.filter((a) => a.reverts === id && !a.deleted));
+  }
+
+  /** Whether accepted suggestion `id` was already reverted (§4.3.4). */
+  isReverted(id: string): boolean {
+    return this.revertsOf(id).some((a) => a.status === "accepted");
+  }
+
+  /** Lines linking the threads of a revert and the suggestion it reverts, in
+   * both directions (§4.3.4). */
+  revertLinks(a: AnnotationView): string[] {
+    const lines: string[] = [];
+    if (a.reverts) {
+      const reverted = this.find(a.reverts)?.view;
+      lines.push(reverted ? `*Reverts the accepted suggestion “${summary(reverted)}”*` : "*Reverts an accepted suggestion*");
+    }
+    if (a.status === "accepted") {
+      for (const r of this.revertsOf(a.id)) {
+        if (r.status === "accepted") lines.push(`*Reverted by “${summary(r)}”*`);
+        else if (r.status === "open") lines.push(`*A revert is suggested: “${summary(r)}”*`);
+      }
+    }
+    return lines;
   }
 
   setPeers(peers: Peer[]): void {

@@ -32,6 +32,9 @@ pub enum Command {
         /// Also list resolved, accepted, rejected, withdrawn and deleted annotations
         #[arg(long)]
         all: bool,
+        /// Also list resolved, accepted, rejected and withdrawn annotations, but not deleted ones
+        #[arg(long, conflicts_with = "all")]
+        closed: bool,
         #[command(flatten)]
         filter: Filter,
     },
@@ -47,6 +50,14 @@ pub enum Command {
     Show {
         /// The annotation's id, as printed by `annox list`; a reply's shows its thread
         id: String,
+    },
+    /// Print who did what to a thread (the annotation and its replies), and when, oldest first
+    History {
+        /// The annotation's id, as printed by `annox list`; a reply's shows its thread
+        id: String,
+        /// Print the events as JSON instead of text
+        #[arg(long)]
+        json: bool,
     },
     /// Comment on a quote in FILE
     Comment {
@@ -121,6 +132,20 @@ pub enum Command {
         #[command(flatten)]
         author: Author,
     },
+    /// Undo an accepted suggestion with a new suggestion that restores the original text, or the open one
+    /// that already does
+    Revert {
+        /// The accepted suggestion's id, as printed by `annox list --closed`
+        id: String,
+        /// Accept the new suggestion right away, instead of leaving it open for review
+        #[arg(long)]
+        accept: bool,
+        /// Why it's being reverted, in Markdown
+        #[arg(long, value_name = "TEXT", allow_hyphen_values = true)]
+        body: Option<String>,
+        #[command(flatten)]
+        author: Author,
+    },
     /// Move an open suggestion to new text, with a reviewed replacement
     Retarget {
         /// The annotation's id, as printed by `annox list`
@@ -185,7 +210,7 @@ pub struct Filter {
     /// Only comments or only suggestions
     #[arg(long, value_name = "KIND", value_parser = ["comment", "suggestion"])]
     kind: Option<String>,
-    /// Only these statuses (repeatable or comma-separated) [default: open, or any with --all]
+    /// Only these statuses (repeatable or comma-separated) [default: open, or any with --all or --closed]
     #[arg(long, value_name = "S", value_delimiter = ',',
           value_parser = ["open", "resolved", "accepted", "rejected", "withdrawn"])]
     status: Vec<String>,
@@ -257,9 +282,10 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
             }
             Ok(json!({ "root": ws.root }))
         }
-        Command::List { file, all, filter } => list(file.as_deref(), all, filter, &cwd),
+        Command::List { file, all, closed, filter } => list(file.as_deref(), all, closed, filter, &cwd),
         Command::Report { file, json: _ } => report(file.as_deref(), &cwd),
         Command::Show { id } => show(&id, &cwd),
+        Command::History { id, json: _ } => history(&id, &cwd),
         Command::Comment { file, at, body, meta, author } => {
             create(&file, &at, None, Some(&body), &meta, &author, &cwd)
         }
@@ -320,6 +346,9 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
             Ok(json!({ "id": id, "status": status }))
         }
         Command::Accept { id, confirmed, author } => accept(&id, confirmed, &author, &cwd),
+        Command::Revert { id, accept: then_accept, body, author } => {
+            revert(&id, then_accept, body.as_deref(), &author, &cwd)
+        }
         Command::Retarget { id, at, replace, author } => move_target(&id, &at, Some(&replace), &author, &cwd),
         Command::Reattach { id, at, author } => move_target(&id, &at, None, &author, &cwd),
         Command::Delete { id, author } => set_deleted(&id, true, &author, &cwd),
@@ -525,13 +554,14 @@ fn create(
         label: meta.label.as_deref(),
         replacement: replacement.as_deref(),
         local: meta.local,
+        reverts: None,
     };
     let index = Index::read(&ws);
     let event = ops::create_annotation(&ws, &index, &rel, &text, &new, &author(who, &ws)?)?;
     Ok(json!({ "id": event.id, "path": rel, "line": line_of(&text, start) }))
 }
 
-fn list(file: Option<&str>, all: bool, mut filter: Filter, cwd: &Path) -> anyhow::Result<Value> {
+fn list(file: Option<&str>, all: bool, closed: bool, mut filter: Filter, cwd: &Path) -> anyhow::Result<Value> {
     let (ws, paths) = match file {
         Some(file) => {
             let (ws, rel, _) = open_file(cwd, file)?;
@@ -559,10 +589,10 @@ fn list(file: Option<&str>, all: bool, mut filter: Filter, cwd: &Path) -> anyhow
             if state["kind"] == "reply" {
                 continue;
             }
-            let closed = state["status"] != "open";
+            let is_closed = state["status"] != "open";
             let deleted = state["deleted"] != json!(false);
             let status_ok = if filter.status.is_empty() {
-                all || !closed
+                all || closed || !is_closed
             } else {
                 filter.status.iter().any(|s| state["status"] == json!(s))
             };
@@ -600,7 +630,7 @@ fn report(file: Option<&str>, cwd: &Path) -> anyhow::Result<Value> {
     let (ws, index) = open_workspace(cwd)?;
     let files = uncommitted(&ws.root).ok();
     let uncommitted = files.as_ref().map(|files| summarize(&index, files));
-    let views = list(file, true, Filter::default(), cwd)?;
+    let views = list(file, true, false, Filter::default(), cwd)?;
     let mut documents: Vec<Value> = Vec::new();
     for view in views.as_array().into_iter().flatten().filter(|v| v["deleted"] != json!(true)) {
         let path = view["path"].as_str().unwrap_or_default();
@@ -692,6 +722,64 @@ pub fn render_report(report: &Value) -> String {
     out + &uncommitted
 }
 
+/// The events of an annotation's thread in display order (§2.5.5).
+fn history(id: &str, cwd: &Path) -> anyhow::Result<Value> {
+    let (_, index) = open_workspace(cwd)?;
+    let path = document_path(&index, id)?;
+    Ok(json!(annox_core::replay::thread_events(&index.load(&path).events, id)))
+}
+
+/// The text form of `annox history`: one line per event. Events that change a
+/// reply say so.
+pub fn render_history(events: &Value) -> String {
+    let events = events.as_array().map_or(&[][..], Vec::as_slice);
+    let replies: BTreeSet<&str> = events
+        .iter()
+        .filter(|e| e["type"] == "create" && e["kind"] == "reply")
+        .filter_map(|e| e["id"].as_str())
+        .collect();
+    let name = |e: &Value| e["author"]["name"].as_str().or(e["author"]["id"].as_str()).unwrap_or("unknown").to_owned();
+    let width = events.iter().map(|e| name(e).chars().count()).max().unwrap_or(0);
+    let mut out = String::new();
+    for e in events {
+        let detail = e["body"].as_str().or(e["edit"]["replacement"].as_str()).and_then(|d| d.lines().next());
+        let detail = detail.map_or(String::new(), |d| format!(": {d}"));
+        out.push_str(&format!(
+            "{}  {:width$}  {}{}{detail}\n",
+            e["time"].as_str().unwrap_or_default(),
+            name(e),
+            action(e),
+            if e["type"] != "create" && e["annotation"].as_str().is_some_and(|a| replies.contains(a)) {
+                " reply"
+            } else {
+                ""
+            },
+        ));
+    }
+    out
+}
+
+/// What an event did, as a past-tense verb for history views.
+fn action(event: &Value) -> String {
+    let status = event["status"].as_str().unwrap_or_default();
+    match (event["type"].as_str().unwrap_or_default(), event["kind"].as_str().unwrap_or_default()) {
+        ("create", "comment") => "commented".into(),
+        ("create", "suggestion") => "suggested".into(),
+        ("create", "reply") => "replied".into(),
+        ("edit", _) => "edited".into(),
+        ("status", _) => match status {
+            "open" => "reopened".into(),
+            "withdrawn" => "withdrew".into(),
+            _ => status.into(),
+        },
+        ("reanchor", _) => "re-anchored (automatic)".into(),
+        ("retarget", _) => "retargeted".into(),
+        ("delete", _) => "deleted".into(),
+        ("restore", _) => "restored".into(),
+        (kind, _) => kind.into(),
+    }
+}
+
 fn show(id: &str, cwd: &Path) -> anyhow::Result<Value> {
     let (ws, index) = open_workspace(cwd)?;
     let state = derived(&index, id)?;
@@ -740,6 +828,9 @@ fn item(
     });
     if state["kind"] == "suggestion" {
         view["replacement"] = state["edit"]["replacement"].clone();
+    }
+    if let Some(reverts) = state.get("reverts") {
+        view["reverts"] = reverts.clone();
     }
     // Closed annotations aren't resolved against the document (§4.4.1).
     if let (Some(target), Some(text), false) = (&target, text, closed) {
@@ -802,6 +893,52 @@ fn move_target(id: &str, at: &Quote, replace: Option<&str>, who: &Author, cwd: &
     };
     ops::append_event(&ws, &index, id, event, fields, &author(who, &ws)?)?;
     Ok(json!({ "id": id, "path": path, "line": line_of(&text, start) }))
+}
+
+/// Reverts an accepted suggestion (§4.3.4): suggests putting its original
+/// text back where the applied text is now, and accepts that if asked. An
+/// open suggestion that already reverts it is used instead of a new one.
+fn revert(id: &str, then_accept: bool, body: Option<&str>, who: &Author, cwd: &Path) -> anyhow::Result<Value> {
+    let (ws, index) = open_workspace(cwd)?;
+    let state = derived(&index, id)?;
+    if state["kind"] != "suggestion" || state["status"] != "accepted" || state["deleted"] != json!(false) {
+        bail!("only accepted suggestions can be reverted");
+    }
+    let path = document_path(&index, id)?;
+    let reverts = annox_core::replay::reverts_of(&index.load(&path).events, id);
+    if let Some(done) = reverts.iter().find(|s| s["status"] == "accepted") {
+        bail!("it was already reverted by {}", done["id"].as_str().unwrap_or_default());
+    }
+    let raw = std::fs::read_to_string(ws.root.join(&path)).with_context(|| format!("can't read {path}"))?;
+    let text = Text::from_raw(&raw);
+    let target: Anchor = serde_json::from_value(state["target"].clone())?;
+    let replacement = state["edit"]["replacement"].as_str().unwrap_or_default();
+    let (start, end) = suggestion::applied_text_search(&text, &target, replacement)
+        .ok_or_else(|| anyhow!("the accepted text was changed since, so it can't be reverted automatically"))?;
+    let revert_id = match reverts.iter().find(|s| s["status"] == "open") {
+        Some(open) => open["id"].as_str().unwrap_or_default().to_owned(),
+        None => {
+            let new = NewAnnotation {
+                kind: "suggestion",
+                start,
+                end,
+                body,
+                label: None,
+                replacement: Some(&target.selectors.quote.exact),
+                local: index.events.get(id).is_some_and(|(_, loc)| loc.area == Area::Local),
+                reverts: Some(id),
+            };
+            ops::create_annotation(&ws, &index, &path, &text, &new, &author(who, &ws)?)?.id
+        }
+    };
+    let mut out = if then_accept {
+        accept(&revert_id, false, who, cwd)
+            .with_context(|| format!("suggestion {revert_id} reverts it, but it couldn't be accepted"))?
+    } else {
+        json!({ "id": revert_id, "path": path, "line": line_of(&text, start) })
+    };
+    out["reverts"] = json!(id);
+    Ok(out)
 }
 
 /// Accepts a suggestion (§4.3): writes the file first, then the status event.

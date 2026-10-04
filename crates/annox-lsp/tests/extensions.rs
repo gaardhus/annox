@@ -106,7 +106,13 @@ fn create_reply_edit_publish() {
 
     let history = f.client.call("annox/history", json!({ "annotation": id }));
     let kinds: Vec<&str> = history.as_array().unwrap().iter().map(|e| e["type"].as_str().unwrap()).collect();
-    assert_eq!(kinds, ["create", "edit"]);
+    assert_eq!(kinds, ["create", "create", "edit"], "the root, its reply, then the edit");
+    assert_eq!(history[1]["annotation"], reply["id"]);
+    assert_eq!(
+        f.client.call("annox/history", json!({ "annotation": reply["id"] })),
+        history,
+        "a reply shows its thread"
+    );
 
     assert_eq!(f.client.call_err("annox/setStatus", json!({ "annotation": id, "status": "accepted" })), 1003);
     let resolved = f.client.call("annox/setStatus", json!({ "annotation": id, "status": "resolved" }));
@@ -239,6 +245,68 @@ fn accept_all_and_revert() {
     let view = f.client.response(&id).unwrap();
     assert_eq!(view["status"], "rejected");
     assert_eq!(view["conflicts"], json!({}));
+    f.client.shutdown();
+}
+
+#[test]
+fn revert_suggests_or_applies_the_original_text() {
+    let mut f = setup();
+    let uri = f.uri.clone();
+    let sugg = f.client.call(
+        "annox/create",
+        json!({ "textDocument": { "uri": uri }, "kind": "suggestion", "range": range(1, 14, 27), "replacement": "we show that" }),
+    );
+    let sid = sugg["id"].as_str().unwrap().to_owned();
+    assert_eq!(f.client.call_err("annox/revert", json!({ "annotation": sid })), 1003, "only accepted ones");
+
+    let id = f.client.request("annox/accept", json!({ "annotation": sid }));
+    f.client.answer_apply_edit(true);
+    f.client.response(&id).unwrap();
+    let applied = DOC.replace("we prove that", "we show that");
+    f.client.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": uri, "version": 2 }, "contentChanges": [{ "text": applied }] }),
+    );
+
+    // Without `accept`, the revert is an open suggestion linked to the original.
+    let revert = f.client.call("annox/revert", json!({ "annotation": sid, "body": "too strong" }));
+    assert_eq!(
+        (&revert["status"], &revert["reverts"], &revert["body"]),
+        (&json!("open"), &json!(sid), &json!("too strong"))
+    );
+    assert_eq!(revert["edit"]["replacement"], "we prove that");
+    assert_eq!(revert["resolution"]["range"], range(1, 14, 26));
+
+    let again = f.client.call("annox/revert", json!({ "annotation": sid }));
+    assert_eq!(again["id"], revert["id"], "the open revert is used again");
+
+    // With `accept`, it's applied like annox/accept.
+    let id = f.client.request("annox/revert", json!({ "annotation": sid, "accept": true }));
+    let edit = f.client.answer_apply_edit(true);
+    let change = &edit["edit"]["changes"][&uri][0];
+    assert_eq!((&change["newText"], &change["range"]), (&json!("we prove that"), &range(1, 14, 26)));
+    let view = f.client.response(&id).unwrap();
+    assert_eq!((&view["id"], &view["status"], &view["reverts"]), (&revert["id"], &json!("accepted"), &json!(sid)));
+    f.client.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": uri, "version": 3 }, "contentChanges": [{ "text": DOC }] }),
+    );
+    assert_eq!(f.client.call_err("annox/revert", json!({ "annotation": sid })), 1003, "already reverted");
+
+    // Once the applied text is gone, it can't be found to revert.
+    let other = f.client.call(
+        "annox/create",
+        json!({ "textDocument": { "uri": uri }, "kind": "suggestion", "range": range(1, 14, 27), "replacement": "we show that" }),
+    );
+    let oid = other["id"].as_str().unwrap().to_owned();
+    let id = f.client.request("annox/accept", json!({ "annotation": oid }));
+    f.client.answer_apply_edit(true);
+    f.client.response(&id).unwrap();
+    f.client.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": uri, "version": 4 }, "contentChanges": [{ "text": DOC }] }),
+    );
+    assert_eq!(f.client.call_err("annox/revert", json!({ "annotation": oid })), 1002);
     f.client.shutdown();
 }
 

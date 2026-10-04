@@ -16,7 +16,7 @@ fn setup(doc: &str) -> tempfile::TempDir {
 
 fn try_annox(cwd: &Path, args: &[&str]) -> anyhow::Result<Value> {
     let mut args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    if !matches!(args[0].as_str(), "init" | "list" | "show" | "report" | "commit") {
+    if !matches!(args[0].as_str(), "init" | "list" | "show" | "history" | "report" | "commit") {
         args.extend(["--author".into(), "urn:test:agent".into(), "--name".into(), "Agent".into()]);
     }
     cli::run(&args, cwd)
@@ -73,6 +73,7 @@ fn threads_and_statuses() {
     annox(dir.path(), &["status", &c, "resolved"]);
     assert_eq!(annox(dir.path(), &["list"]), serde_json::json!([]));
     assert_eq!(annox(dir.path(), &["list", "--all"])[0]["status"], "resolved");
+    assert_eq!(annox(dir.path(), &["list", "--closed"])[0]["status"], "resolved");
 
     annox(dir.path(), &["edit", &c, "--body", "Which section?", "--label", "question"]);
     let all = annox(dir.path(), &["list", "--all"]);
@@ -82,6 +83,49 @@ fn threads_and_statuses() {
 
     annox(dir.path(), &["delete", &c]);
     assert_eq!(annox(dir.path(), &["list", "--all"])[0]["deleted"], true);
+    assert_eq!(annox(dir.path(), &["list", "--closed"]), serde_json::json!([]), "--closed leaves out deleted ones");
+    assert!(error(dir.path(), &["list", "--all", "--closed"]).contains("cannot be used with"));
+}
+
+#[test]
+fn revert_undoes_an_accepted_suggestion() {
+    let dir = setup(DOC);
+    let read = || std::fs::read_to_string(dir.path().join("paper.md")).unwrap();
+    let s = id(&annox(dir.path(), &["suggest", "paper.md", "--quote", "teh", "--replace", "the"]));
+    assert!(error(dir.path(), &["revert", &s]).contains("only accepted"));
+    annox(dir.path(), &["accept", &s]);
+
+    // Without --accept, the revert waits for review.
+    let r = annox(dir.path(), &["revert", &s, "--body", "keep the typo"]);
+    assert_eq!(r["reverts"], serde_json::json!(s));
+    let shown = annox(dir.path(), &["show", &id(&r)]);
+    assert_eq!(
+        (&shown["replacement"], &shown["quote"], &shown["reverts"]),
+        (&"teh".into(), &"the".into(), &s.as_str().into())
+    );
+    assert_eq!(read(), DOC.replace("teh", "the"));
+
+    assert_eq!(id(&annox(dir.path(), &["revert", &s])), id(&r), "the open revert is used again");
+    let accepted = annox(dir.path(), &["revert", &s, "--accept"]);
+    assert_eq!(
+        (&accepted["id"], &accepted["status"], &accepted["reverts"]),
+        (&r["id"], &"accepted".into(), &s.as_str().into())
+    );
+    assert_eq!(read(), DOC);
+    assert!(error(dir.path(), &["revert", &s]).contains(&format!("already reverted by {}", id(&r))));
+
+    // A deletion is reverted by an insertion.
+    let d =
+        id(&annox(dir.path(), &["suggest", "paper.md", "--quote", " is tight", "--occurrence", "1", "--replace", ""]));
+    annox(dir.path(), &["accept", &d]);
+    annox(dir.path(), &["revert", &d, "--accept"]);
+    assert_eq!(read(), DOC);
+
+    // An accepted suggestion whose text changed since can't be found to revert.
+    let e = id(&annox(dir.path(), &["suggest", "paper.md", "--quote", "teh", "--replace", "the"]));
+    annox(dir.path(), &["accept", &e]);
+    std::fs::write(dir.path().join("paper.md"), DOC.replace("teh", "a")).unwrap();
+    assert!(error(dir.path(), &["revert", &e]).contains("changed since"));
 }
 
 #[test]
@@ -222,6 +266,34 @@ fn show_prints_one_thread() {
     assert_eq!((&shown["status"], &shown["replies"][0]["body"]), (&"resolved".into(), &"The third.".into()));
     assert_eq!(annox(dir.path(), &["show", &r]), shown, "a reply shows its thread");
     assert!(error(dir.path(), &["show", "nope"]).contains("unknown annotation"));
+}
+
+#[test]
+fn history_lists_who_did_what() {
+    let dir = setup(DOC);
+    let c = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "Section 3", "--body", "Which?"]));
+    let s = id(&annox(dir.path(), &["suggest", "paper.md", "--quote", "teh", "--replace", "the"]));
+    let r = id(&annox(dir.path(), &["reply", &c, "--body", "The third."]));
+    annox(dir.path(), &["status", &c, "resolved"]);
+    annox(dir.path(), &["edit", &r, "--body", "The third one."]);
+    annox(dir.path(), &["status", &c, "open"]);
+    annox(dir.path(), &["accept", &s]);
+
+    let events = annox(dir.path(), &["history", &c]);
+    let types: Vec<&str> = events.as_array().unwrap().iter().map(|e| e["type"].as_str().unwrap()).collect();
+    assert_eq!(types, ["create", "create", "status", "edit", "status"], "the thread, interleaved");
+    assert_eq!(annox(dir.path(), &["history", &r]), events, "a reply shows its thread");
+    let text = cli::render_history(&events);
+    let actions: Vec<&str> = text.lines().map(|l| l.split("  ").nth(2).unwrap()).collect();
+    assert_eq!(
+        actions,
+        ["commented: Which?", "replied: The third.", "resolved", "edited reply: The third one.", "reopened"]
+    );
+    assert!(text.lines().all(|l| l.contains("  Agent  ")), "{text}");
+
+    let text = cli::render_history(&annox(dir.path(), &["history", &s]));
+    assert_eq!(text.lines().map(|l| l.split("  ").nth(2).unwrap()).collect::<Vec<_>>(), ["suggested: the", "accepted"]);
+    assert!(error(dir.path(), &["history", "nope"]).contains("unknown annotation"));
 }
 
 #[test]

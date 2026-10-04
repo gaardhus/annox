@@ -105,6 +105,17 @@ It is used in two places:
 - **Lost acceptance** (§4.3): an open suggestion whose applied text is found was probably applied without the `status` event being written.
 - **Reverting**: when a status conflict between `accepted` and another status is resolved in favour of the other status (§2.5.4), the document still contains the edit. The client SHOULD offer to revert it. If the applied-text search succeeds, the client replaces `[c, c+len(replacement))` with `quote.exact`. Otherwise the user reverts by hand. The `status` event is written in either case.
 
+### 4.3.4 Reverting an accepted suggestion
+
+An accepted suggestion stays accepted (§4.4). To undo it, a client creates a new suggestion that puts the original text back:
+
+1. If an accepted, non-deleted suggestion has `reverts` set to *S*'s id, *S* is already reverted. The client says so and stops.
+2. Run the applied-text search (§4.3.3) for the accepted suggestion *S* against *D*. If it finds nothing, the applied text was changed since, and the user reverts by hand.
+3. If an open, non-deleted suggestion has `reverts` set to *S*'s id, the client SHOULD use it rather than create another.
+4. Otherwise, create a suggestion anchored to the found range `[c, c+len(replacement))`, with `replacement` set to *S*'s `quote.exact` and `reverts` set to *S*'s id. If *S* was a deletion, the found range is a point and the new suggestion is an insertion.
+
+The new suggestion is an ordinary suggestion: it can be reviewed, accepted, rejected, or withdrawn like any other. A client MAY accept it right away (§4.3) when the user asks to undo rather than to propose undoing. Clients SHOULD link the two threads through `reverts`, in both directions: the new suggestion names the one it reverts, and an accepted suggestion shows the suggestions that revert it. A reader MUST NOT treat a `reverts` that names no accepted suggestion as invalid; the link is informational.
+
 ## 4.4 Lifecycle
 
 | Status | Meaning | Terminal |
@@ -122,7 +133,7 @@ open ──reject──▶ rejected ──reopen──▶ open
 open ──withdraw─▶ withdrawn ──reopen──▶ open
 ```
 
-- `accepted` is terminal. Undoing an accepted suggestion is done by making a new suggestion. The only exception is resolving a concurrent status conflict (§2.5.4, §4.3.3).
+- `accepted` is terminal. Undoing an accepted suggestion is done by making a new suggestion that reverts it (§4.3.4). The only exception is resolving a concurrent status conflict (§2.5.4, §4.3.3).
 - A client SHOULD offer `withdraw` only to the suggestion's author, and `reject` and `accept` to anyone else. annox has no authentication (§1.3), so this is a user-interface convention. A reader MUST NOT treat a status as invalid because of who set it.
 - Each transition is a `status` event (§2.4), which records who made it and when.
 

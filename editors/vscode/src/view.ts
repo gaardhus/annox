@@ -33,11 +33,12 @@ function order(a: AnnotationView, b: AnnotationView): number {
 }
 
 /** The thread as Markdown, for annotations without a place in the text. */
-export function threadMarkdown(a: AnnotationView): string {
+export function threadMarkdown(a: AnnotationView, store: Store): string {
   const person = (x: AnnotationView) => `**${authorName(x)}** · ${x.created ?? ""}`;
   const lines = [`# ${describe(a)}`, ""];
   lines.push(`${person(a)} · *${a.status}*`, "");
   if (a.kind === "suggestion") lines.push(changeMarkdown(undefined, a.edit?.replacement ?? ""), "");
+  for (const link of store.revertLinks(a)) lines.push(link, "");
   if (a.body) lines.push(a.body, "");
   for (const r of a.replies ?? []) lines.push("---", "", person(r), "", r.body ?? "", "");
   return lines.join("\n");
@@ -83,8 +84,16 @@ export class AnnotationsView implements vscode.TreeDataProvider<Node>, vscode.Di
     const where = r ? `line ${r.start.line + 1}` : "text gone";
     item.description = [authorName(a), a.status === "open" ? "" : a.status, where].filter(Boolean).join(" · ");
     item.iconPath = icon(a);
-    item.tooltip = new vscode.MarkdownString(threadMarkdown(a));
-    item.contextValue = `annox ${a.status === "open" ? "open" : "closed"}`;
+    item.tooltip = new vscode.MarkdownString(threadMarkdown(a, this.store));
+    // Accepted suggestions are reverted rather than reopened, once (§4.3.4).
+    item.contextValue =
+      a.status === "open"
+        ? "annox open"
+        : a.status !== "accepted"
+          ? "annox closed"
+          : this.store.isReverted(a.id)
+            ? "annox closed accepted reverted"
+            : "annox closed accepted";
     item.command = { command: "annox.open", title: "Open", arguments: [{ annotation: a.id }] };
     return item;
   }

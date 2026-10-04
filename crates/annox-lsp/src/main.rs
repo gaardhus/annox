@@ -83,17 +83,21 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Command::Annotations(command) => {
-            let text = matches!(command, annox_lsp::cli::Command::Report { json: false, .. });
-            match annox_lsp::cli::execute(command, &std::env::current_dir()?) {
-                Ok(output) if text => {
-                    print!("{}", annox_lsp::cli::render_report(&output));
+            let render: Option<fn(&serde_json::Value) -> String> = match command {
+                annox_lsp::cli::Command::Report { json: false, .. } => Some(annox_lsp::cli::render_report),
+                annox_lsp::cli::Command::History { json: false, .. } => Some(annox_lsp::cli::render_history),
+                _ => None,
+            };
+            match (annox_lsp::cli::execute(command, &std::env::current_dir()?), render) {
+                (Ok(output), Some(render)) => {
+                    print!("{}", render(&output));
                     Ok(())
                 }
-                Ok(output) => {
+                (Ok(output), None) => {
                     println!("{}", serde_json::to_string_pretty(&output)?);
                     Ok(())
                 }
-                Err(e) => {
+                (Err(e), _) => {
                     eprintln!("annox: {e:#}");
                     std::process::exit(1);
                 }

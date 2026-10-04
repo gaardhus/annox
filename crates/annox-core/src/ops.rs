@@ -28,6 +28,8 @@ pub struct NewAnnotation<'a> {
     /// Required for suggestions.
     pub replacement: Option<&'a str>,
     pub local: bool,
+    /// For a suggestion: the accepted suggestion it undoes (§4.3.4).
+    pub reverts: Option<&'a str>,
 }
 
 /// Creates a comment or suggestion on the document at `path` with content
@@ -86,6 +88,9 @@ pub fn create_annotation(
     }
     if new.kind == "suggestion" {
         fields.insert("edit".into(), json!({ "replacement": new.replacement.unwrap_or_default() }));
+        if let Some(reverts) = new.reverts {
+            fields.insert("reverts".into(), json!(reverts));
+        }
     }
     let event = Event {
         id: id.clone(),
@@ -310,6 +315,7 @@ mod tests {
             label: None,
             replacement: None,
             local: false,
+            reverts: None,
         };
         let comment = create_annotation(&ws, &index, "notes.md", &text, &new, &author).unwrap();
         let annox = ws.root.join(".annox");

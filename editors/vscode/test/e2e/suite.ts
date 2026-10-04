@@ -135,6 +135,16 @@ export async function run(): Promise<void> {
     assert.doesNotMatch(thread.contextValue ?? "", /\borphaned\b/);
     assert.doesNotMatch(thread.label ?? "", /not found/);
     assert.equal(thread.collapsibleState, vscode.CommentThreadCollapsibleState.Collapsed);
+    assert.match(thread.contextValue ?? "", /\baccepted\b/);
+
+    // Reverting is a new suggestion that restores the text, linked to this one.
+    await exec("annox.revertSuggestion", { annotation: s.id, accept: true });
+    await wait("text restored", () => line(1) === "In Section 3, we prove that the bound is tight.");
+    const revert = await wait("revert accepted", () => all().find((a) => a.reverts === s.id && a.status === "accepted"));
+    const revertThread = await wait("revert thread", () => api.threads.threadOf(revert.id));
+    assert.match((revertThread.comments[0].body as vscode.MarkdownString).value, /Reverts/);
+    assert.ok(api.store.isReverted(s.id), "the original knows it was reverted");
+    assert.match(api.store.revertLinks(api.store.find(s.id)!.view).join("\n"), /Reverted by/);
   });
 
   step("bulk accept is one edit that one undo reverts", async () => {
@@ -278,7 +288,7 @@ export async function run(): Promise<void> {
       const d = vscode.window.activeTextEditor?.document;
       return d?.uri.scheme === "annox-history" ? d : undefined;
     });
-    assert.match(shown.getText(), /merged/);
+    assert.match(shown.getText(), /edited: merged/);
     assert.match(shown.getText(), /Bob/);
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
   });

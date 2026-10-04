@@ -99,6 +99,7 @@ fn loading() {
             label: None,
             replacement: None,
             local: false,
+            reverts: None,
         };
         ops::create_annotation(&ws, &Index::read(&ws), "doc.txt", &text, &first, &author).unwrap();
         let index = Index::read(&ws);

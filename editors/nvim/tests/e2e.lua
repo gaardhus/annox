@@ -154,6 +154,23 @@ wait("suggestion to close", function()
   return #annotations() == 1
 end)
 
+-- Revert: pick the accepted suggestion from the buffer's closed ones.
+local select = vim.ui.select
+local offered
+vim.ui.select = function(items, _, on_choice)
+  offered = items
+  on_choice(items[1], 1)
+end
+annox.revert({ accept = true })
+wait("reverted edit in buffer", function()
+  return vim.api.nvim_buf_get_lines(buf, 1, 2, false)[1] == "In Section 3, we prove that the bound is tight."
+end)
+vim.ui.select = select
+check(#offered == 1 and offered[1].id == suggestion.id, "offered the accepted suggestion: " .. vim.inspect(offered))
+wait("only open annotations pushed again", function()
+  return #annotations() == 1
+end)
+
 annox.resolve({ annotation = comment.id })
 wait("comment to resolve", function()
   return #annotations() == 0
@@ -246,7 +263,7 @@ wait("history float", function()
   for _, w in ipairs(vim.api.nvim_list_wins()) do
     if vim.api.nvim_win_get_config(w).relative ~= "" then
       local text = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(w), 0, -1, false), "\n")
-      return text:find("merged", 1, true) ~= nil and text:find("Bob", 1, true) ~= nil
+      return text:find("edited: merged", 1, true) ~= nil and text:find("Bob", 1, true) ~= nil
     end
   end
 end)

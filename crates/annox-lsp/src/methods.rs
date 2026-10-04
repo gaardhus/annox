@@ -3,7 +3,7 @@
 use annox_core::anchor::{self, Anchor};
 use annox_core::ops::{self, NewAnnotation};
 use annox_core::replay;
-use annox_core::storage::{Index, Workspace};
+use annox_core::storage::{Area, Index, Workspace};
 use annox_core::suggestion;
 use lsp_server::RequestId;
 use lsp_types::{Range, Url};
@@ -43,6 +43,7 @@ impl Server<'_> {
         let result = match method.as_str() {
             "annox/accept" => return self.m_accept(id, &params),
             "annox/acceptAll" => return self.m_accept_all(id, &params),
+            "annox/revert" => return self.m_revert(id, &params),
             "annox/resolveConflict" => return self.m_resolve_conflict(id, &params),
             "annox/create" => return self.m_create_or_init(id, params),
             "annox/annotations" => self.m_annotations(&params),
@@ -180,6 +181,7 @@ impl Server<'_> {
             label: params["label"].as_str(),
             replacement,
             local: params["local"].as_bool().unwrap_or(false),
+            reverts: None,
         };
         let event = ops::create_annotation(&a.ws, &a.index, &a.rel, &a.text, &new, &self.author(&a.ws));
         self.invalidate();
@@ -307,7 +309,7 @@ impl Server<'_> {
     fn m_history(&self, params: &Value) -> Result<Value, Failure> {
         let id = str_param(params, "annotation")?;
         let (_, a) = self.locate(id)?;
-        Ok(json!(replay::ordered_events(&a.loaded.events, id)))
+        Ok(json!(replay::thread_events(&a.loaded.events, id)))
     }
 
     fn m_commit(&self, params: &Value) -> Result<Value, Failure> {
@@ -326,6 +328,65 @@ impl Server<'_> {
         match located {
             Ok((id, (uri, a))) => self.accept(command, uri, &a, &id, true),
             Err(e) => self.reply(command, Err(e)),
+        }
+    }
+
+    /// Reverts an accepted suggestion (§4.3.4): creates a suggestion that
+    /// puts the original text back where the applied text is now, or uses
+    /// the open one that already does, and with `accept` applies it like
+    /// `annox/accept`.
+    fn m_revert(&mut self, command: RequestId, params: &Value) {
+        let created = (|| {
+            let id = str_param(params, "annotation")?;
+            let (uri, a) = self.locate(id)?;
+            let item = a
+                .item(id)
+                .filter(|i| i.kind() == "suggestion" && i.status() == "accepted" && i.state["deleted"] == json!(false));
+            let Some(item) = item else {
+                return fail(INVALID_OPERATION, "only accepted suggestions can be reverted");
+            };
+            let reverts = replay::reverts_of(&a.loaded.events, id);
+            if let Some(done) = reverts.iter().find(|s| s["status"] == "accepted") {
+                let by = done["id"].as_str().unwrap_or_default();
+                return fail(INVALID_OPERATION, format!("it was already reverted by {by}"));
+            }
+            let replacement = item.state["edit"]["replacement"].as_str().unwrap_or_default();
+            let Some((start, end)) = suggestion::applied_text_search(&a.text, &item.target, replacement) else {
+                return fail(
+                    STALE_SUGGESTION,
+                    "the accepted text was changed since, so it can't be reverted automatically",
+                );
+            };
+            if let Some(open) = reverts.iter().find(|s| s["status"] == "open") {
+                return Ok((uri, open["id"].as_str().unwrap_or_default().to_owned()));
+            }
+            let new = NewAnnotation {
+                kind: "suggestion",
+                start,
+                end,
+                body: params["body"].as_str(),
+                label: None,
+                replacement: Some(&item.target.selectors.quote.exact),
+                local: a.index.events.get(id).is_some_and(|(_, loc)| loc.area == Area::Local),
+                reverts: Some(id),
+            };
+            let event = ops::create_annotation(&a.ws, &a.index, &a.rel, &a.text, &new, &self.author(&a.ws));
+            self.invalidate();
+            Ok((uri, event.map_err(io_failure)?.id))
+        })();
+        let (uri, new_id) = match created {
+            Ok(created) => created,
+            Err(e) => return self.reply(command, Err(e)),
+        };
+        if params["accept"].as_bool().unwrap_or(false) {
+            match self.analyze_uri(&uri) {
+                Ok(a) => self.accept(command, uri, &a, &new_id, true),
+                Err(e) => self.reply(command, Err(e)),
+            }
+        } else {
+            let view = self.view_of(&uri, &new_id);
+            self.reply(command, view);
+            self.refresh_all();
         }
     }
 

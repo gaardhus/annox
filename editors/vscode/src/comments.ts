@@ -69,9 +69,11 @@ function markdown(text: string): vscode.MarkdownString {
 
 /** Flags describing a root annotation, matched by `when` clauses in
  * package.json, e.g. `commentThread =~ /\bsuggestion\b/`. */
-function flags(a: AnnotationView): string {
+function flags(a: AnnotationView, reverted: boolean): string {
   const f = ["annox", a.kind, a.status === "open" ? "open" : "closed"];
   if (a.kind === "suggestion" && a.status === "open") f.push(a.applicable ? "applicable" : "stale");
+  if (a.status === "accepted") f.push("accepted");
+  if (reverted) f.push("reverted");
   if (a.local) f.push("draft");
   if (isConflicted(a)) f.push("conflicted");
   // A closed annotation is expected to lose its text, e.g. once a suggestion
@@ -205,6 +207,7 @@ export class Threads implements vscode.Disposable {
       const r = rangeOf(a);
       const original = r && doc && a.status === "open" ? doc.getText(doc.validateRange(r)) : undefined;
       lines.push(changeMarkdown(original, a.edit?.replacement ?? ""));
+      lines.push(...this.store.revertLinks(a));
       const by = a.retargetedBy?.author;
       if (by && by.id !== a.author?.id) lines.push(`*Re-targeted by ${by.name ?? by.id}*`);
       if (a.status === "open" && !a.applicable) {
@@ -238,7 +241,8 @@ export class Threads implements vscode.Disposable {
       if (a.deleted || !range) continue;
       seen.add(a.id);
       const original = a.kind === "suggestion" && doc && rangeOf(a) ? doc.getText(range) : "";
-      const signature = JSON.stringify([a, original]);
+      const reverts = this.store.revertsOf(a.id).map((r) => [r.id, r.status]);
+      const signature = JSON.stringify([a, original, reverts]);
       let entry = this.entries.get(a.id);
       if (!entry) {
         const thread = this.controller.createCommentThread(vscode.Uri.parse(uri), range, []);
@@ -278,7 +282,7 @@ export class Threads implements vscode.Disposable {
       entry.comments = comments;
       thread.comments = list;
       thread.label = threadLabel(a);
-      thread.contextValue = flags(a);
+      thread.contextValue = flags(a, this.store.isReverted(a.id));
       thread.canReply = true;
       thread.state = a.status === "open" ? vscode.CommentThreadState.Unresolved : vscode.CommentThreadState.Resolved;
     }

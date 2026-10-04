@@ -33,6 +33,7 @@ fn main() {
         label: None,
         replacement: None,
         local: false,
+        reverts: None,
     };
     ops::create_annotation(&ws, &Index::read(&ws), "doc.txt", &text, &first, &author).unwrap();
     let folder = Index::read(&ws).events.values().next().unwrap().1.folder.clone();

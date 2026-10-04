@@ -441,12 +441,17 @@ local function on_annotations(_, result)
   if not vim.api.nvim_buf_is_loaded(bufnr) then
     return
   end
-  M.state[bufnr] = { annotations = result.annotations, document = result.document }
+  -- Only open annotations are shown. The server pushes closed ones too while
+  -- `M.revert` has asked for them.
+  local annotations = vim.tbl_filter(function(a)
+    return a.status == nil or a.status == "open"
+  end, result.annotations)
+  M.state[bufnr] = { annotations = annotations, document = result.document }
   local s = M.suggesting[bufnr]
   if s then
     -- Keep only suggestions that can still be extended.
     local fresh = {}
-    for _, a in ipairs(result.annotations) do
+    for _, a in ipairs(annotations) do
       if s.views[a.id] then
         fresh[a.id] = a
       end
@@ -685,6 +690,64 @@ M.reopen = status_action("open", function(a)
   return a.status ~= "open"
 end)
 
+--- Undoes an accepted suggestion with a new suggestion that restores the
+--- original text (§4.3.4). `opts.annotation` names it; otherwise the buffer's
+--- accepted suggestions are offered, newest first. `opts.accept` applies the
+--- revert now (true) or leaves it open for review (false); otherwise you're
+--- asked.
+function M.revert(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  local function revert(id, accept)
+    request(bufnr, "annox/revert", { annotation = id, accept = accept })
+  end
+  local function choose(id)
+    if opts.accept ~= nil then
+      return revert(id, opts.accept)
+    end
+    local choices = { "Revert now", "Suggest reverting (leave it open for review)" }
+    vim.ui.select(choices, { prompt = "Revert the accepted suggestion" }, function(_, i)
+      if i then
+        revert(id, i == 1)
+      end
+    end)
+  end
+  if opts.annotation then
+    return choose(opts.annotation)
+  end
+  -- Closed annotations aren't pushed, so ask for them once, then go back to
+  -- open ones only, which the next pushes follow (§6.6.3). A push in between
+  -- may include closed ones, which `on_annotations` drops.
+  local doc = { uri = vim.uri_from_bufnr(bufnr) }
+  request(bufnr, "annox/annotations", { textDocument = doc, includeClosed = true }, function(result)
+    request(bufnr, "annox/annotations", { textDocument = doc })
+    -- Leave out those already reverted, and mark those with a revert open.
+    local reverts = {}
+    for _, a in ipairs(result.annotations) do
+      if type(a.reverts) == "string" and (a.status == "accepted" or a.status == "open") then
+        reverts[a.reverts] = reverts[a.reverts] == "accepted" and "accepted" or a.status
+      end
+    end
+    local accepted = vim.tbl_filter(function(a)
+      return a.kind == "suggestion" and a.status == "accepted" and reverts[a.id] ~= "accepted"
+    end, result.annotations)
+    if #accepted == 0 then
+      return vim.notify("annox: no accepted suggestions to revert in this buffer", vim.log.levels.INFO)
+    end
+    table.sort(accepted, function(a, b)
+      return (a.created or "") > (b.created or "")
+    end)
+    local function format(a)
+      return describe(a) .. (reverts[a.id] == "open" and " (revert suggested)" or "")
+    end
+    vim.ui.select(accepted, { prompt = "Accepted suggestion", format_item = format }, function(a)
+      if a then
+        choose(a.id)
+      end
+    end)
+  end)
+end
+
 --- The open annotations of `kind` shown in the buffer: those touching the
 --- last visual selection with `visual`, and all of them otherwise. Nil if no
 --- server is attached.
@@ -911,6 +974,9 @@ function thread_lines(a, bufnr)
     local old = bufnr and resolved_text(a, bufnr) or ""
     vim.list_extend(lines, diff_block(old, type(a.edit) == "table" and str(a.edit.replacement) or ""))
     -- LSP decodes JSON null as vim.NIL, which is truthy.
+    if type(a.reverts) == "string" then
+      table.insert(lines, "_reverts an accepted suggestion_")
+    end
     local by = type(a.retargetedBy) == "table" and a.retargetedBy.author
     if type(by) == "table" and by.id ~= (a.author or {}).id then
       table.insert(lines, string.format("_re-targeted by %s_", by.name or by.id))
@@ -1391,17 +1457,53 @@ function M.resolve_conflict(opts)
   end)
 end
 
+local event_verbs = {
+  edit = "edited",
+  reanchor = "re-anchored (automatic)",
+  retarget = "retargeted",
+  delete = "deleted",
+  restore = "restored",
+}
+local status_verbs = { open = "reopened", withdrawn = "withdrew" }
+local create_verbs = { comment = "commented", suggestion = "suggested", reply = "replied" }
+
+--- What a history event did, as a past-tense verb, with the first line of its
+--- text if it has any. `replies` holds the thread's reply ids, so that events
+--- changing a reply say so.
+local function event_action(e, replies)
+  local verb
+  if e.type == "create" then
+    verb = create_verbs[e.kind] or "created"
+  elseif e.type == "status" then
+    verb = status_verbs[e.status] or tostring(e.status)
+  else
+    verb = (event_verbs[e.type] or e.type) .. (replies[e.annotation] and " reply" or "")
+  end
+  local text = type(e.body) == "string" and e.body or (e.edit and e.edit.replacement)
+  local detail = text and first_line(text) or ""
+  return detail ~= "" and (verb .. ": " .. detail) or verb
+end
+
 --- Shows the history of the annotation under the cursor (§2.5.5).
 function M.history(opts)
   opts = opts or {}
   local bufnr = vim.api.nvim_get_current_buf()
   with_annotation(opts, nil, function(id)
     request(bufnr, "annox/history", { annotation = id }, function(events)
+      local function who(e)
+        return e.author and (e.author.name or e.author.id) or "unknown"
+      end
+      local width, replies = 0, {}
+      for _, e in ipairs(events) do
+        width = math.max(width, vim.fn.strdisplaywidth(who(e)))
+        if e.type == "create" and e.kind == "reply" then
+          replies[e.id] = true
+        end
+      end
       local lines = {}
       for _, e in ipairs(events) do
-        local who = e.author and (e.author.name or e.author.id) or "unknown"
-        local detail = e.body or e.status or (e.edit and e.edit.replacement) or ""
-        table.insert(lines, string.format("%s  %-8s %s  %s", e.time, e.type, who, first_line(tostring(detail))))
+        local name = who(e) .. string.rep(" ", width - vim.fn.strdisplaywidth(who(e)))
+        table.insert(lines, string.format("%s  %s  %s", e.time, name, event_action(e, replies)))
       end
       vim.lsp.util.open_floating_preview(lines, "text", { border = "rounded", focus_id = "annox-history" })
     end)
@@ -1876,6 +1978,9 @@ local subcommands = {
   end,
   reopen = function()
     M.reopen()
+  end,
+  revert = function()
+    M.revert()
   end,
   accept = function(o)
     M.accept({ visual = o.range > 0, all = o.bang })

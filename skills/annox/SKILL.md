@@ -25,7 +25,9 @@ The MCP server may already be started with an identity; then you don't need to s
 annox list                  # open annotations in every document
 annox list paper.md         # one file
 annox list --all            # also resolved, accepted, rejected, withdrawn, deleted
+annox list --closed         # also resolved, accepted, rejected, withdrawn, but not deleted
 annox show ID               # one annotation and its thread
+annox history ID --json     # who did what to a thread (replies included), and when
 annox report --json         # counts per document: open, closed, orphaned, stale
 ```
 
@@ -41,7 +43,7 @@ annox list --author ID / --not-author ID
 
 `--mine` and `--others` use your identity (see above).
 
-Each entry has `id`, `path`, `kind` (`comment` or `suggestion`), `status`, `author`, `body`, `quote` (the text it's attached to, as it reads now), `line`, `resolution`, and `replies`. Suggestions also have `replacement` and `applicable`.
+Each entry has `id`, `path`, `kind` (`comment` or `suggestion`), `status`, `author`, `body`, `quote` (the text it's attached to, as it reads now), `line`, `resolution`, and `replies`. Suggestions also have `replacement` and `applicable`, and `reverts` if they undo an accepted suggestion.
 
 - `resolution: "orphaned"` means the quoted text is gone from the file. Fix it with `reattach` or `retarget` (below), or tell the user.
 - `applicable: false` means the suggestion can't be applied as is. Use `retarget` to fix it.
@@ -75,7 +77,7 @@ annox delete ID / annox restore ID
 - **Say why** in `--body` whenever the reason isn't obvious from the change.
 - **Use comments for questions and for problems you can't fix yourself.** Use suggestions for concrete replacement text.
 - **Answer review comments in their thread.** When the user asks you to address comments, run `annox list --kind comment --others`, then handle each one. Either make the change (as a suggestion, or as a direct edit if asked) and `reply` saying what you did, or `reply` explaining why not. Resolve a comment (`annox status ID resolved`) only when you've fully addressed it and it's addressed to you.
-- **Don't accept suggestions unless the user asks you to.** `annox accept ID` writes the change into the file and is final. If it says the suggestion was relocated, check the text at the reported line before passing `--confirmed`.
+- **Don't accept suggestions unless the user asks you to.** `annox accept ID` writes the change into the file and closes the suggestion for good. If it says the suggestion was relocated, check the text at the reported line before passing `--confirmed`. To undo an accepted suggestion, `annox revert ID` suggests restoring the original text; add `--accept` only if the user asks you to undo it outright.
 - **Don't commit unless the user asks.** `annox commit` commits the annotation files under `.annox/` and nothing else.
 - **Don't change other people's annotations.** Don't edit, withdraw, or delete them. Reply instead.
 - **Suggestions you make go stale if you then edit the same text yourself.** Finish your direct edits first, or check `annox list --mine --broken` afterwards and retarget what it lists.

@@ -56,6 +56,7 @@ const TOOLS: &[Tool] = &[
         params: &[
             ("file", "string", false, "Only this file."),
             ("all", "boolean", false, "Include resolved, accepted, rejected, withdrawn and deleted annotations."),
+            ("closed", "boolean", false, "Include resolved, accepted, rejected and withdrawn annotations, but not deleted ones."),
             ("kind", "string", false, "Only `comment` or only `suggestion`."),
             ("status", "string", false, "Only these statuses, comma-separated: open, resolved, accepted, rejected, withdrawn."),
             ("author", "string", false, "Only annotations by this author id."),
@@ -78,6 +79,14 @@ const TOOLS: &[Tool] = &[
         name: "show_annotation",
         command: "show",
         description: "Show one annotation and its thread, in the same form as list_annotations. Given a reply's id, shows its thread.",
+        positional: &["id"],
+        params: &[ID],
+        read_only: true,
+    },
+    Tool {
+        name: "history",
+        command: "history",
+        description: "List the events of an annotation's thread, oldest first: who created, edited, resolved, accepted, rejected, withdrew, deleted or restored the annotation or its replies, and when. Given a reply's id, shows its thread.",
         positional: &["id"],
         params: &[ID],
         read_only: true,
@@ -138,6 +147,18 @@ const TOOLS: &[Tool] = &[
         params: &[
             ID,
             ("confirmed", "boolean", false, "Accept even though the suggestion was relocated, after checking its new location."),
+        ],
+        read_only: false,
+    },
+    Tool {
+        name: "revert",
+        command: "revert",
+        description: "Undo an accepted suggestion: create a new suggestion that puts the original text back, linked to it by `reverts`, or use the open one that already does. Fails if it was already reverted, or if the accepted text was changed since. Only do this when the user asks.",
+        positional: &["id"],
+        params: &[
+            ID,
+            ("accept", "boolean", false, "Also accept the new suggestion, applying the revert to the file."),
+            ("body", "string", false, "Why it's being reverted, in Markdown."),
         ],
         read_only: false,
     },

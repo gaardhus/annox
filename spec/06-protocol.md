@@ -150,24 +150,25 @@ Every request that changes something writes the corresponding events (§2.4), th
 | `annox/setStatus` | `{ annotation, status }` | `status` event. Not for `accepted`: use `annox/accept`. |
 | `annox/accept` | `{ annotation }` | Applies the suggestion (below). |
 | `annox/acceptAll` | `{ annotations: Id[], confirmed?: boolean }` | Bulk accept (below). Returns `{ results: ({ annotation, accepted: true } \| { annotation, error })[] }`. |
+| `annox/revert` | `{ annotation, accept?: boolean, body? }` | Reverts an accepted suggestion (§4.3.4): creates a suggestion with `reverts` set, or uses the open one that already reverts it (ignoring `body`), and returns it. With `accept: true`, then applies it as below. Fails with `InvalidOperation` if it's already reverted, and with `StaleSuggestion` if the applied text isn't found (§4.3.3). |
 | `annox/retarget` | `{ annotation, range, replacement }` | `retarget` event (§4.2.1). |
 | `annox/reattach` | `{ annotation, range }` | A user-confirmed location for an orphaned comment (§3.7.4): `reanchor` event. Suggestions use `annox/retarget` instead. |
 | `annox/delete`, `annox/restore` | `{ annotation }` | `delete` or `restore` event. |
 | `annox/resolveConflict` | `{ annotation, field, value, revert?: boolean }` | Writes the resolving event described in §2.5.4, with `after` covering all competing heads. `value` has the type of the field. For a status conflict involving `accepted`, `revert: true` asks the server to revert the edit (§4.3.3), applied as below. |
 | `annox/moveDocument` | `{ from: DocumentUri, to: DocumentUri }` | Re-attaches a missing document (§5.7.3): `move` events for the documents at `from`. |
-| `annox/history` | `{ annotation }` | Returns the annotation's events in the order of §2.5.5, for history views. Changes nothing. |
+| `annox/history` | `{ annotation }` | Returns the events of the annotation's thread (its root's and every reply's, also when `annotation` is a reply) in the order of §2.5.5, for history views. Changes nothing. |
 | `annox/commit` | `{ textDocument, message?: string, dryRun?: boolean }` | Optional: a Server that doesn't implement it fails with MethodNotFound. Commits the files under `.annox/` that version control doesn't ignore (§5.10) in the workspace of `textDocument`, and nothing else, with `message` or a summary the server writes. Returns `{ commit: string \| null, files: number, documents: { [path]: { comments, suggestions, replies, updates } }, message: string \| null }`: the new commit, or null if there was nothing to commit or `dryRun` is true; how many files it committed or would commit; how many of their events create each kind of annotation or update one, by document path; and the message. It writes no events. |
 | `annox/setPresence` | `{ textDocument?, selection?: Range }` (notification) | The user's current document and cursor, forwarded to the sync hub as presence (§7.8). Clients send it as the focus or cursor changes, and not at all if the user turned presence off. LSP has no cursor notifications, so plain LSP clients share no presence. |
 
 `DocumentInfo` is `{ documents: Id[], conflicts: { path?: ConflictEntry[] }, duplicates: boolean }`, covering the document records at the path (§5.7.1). The `value` of a path ConflictEntry is the competing path.
 
-**Applying edits.** For `annox/accept`, and for `annox/resolveConflict` with `revert`, the server:
+**Applying edits.** For `annox/accept`, `annox/revert` with `accept`, and `annox/resolveConflict` with `revert`, the server:
 
 1. resolves the suggestion against the current buffer, and fails with `StaleSuggestion` if it is stale;
 2. sends `workspace/applyEdit` with a `WorkspaceEdit` that replaces the resolved range;
 3. only if the client reports `applied: true`, writes the `status` event, with `appliedVersion` set to the version of the buffer after the edit (§4.3.2).
 
-The client applies the edit to its buffer, so the user can undo it and save as usual. If the edit isn't applied, no event is written.
+The client applies the edit to its buffer, so the user can undo it and save as usual. If the edit isn't applied, no `status` event is written. For `annox/revert`, the new suggestion was already created, so it stays open.
 
 **Bulk accept.** `annox/acceptAll` follows the rule in §4.3 for accepting several suggestions without showing each one. The server goes through `annotations` in the order given. It skips a suggestion, with an error in its result, if it is stale (`StaleSuggestion`), if it resolves only by step 3 or 5 and `confirmed` isn't true (`NeedsReview`), or if its range overlaps one already chosen in this batch (`Overlap`). A client sets `confirmed` only after telling the user that the batch includes such suggestions and the user agreeing, for example with a single prompt for the whole batch (§4.3). It then sends **one** `workspace/applyEdit` with all the chosen replacements, so a single undo reverts the whole batch. Only if that edit is applied does it write a `status` event for each chosen suggestion, all with the same `appliedVersion`.
 
@@ -187,7 +188,7 @@ Failed requests use JSON-RPC errors with these codes. They are outside the range
 | Code | Name | Meaning |
 |---|---|---|
 | 1001 | `UnknownAnnotation` | No such annotation in this workspace. |
-| 1002 | `StaleSuggestion` | The suggestion can't be applied (§4.2). |
+| 1002 | `StaleSuggestion` | The suggestion can't be applied (§4.2), or, for `annox/revert`, its applied text can't be found (§4.3.3). |
 | 1003 | `InvalidOperation` | The operation doesn't apply to this annotation, e.g. `retarget` on a comment or `reply` to a reply. |
 | 1004 | `NotConflicted` | `resolveConflict` on a field that isn't conflicted. |
 | 1005 | `NoWorkspace` | The document isn't in an annox workspace, and the user declined to create one. |

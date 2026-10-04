@@ -43,6 +43,7 @@ fn outside_changes_are_pushed_without_a_save() {
         label: None,
         replacement: None,
         local: false,
+        reverts: None,
     };
     let author = json!({ "id": "mailto:bob@example.org" });
     ops::create_annotation(&ws, &Index::read(&ws), "notes.txt", &Text::from_raw(DOC), &new, &author).unwrap();

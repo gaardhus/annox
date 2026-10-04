@@ -1630,6 +1630,95 @@
       }
     },
     {
+      "name": "reverts",
+      "description": "A suggestion whose create event names the suggestion it reverts (§4.3.4) exposes `reverts`.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "suggestion",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": null,
+          "edit": {
+            "replacement": "we show that"
+          },
+          "reverts": "01926d3a-00ff-7000-8000-000000000000"
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "status",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "status": "accepted",
+          "appliedVersion": "sha256:abababababababababababababababababababababababababababababababab"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "suggestion",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "body": null,
+        "label": null,
+        "status": "accepted",
+        "edit": {
+          "replacement": "we show that"
+        },
+        "retargetedBy": null,
+        "appliedVersion": "sha256:abababababababababababababababababababababababababababababababab",
+        "deleted": false,
+        "conflicts": {},
+        "reverts": "01926d3a-00ff-7000-8000-000000000000"
+      }
+    },
+    {
       "name": "reply",
       "description": "A reply: body edits apply; a status event on a reply is invalid and ignored.",
       "annotation": "01926d3a-0001-7000-8000-000000000000",

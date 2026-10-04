@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Data model (§2.4), suggestions (§4.3.4), protocol (§6.6.2).** An accepted suggestion is undone by a new suggestion that restores its original text, found with the applied-text search. Its `create` event carries an optional `reverts` id linking it to the original. `annox/revert` creates it, or reuses an open one, and with `accept` applies it. It refuses a suggestion that's already reverted.
+- **Protocol (§6), order (§2.5.5).** `annox/history` returns the events of the whole thread, replies included, interleaved by id. §2.5.5 defines that interleaving.
 - **Protocol (§6.6.2).** An optional `annox/commit` request commits the workspace's uncommitted annotation files to version control, or with `dryRun` reports what it would commit.
 
 ## 0.1 — 2026-09-29

@@ -38,6 +38,8 @@ export interface AnnotationView {
   status: string;
   edit?: { replacement: string } | null;
   retargetedBy?: { author?: Author } | null;
+  /** The accepted suggestion this one undoes (§4.3.4). */
+  reverts?: string;
   deleted?: boolean;
   resolution?: Resolution;
   applicable?: boolean;
@@ -68,6 +70,8 @@ export interface Peer {
 }
 
 export interface HistoryEvent {
+  id: string;
+  annotation: string;
   type: string;
   time?: string;
   author?: Author;

@@ -57,6 +57,7 @@ Creates an annotation.
 | `body` (Markdown) | optional | optional | required, non-empty |
 | `label` (string) | optional | optional | MUST NOT be present |
 | `edit` (`{ "replacement": string }`) | MUST NOT be present | required (§4.1) | MUST NOT be present |
+| `reverts` (Id) | MUST NOT be present | optional: the accepted suggestion this one undoes (§4.3.4) | MUST NOT be present |
 
 A newly created comment or suggestion has status `open`. Replies have no status.
 
@@ -153,6 +154,8 @@ A user resolves a conflict by choosing a value. The client writes an event for t
 
 When events or replies have to be listed, they are ordered topologically along `after` links, with ties broken by ascending id. This order is used only for display, not for deciding values.
 
+Events of different annotations, such as those of a whole thread, aren't linked by `after`. When they're listed together, each annotation's events keep the order above, and the annotations are interleaved by ascending id: the next event listed is the one with the smallest id among each annotation's next unlisted event. Ids are generally time-ordered (§2.1), so this follows the writers' clocks.
+
 ### 2.5.6 Derived annotation
 
 The derived state of an annotation has this shape. It is used by the test vectors and the protocol (§6):
@@ -173,7 +176,7 @@ The derived state of an annotation has this shape. It is used by the test vector
 ```
 
 - `author` and `created` come from the `create` event.
-- For suggestions, `replacement` appears as `edit.replacement`, and `appliedVersion` appears when `status` is `accepted`. `retargetedBy` is `{ author, time }` from the event that wrote the current `replacement` if that event is a `retarget`, and `null` otherwise (§4.2.1). For replies, `parent` is present and `target`, `label`, and `status` are omitted.
+- For suggestions, `replacement` appears as `edit.replacement`, and `appliedVersion` appears when `status` is `accepted`. `retargetedBy` is `{ author, time }` from the event that wrote the current `replacement` if that event is a `retarget`, and `null` otherwise (§4.2.1). `reverts` appears only if the `create` event has it. For replies, `parent` is present and `target`, `label`, and `status` are omitted.
 - `conflicts` maps each conflicted field name to the ids of its competing events, sorted by ascending id. The field itself holds the provisional value.
 
 A reply whose parent is deleted, missing, or not a root SHOULD still be shown, for example under a placeholder thread.

@@ -70,6 +70,7 @@ fn diagnostics_hover_and_accept() {
         label: None,
         replacement: None,
         local: false,
+        reverts: None,
     };
     let comment = ops::create_annotation(&ws, &Index::read(&ws), "paper.tex", &text, &comment, &author).unwrap();
     let sugg = NewAnnotation {
@@ -80,6 +81,7 @@ fn diagnostics_hover_and_accept() {
         label: None,
         replacement: Some("we show that"),
         local: false,
+        reverts: None,
     };
     let sugg = ops::create_annotation(&ws, &Index::read(&ws), "paper.tex", &text, &sugg, &author).unwrap();
 

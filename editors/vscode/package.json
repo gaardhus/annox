@@ -117,6 +117,12 @@
         "icon": "$(issue-reopened)"
       },
       {
+        "command": "annox.revertSuggestion",
+        "title": "Revert Accepted Suggestion",
+        "category": "annox",
+        "icon": "$(discard)"
+      },
+      {
         "command": "annox.publish",
         "title": "Publish Draft",
         "category": "annox",
@@ -332,6 +338,10 @@
           "when": "annox.inWorkspace"
         },
         {
+          "command": "annox.revertSuggestion",
+          "when": "annox.inWorkspace"
+        },
+        {
           "command": "annox.publish",
           "when": "annox.inWorkspace"
         },
@@ -397,7 +407,12 @@
         {
           "command": "annox.reopenThread",
           "group": "inline@4",
-          "when": "commentController == annox && commentThread =~ /\\bclosed\\b/"
+          "when": "commentController == annox && commentThread =~ /\\bclosed\\b(?!.*\\baccepted\\b)/"
+        },
+        {
+          "command": "annox.revertSuggestion",
+          "group": "inline@4",
+          "when": "commentController == annox && commentThread =~ /\\baccepted\\b(?!.*\\breverted\\b)/"
         },
         {
           "command": "annox.publish",
@@ -522,6 +537,11 @@
           "command": "annox.reopenThread",
           "group": "inline@1",
           "when": "view == annox.annotations && viewItem == 'annox closed'"
+        },
+        {
+          "command": "annox.revertSuggestion",
+          "group": "inline@1",
+          "when": "view == annox.annotations && viewItem == 'annox closed accepted'"
         },
         {
           "command": "annox.history",
