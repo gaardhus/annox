@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "annox-core"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -14,7 +14,7 @@ dependencies = [
 
 [[package]]
 name = "annox-lsp"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "annox-core",
  "annox-sync",
@@ -30,7 +30,7 @@ dependencies = [
 
 [[package]]
 name = "annox-sync"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "annox-core",
  "crossbeam-channel",
@@ -43,7 +43,7 @@ dependencies = [
 
 [[package]]
 name = "annox-wasm"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "annox-core",
  "serde",
