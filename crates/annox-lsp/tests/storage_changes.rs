@@ -54,6 +54,43 @@ fn outside_changes_are_pushed_without_a_save() {
 }
 
 #[test]
+fn outside_changes_the_watcher_misses_are_pushed() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws = Workspace::init(dir.path()).unwrap();
+    let file = dir.path().join("notes.txt");
+    std::fs::write(&file, DOC).unwrap();
+    let uri = lsp_types::Url::from_file_path(&file).unwrap().to_string();
+    let (client, _) = Client::start(json!({
+        "capabilities": {
+            "workspace": { "didChangeWatchedFiles": { "dynamicRegistration": true } },
+            "experimental": { "annox": { "version": "0.1" } },
+        },
+        "initializationOptions": { "annox": { "diagnostics": false } },
+    }));
+    client.answer("client/registerCapability", json!(null));
+    open(&client, &uri);
+    assert_eq!(client.notification("annox/didChangeAnnotations")["annotations"], json!([]));
+
+    // A comment lands on disk, and the client never reports it.
+    let new = NewAnnotation {
+        kind: "comment",
+        start: 6,
+        end: 15,
+        body: Some("missed"),
+        label: None,
+        replacement: None,
+        local: false,
+        reverts: None,
+    };
+    let author = json!({ "id": "mailto:bob@example.org" });
+    ops::create_annotation(&ws, &Index::read(&ws), "notes.txt", &Text::from_raw(DOC), &new, &author).unwrap();
+
+    let pushed = client.notification("annox/didChangeAnnotations");
+    assert_eq!(pushed["annotations"][0]["body"], "missed");
+    client.shutdown();
+}
+
+#[test]
 fn registers_a_watcher_when_the_client_can_watch() {
     let (client, _) = Client::start(json!({
         "capabilities": { "workspace": { "didChangeWatchedFiles": { "dynamicRegistration": true } } },

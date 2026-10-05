@@ -165,7 +165,7 @@ pub fn run(connection: &Connection) -> anyhow::Result<()> {
         pending: HashMap::new(),
         pending_init: HashMap::new(),
         roots,
-        poll: !dynamic_watch,
+        poll_interval: if dynamic_watch { BACKSTOP_INTERVAL } else { POLL_INTERVAL },
         fingerprints: HashMap::new(),
         replicas: HashMap::new(),
         sync_tx,
@@ -223,6 +223,11 @@ pub(crate) struct PendingInit {
 /// How often storage is checked when the client can't watch files (§6.4).
 const POLL_INTERVAL: Duration = Duration::from_millis(1000);
 
+/// How often storage is checked when the client watches files, for changes
+/// its watcher misses. VS Code's misses everything in folders created
+/// together with their parent, such as a document's first annotation folder.
+const BACKSTOP_INTERVAL: Duration = Duration::from_secs(5);
+
 const CREATE_WORKSPACE: &str = "Create workspace";
 
 pub(crate) struct Server<'a> {
@@ -237,8 +242,8 @@ pub(crate) struct Server<'a> {
     pending_init: HashMap<RequestId, PendingInit>,
     /// Workspace folders from `initialize`, for placing new workspaces.
     roots: Vec<PathBuf>,
-    /// Whether to poll `.annox/` because the client can't watch it (§6.4).
-    poll: bool,
+    /// How often to check `.annox/` for changes the client didn't report (§6.4).
+    poll_interval: Duration,
     fingerprints: HashMap<PathBuf, Vec<(String, u64, std::time::SystemTime)>>,
     /// Sync replica per workspace root (§7), or `None` if it doesn't sync.
     replicas: HashMap<PathBuf, Option<Sender<ToReplica>>>,
@@ -329,7 +334,7 @@ impl Analysis {
 
 impl Server<'_> {
     fn main_loop(&mut self) -> anyhow::Result<()> {
-        let ticker = if self.poll { crossbeam_channel::tick(POLL_INTERVAL) } else { crossbeam_channel::never() };
+        let ticker = crossbeam_channel::tick(self.poll_interval);
         let sync_rx = self.sync_rx.clone();
         loop {
             let debounce = match self.dirty.values().min() {
@@ -368,8 +373,17 @@ impl Server<'_> {
     }
 
     /// Checks `.annox/` of every open document's workspace for changes made by
-    /// others, for clients that can't watch files (§6.4).
+    /// others that the client didn't report (§6.4).
     fn poll_storage(&mut self) {
+        if self.scan_storage() {
+            self.invalidate();
+            self.refresh_all();
+        }
+    }
+
+    /// Records the state of `.annox/` in every open document's workspace, and
+    /// whether it changed since the last scan.
+    fn scan_storage(&mut self) -> bool {
         let roots: std::collections::BTreeSet<PathBuf> = self
             .open
             .keys()
@@ -385,10 +399,7 @@ impl Server<'_> {
                 self.fingerprints.insert(root, print);
             }
         }
-        if changed {
-            self.invalidate();
-            self.refresh_all();
-        }
+        changed
     }
 
     /// Refreshes documents whose typing pause has elapsed.
@@ -449,7 +460,13 @@ impl Server<'_> {
                     let uri = p.text_document.uri;
                     self.set_text(uri.clone(), &p.text_document.text);
                     self.ensure_replica(&uri);
-                    self.refresh(&uri);
+                    // Polls compare against storage as it was read here.
+                    if self.scan_storage() {
+                        self.invalidate();
+                        self.refresh_all();
+                    } else {
+                        self.refresh(&uri);
+                    }
                 }
             }
             DidChangeTextDocument::METHOD => {
@@ -478,6 +495,8 @@ impl Server<'_> {
                 }
             }
             DidChangeWatchedFiles::METHOD => {
+                // So that the next poll doesn't reload for the same change.
+                self.scan_storage();
                 self.invalidate();
                 self.refresh_all();
             }
