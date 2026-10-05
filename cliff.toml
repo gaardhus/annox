@@ -42,6 +42,8 @@ commit_preprocessors = [
 ]
 commit_parsers = [
   { field = "breaking", pattern = "true", group = "<!-- 0 -->Breaking changes" },
+  # The site is deployed on its own (pages.yml) and isn't part of a release.
+  { message = '^\w+\(site\)', skip = true },
   { message = "^feat", group = "<!-- 1 -->Added" },
   { message = "^fix", group = "<!-- 2 -->Fixed" },
   { message = "^perf", group = "<!-- 3 -->Performance" },
