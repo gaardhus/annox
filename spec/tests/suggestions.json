@@ -163,6 +163,38 @@
       }
     },
     {
+      "name": "stale-bracket",
+      "description": "Quote only found between its prefix and suffix after an edit (step 6): stale.",
+      "document": "\\section{Results}\nIn Section 3, we formally prove that the bound is tight for all $n$.\n",
+      "suggestion": {
+        "kind": "suggestion",
+        "target": {
+          "path": "doc.txt",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "edit": {
+          "replacement": "we show that"
+        },
+        "status": "open"
+      },
+      "expected": {
+        "applicability": "stale",
+        "resolutionStep": 6,
+        "result": null
+      }
+    },
+    {
       "name": "stale-orphaned",
       "description": "Quoted text was rewritten: orphaned, stale.",
       "document": "\\section{Results}\nIn Section 3, the bound is shown to be tight.\n",
@@ -190,7 +222,7 @@
       },
       "expected": {
         "applicability": "stale",
-        "resolutionStep": 6,
+        "resolutionStep": 7,
         "result": null
       }
     },
@@ -292,7 +324,7 @@
     },
     {
       "name": "overlap-second",
-      "description": "Second suggestion on overlapping text, resolved after the first was applied: stale.",
+      "description": "Second suggestion on overlapping text, resolved after the first was applied: found between its prefix and suffix (step 6), stale.",
       "document": "\\section{Results}\nIn Section 3, we prove that the bound is sharp for all $n$.\n",
       "suggestion": {
         "kind": "suggestion",

@@ -61,7 +61,7 @@ pub enum State {
 }
 
 /// The result of resolving an anchor: its state, the range (absent when
-/// orphaned), and the step of §3.7.2 that produced it (6 when orphaned).
+/// orphaned), and the step of §3.7.2 that produced it (7 when orphaned).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Resolution {
     pub state: State,
@@ -78,7 +78,7 @@ impl Resolution {
         Resolution { state: State::Relocated, range: Some((start, end)), step }
     }
 
-    const ORPHANED: Resolution = Resolution { state: State::Orphaned, range: None, step: 6 };
+    const ORPHANED: Resolution = Resolution { state: State::Orphaned, range: None, step: 7 };
 }
 
 /// Resolves `anchor` against the current document `doc` (§3.7.2).
@@ -128,6 +128,10 @@ pub fn resolve(doc: &Text, anchor: &Anchor) -> Resolution {
                 let j = i + wq.len();
                 return Resolution::relocated(w.spans[i].0, w.spans[j - 1].1, 4);
             }
+        }
+        // Step 6: bracket search.
+        if let Some((a, b)) = bracket(doc, &quote.prefix, &quote.suffix, p.len(), q.len()) {
+            return Resolution::relocated(a, b, 6);
         }
     } else {
         // Step 4, point variant: whitespace-insensitive context search.
@@ -198,6 +202,24 @@ fn partial_context(doc: &Text, p: &[char], x: &[char]) -> Option<usize> {
         (Some(&(_, c)), None) if best >= need => Some(c),
         _ => None,
     }
+}
+
+/// Step 6 (§3.7.2): the text between the stored prefix and suffix, when one
+/// of them occurs once, the other follows or precedes it, and the text
+/// between them is between half and twice the quote's length.
+fn bracket(doc: &Text, p: &str, x: &str, plen: usize, qlen: usize) -> Option<(usize, usize)> {
+    if p.is_empty() || x.is_empty() {
+        return None;
+    }
+    let ends: Vec<usize> = doc.haystack().find_all(p).into_iter().map(|i| i + plen).collect();
+    let starts = doc.haystack().find_all(x);
+    let (a, b) = match (&ends[..], &starts[..]) {
+        ([a], _) => (*a, starts.iter().copied().find(|&b| b >= *a)?),
+        (_, [b]) => (ends.iter().copied().rev().find(|&a| a <= *b)?, *b),
+        _ => return None,
+    };
+    let gap = b - a;
+    (2 * gap >= qlen && gap <= 2 * qlen).then_some((a, b))
 }
 
 /// The candidate closest to `s`, with ties going to the lower offset (§3.7.1).

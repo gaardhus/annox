@@ -156,6 +156,25 @@ fn accept_keeps_bom_and_line_endings() {
 }
 
 #[test]
+fn accepting_carries_comments_on_the_replaced_text() {
+    let dir = setup(DOC);
+    let c = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "prove that teh bound", "--body", "x"]));
+    let s = id(&annox(dir.path(), &["suggest", "paper.md", "--quote", "teh", "--replace", "the"]));
+    let accepted = annox(dir.path(), &["accept", &s]);
+    assert_eq!(accepted["reanchored"], serde_json::json!([c]));
+    let list = annox(dir.path(), &["list"]);
+    assert_eq!((&list[0]["quote"], &list[0]["resolution"]), (&"prove that the bound".into(), &"exact".into()));
+}
+
+#[test]
+fn edited_quotes_are_found_between_their_prefix_and_suffix() {
+    let dir = setup(DOC);
+    annox(dir.path(), &["comment", "paper.md", "--quote", "we prove that", "--body", "x"]);
+    std::fs::write(dir.path().join("paper.md"), DOC.replace("we prove", "we formally prove")).unwrap();
+    assert_eq!(annox(dir.path(), &["list"])[0]["resolution"], "relocated");
+}
+
+#[test]
 fn relocated_suggestions_need_confirmation() {
     let dir = setup(DOC);
     let s = id(&annox(dir.path(), &["suggest", "paper.md", "--quote", "teh", "--replace", "the"]));

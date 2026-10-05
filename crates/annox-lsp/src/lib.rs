@@ -204,6 +204,9 @@ pub(crate) struct Pending {
     command: RequestId,
     uri: Url,
     applied_version: String,
+    /// New anchors for the comments the edit changes, written once it is
+    /// applied (§4.3.5).
+    carried: Vec<(String, Anchor)>,
     work: Work,
     /// Reply with the AnnotationView (extension method) or null (command).
     respond_view: bool,
@@ -513,6 +516,12 @@ impl Server<'_> {
             fields
         };
         let a = self.analyze(&pending.uri).ok_or((NO_WORKSPACE, "no annox workspace".to_owned()))?;
+        if applied {
+            for (id, target) in &pending.carried {
+                let target = serde_json::to_value(target).map_err(|e| (INTERNAL_ERROR, e.to_string()))?;
+                self.write_event(&a, id, "reanchor", Map::from_iter([("target".into(), target)]))?;
+            }
+        }
         match &pending.work {
             Work::AcceptAll { chosen, results } => {
                 let mut results = results.clone();
@@ -670,7 +679,12 @@ impl Server<'_> {
         let edit = WorkspaceEdit { changes: Some(HashMap::from([(uri.clone(), text_edits)])), ..Default::default() };
         self.next_id += 1;
         let request_id = RequestId::from(format!("annox-apply-{}", self.next_id));
-        let pending = Pending { command, uri, applied_version: result.version, work, respond_view };
+        let mut spans: Vec<(usize, usize, usize)> =
+            sorted.iter().map(|(s, e, t)| (*s, *e, t.chars().count())).collect();
+        spans.reverse();
+        let carried =
+            suggestion::carry_comments(&a.text, &result, &a.rel, &spans, a.items.iter().map(|i| (&i.id, &i.state)));
+        let pending = Pending { command, uri, applied_version: result.version, carried, work, respond_view };
         self.pending.insert(request_id.clone(), pending);
         let label = match &self.pending[&request_id].work {
             Work::Accept { .. } => "annox: accept suggestion",

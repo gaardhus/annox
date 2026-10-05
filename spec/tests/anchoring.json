@@ -253,6 +253,81 @@
       }
     },
     {
+      "name": "bracket-edited",
+      "description": "The quote was edited but its prefix and suffix are intact: step 6 returns the text between them.",
+      "document": "\\section{Results}\nIn Section 3, we formally prove that the bound is tight for all $n$.\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+        "selectors": {
+          "position": {
+            "start": 32,
+            "end": 45
+          },
+          "quote": {
+            "exact": "we prove that",
+            "prefix": "\\section{Results}\nIn Section 3, ",
+            "suffix": " the bound is tight for all $n$."
+          }
+        }
+      },
+      "expected": {
+        "state": "relocated",
+        "start": 32,
+        "end": 54
+      }
+    },
+    {
+      "name": "bracket-too-long",
+      "description": "The text between prefix and suffix is more than twice the quote's length: orphaned.",
+      "document": "\\section{Results}\nIn Section 3, we prove, by a long and rather indirect argument, that the bound is tight for all $n$.\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+        "selectors": {
+          "position": {
+            "start": 32,
+            "end": 45
+          },
+          "quote": {
+            "exact": "we prove that",
+            "prefix": "\\section{Results}\nIn Section 3, ",
+            "suffix": " the bound is tight for all $n$."
+          }
+        }
+      },
+      "expected": {
+        "state": "orphaned",
+        "start": null,
+        "end": null
+      }
+    },
+    {
+      "name": "bracket-suffix-unique",
+      "description": "The prefix occurs twice and the suffix once: step 6 takes the last prefix before the suffix.",
+      "document": "Note: alpha one. Note: beta two gamma.\n",
+      "anchor": {
+        "path": "doc.txt",
+        "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+        "selectors": {
+          "position": {
+            "start": 22,
+            "end": 27
+          },
+          "quote": {
+            "exact": "delta",
+            "prefix": "Note: ",
+            "suffix": " two gamma."
+          }
+        }
+      },
+      "expected": {
+        "state": "relocated",
+        "start": 23,
+        "end": 27
+      }
+    },
+    {
       "name": "point-context",
       "description": "Point anchor (empty range); text inserted before it; found by prefix+suffix: step 2.",
       "document": "zeroth line\nfirst line\nsecond line\n",

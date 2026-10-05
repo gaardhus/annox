@@ -990,5 +990,20 @@ fn accept(id: &str, confirmed: bool, who: &Author, cwd: &Path) -> anyhow::Result
     let fields =
         Map::from_iter([("status".into(), json!("accepted")), ("appliedVersion".into(), json!(applied.text.version))]);
     ops::append_event(&ws, &index, id, "status", fields, &author(who, &ws)?)?;
-    Ok(json!({ "id": id, "status": "accepted", "path": path, "appliedVersion": applied.text.version }))
+    // Keep comments on the replaced text attached to its replacement (§4.3.5).
+    let edits = [(applied.start, applied.end, replacement.chars().count())];
+    let states = index.load(&path).derive();
+    let mut carried = Vec::new();
+    for (comment, target) in
+        suggestion::carry_comments(&Text::from_raw(&raw), &applied.text, &path, &edits, states.iter())
+    {
+        let fields = Map::from_iter([("target".into(), serde_json::to_value(target)?)]);
+        ops::append_event(&ws, &index, &comment, "reanchor", fields, &author(who, &ws)?)?;
+        carried.push(comment);
+    }
+    let mut out = json!({ "id": id, "status": "accepted", "path": path, "appliedVersion": applied.text.version });
+    if !carried.is_empty() {
+        out["reanchored"] = json!(carried);
+    }
+    Ok(out)
 }

@@ -55,10 +55,10 @@ Whether a suggestion can be applied is **derived** from the current document. It
 |---|---|
 | `exact` (step 0 or 1) | **applicable** |
 | `relocated` by step 2, 3, or 5 | **applicable** |
-| `relocated` by step 4 | **stale** |
+| `relocated` by step 4 or 6 | **stale** |
 | `orphaned` | **stale** |
 
-In steps 0–3 and 5, the resolved range contains exactly `quote.exact`, so the text the suggestion was written against is still intact. For step 5 that text is empty: an insertion whose surrounding text was partly edited still inserts at a position its author saw. In step 4 the whitespace differs, so the suggestion author never saw the text it would now replace. For insertions, which relocate by the point variant of step 4, the surrounding whitespace changed, and it's unclear exactly where in the whitespace the author meant to insert. They are stale for the same reason, and are shown at their relocated position so that they can be re-targeted easily.
+In steps 0–3 and 5, the resolved range contains exactly `quote.exact`, so the text the suggestion was written against is still intact. For step 5 that text is empty: an insertion whose surrounding text was partly edited still inserts at a position its author saw. In step 4 the whitespace differs, so the suggestion author never saw the text it would now replace. For insertions, which relocate by the point variant of step 4, the surrounding whitespace changed, and it's unclear exactly where in the whitespace the author meant to insert. They are stale for the same reason, and are shown at their relocated position so that they can be re-targeted easily. In step 6 the quoted text itself was edited, so the suggestion would replace text its author never saw. It is shown at the edited text, for re-targeting, like a step-4 suggestion.
 
 Applicability only matters while the suggestion is `open`. Clients SHOULD show stale suggestions differently from applicable ones, and MUST NOT offer to apply a stale suggestion (§4.3).
 
@@ -67,7 +67,7 @@ Applicability only matters while the suggestion is `open`. Clients SHOULD show s
 §3.8 allows clients to rewrite anchors. For suggestions that is restricted further:
 
 - A client MAY rewrite the anchor of an open suggestion after it is relocated by step 2, 3, or 5. These steps leave `quote.exact` unchanged.
-- A client MUST NOT rewrite the anchor of a suggestion after step 4 or after a confirmed suggested location (§3.7.4). Those rewrites change `quote.exact`, and the suggestion would silently become applicable to text its author never saw.
+- A client MUST NOT rewrite the anchor of a suggestion after step 4 or 6, or after a confirmed suggested location (§3.7.4). Those rewrites change `quote.exact`, and the suggestion would silently become applicable to text its author never saw.
 
 A stale suggestion becomes applicable again only when a user **re-targets** it. That means updating the anchor and reviewing `replacement` in the same action, recorded as a `retarget` event (§2.4).
 
@@ -115,6 +115,14 @@ An accepted suggestion stays accepted (§4.4). To undo it, a client creates a ne
 4. Otherwise, create a suggestion anchored to the found range `[c, c+len(replacement))`, with `replacement` set to *S*'s `quote.exact` and `reverts` set to *S*'s id. If *S* was a deletion, the found range is a point and the new suggestion is an insertion.
 
 The new suggestion is an ordinary suggestion: it can be reviewed, accepted, rejected, or withdrawn like any other. A client MAY accept it right away (§4.3) when the user asks to undo rather than to propose undoing. Clients SHOULD link the two threads through `reverts`, in both directions: the new suggestion names the one it reverts, and an accepted suggestion shows the suggestions that revert it. A reader MUST NOT treat a `reverts` that names no accepted suggestion as invalid; the link is informational.
+
+### 4.3.5 Comments on replaced text
+
+Accepting a suggestion replaces text that open comments may be anchored to. The client knows exactly what changed, so it SHOULD carry those comments along rather than leave them to resolution, which may orphan them. Once the edit is written, for each open comment whose resolved range `[s, e)` in *D* the edit `[c, d)` → `replacement` changes, the client rewrites the anchor (§3.8) with a `reanchor` event (§2.4) for the mapped range in *D'*. An edit changes a range if they share at least one code point (`s < d` and `c < e`), if it inserts strictly inside it (`c = d` and `s < c < e`), or, for a point comment, if it replaces text on both sides of it (`c < s < d`).
+
+The range is mapped offset by offset. An offset at or before `c` stays where it is, and one at or after `d` shifts by `len(replacement) − (d − c)`. An offset strictly inside `[c, d)` moves to the start of the replacement when it is a start, and to its end when it is an end. A point comment is mapped as a start. When several suggestions are applied as one edit (§6.6.2), the offsets are mapped through all of them.
+
+Suggestions are never carried this way: their quote is the text they replace, and they go stale as §4.3.1 describes. Comments the edit doesn't change, including ones next to it, resolve as usual.
 
 ## 4.4 Lifecycle
 

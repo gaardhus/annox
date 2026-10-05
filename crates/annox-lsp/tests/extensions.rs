@@ -378,3 +378,26 @@ fn commit_previews_then_commits() {
     let nothing = f.client.call("annox/commit", json!({ "textDocument": { "uri": uri } }));
     assert_eq!(nothing["files"], 0);
 }
+
+#[test]
+fn accepting_carries_comments_on_the_replaced_text() {
+    let mut f = setup();
+    let uri = f.uri.clone();
+    let sugg = f.client.call(
+        "annox/create",
+        json!({ "textDocument": { "uri": uri }, "kind": "suggestion", "range": range(1, 14, 27), "replacement": "we show that" }),
+    );
+    let comment = f
+        .client
+        .call("annox/create", json!({ "textDocument": { "uri": uri }, "kind": "comment", "range": range(1, 17, 37) }));
+    let id = f.client.request("annox/accept", json!({ "annotation": sugg["id"] }));
+    f.client.answer_apply_edit(true);
+    f.client.response(&id).unwrap();
+    f.client.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": uri, "version": 2 }, "contentChanges": [{ "text": DOC.replace("we prove that", "we show that") }] }),
+    );
+    let view = f.annotations(false).into_iter().find(|v| v["id"] == comment["id"]).unwrap();
+    assert_eq!(view["resolution"], json!({ "state": "exact", "step": 0, "range": range(1, 14, 36) }));
+    f.client.shutdown();
+}
