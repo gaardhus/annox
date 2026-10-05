@@ -277,7 +277,11 @@ export async function run(): Promise<void> {
         time: "2026-09-29T10:00:00Z",
         body,
       };
-      fs.writeFileSync(path.join(path.dirname(create), `${id}.json`), JSON.stringify(event));
+      // Atomically, as writers must (§5.4): a watcher event for a half-written
+      // file can make the server read it empty and never look again.
+      const tmp = path.join(path.dirname(create), `.${id}.json.tmp`);
+      fs.writeFileSync(tmp, JSON.stringify(event));
+      fs.renameSync(tmp, path.join(path.dirname(create), `${id}.json`));
     });
     await wait("conflict pushed", () => get(c.id)?.conflicts?.body, 15000);
     const thread = await wait("thread", () => api.threads.threadOf(c.id));
