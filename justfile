@@ -35,11 +35,18 @@ nvim-demo:
     cargo build -p annox-lsp --locked
     ANNOX_BIN="$PWD/target/debug/annox" editors/nvim/demo/record.sh assets/nvim-demo.gif
 
-# Type check and test the VS Code extension. The end-to-end test downloads VS Code.
-test-vscode:
+# Type check and test the VS Code extension. The end-to-end test downloads VS Code
+# and runs it on a virtual display when xvfb-run is installed; `just test-vscode show`
+# shows its window instead. The Wayland variables are unset so VS Code uses X11.
+test-vscode mode="":
     cargo build -p annox-lsp --locked
     cd editors/vscode && npm ci && npm run check && npm run test:unit
-    cd editors/vscode && ANNOX_BIN="$PWD/../../target/debug/annox" npm run test:e2e
+    cd editors/vscode && export ANNOX_BIN="$PWD/../../target/debug/annox" && \
+    if [ "{{ mode }}" != show ] && command -v xvfb-run > /dev/null; then \
+        env -u WAYLAND_DISPLAY -u XDG_SESSION_TYPE xvfb-run -a npm run test:e2e; \
+    else \
+        npm run test:e2e; \
+    fi
 
 # Package the VS Code extension as editors/vscode/annox-<version>.vsix.
 vsix:
