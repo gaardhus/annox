@@ -6,3 +6,7 @@ tha = "tha"
 enew = "enew"
 # The noice.nvim plugin.
 noice = "noice"
+
+[files]
+# Vendored web fonts; the unicode-range values look like words.
+extend-exclude = ["site/fonts/"]

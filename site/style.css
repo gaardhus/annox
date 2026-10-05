@@ -236,8 +236,24 @@ annox-demo {
   padding-bottom: 3rem;
 }
 .workflow figure {
+  --fade-start: 0px;
+  --fade-end: 0px;
   margin: 0;
   overflow-x: auto;
+  /* On narrow screens the diagram scrolls; fade the edges that hide more of it. */
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 var(--fade-start),
+    #000 calc(100% - var(--fade-end)),
+    transparent
+  );
+}
+.workflow figure.more-before {
+  --fade-start: 3rem;
+}
+.workflow figure.more-after {
+  --fade-end: 3rem;
 }
 .workflow img,
 .workflow svg {

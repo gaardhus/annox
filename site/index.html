@@ -25,13 +25,27 @@
       content="annox: Portable annotations for any document, in any editor."
     />
     <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="assets/favicon-32.png" sizes="32x32" />
     <link rel="icon" href="assets/annox.svg" type="image/svg+xml" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap"
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <meta
+      name="theme-color"
+      content="#eceef3"
+      media="(prefers-color-scheme: light)"
     />
+    <meta
+      name="theme-color"
+      content="#12151c"
+      media="(prefers-color-scheme: dark)"
+    />
+    <link
+      rel="preload"
+      href="fonts/instrument-sans-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="stylesheet" href="fonts/fonts.css" />
     <link rel="stylesheet" href="style.css" />
     <script type="module" src="annox-demo/annox-demo.js"></script>
   </head>
@@ -301,8 +315,14 @@ A good annotation should behave like a pencil mark: it belongs to the document, 
 
       for (const button of document.querySelectorAll("button.copy")) {
         button.addEventListener("click", async () => {
-          const text = document.getElementById(button.dataset.copy).textContent;
-          await navigator.clipboard.writeText(text);
+          const code = document.getElementById(button.dataset.copy);
+          try {
+            await navigator.clipboard.writeText(code.textContent);
+          } catch {
+            // Clipboard access was refused: select the command to copy by hand.
+            getSelection().selectAllChildren(code);
+            return;
+          }
           button.classList.add("done");
           clearTimeout(button.timer);
           button.timer = setTimeout(

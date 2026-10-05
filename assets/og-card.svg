@@ -1,8 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
-  <!-- Social card (og:image). Render to og-card.png with `just og-card`; the
-       fonts load from Google Fonts, so render it with network access. -->
+  <!-- Social card (og:image). Render to og-card.png with `just site-images`. -->
   <style>
-    @import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@700&amp;family=JetBrains+Mono:wght@500&amp;display=block");
+    @import url("../site/fonts/fonts.css");
     .name { font: 700 60px "Instrument Sans", sans-serif; fill: #1f2937; letter-spacing: -0.02em; }
     .head { font: 700 72px "Instrument Sans", sans-serif; fill: #1f2937; letter-spacing: -0.02em; }
     .url { font: 500 26px "JetBrains Mono", monospace; fill: #5b6474; }

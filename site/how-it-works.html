@@ -25,13 +25,27 @@
       content="annox: Portable annotations for any document, in any editor."
     />
     <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="assets/favicon-32.png" sizes="32x32" />
     <link rel="icon" href="assets/annox.svg" type="image/svg+xml" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap"
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <meta
+      name="theme-color"
+      content="#eceef3"
+      media="(prefers-color-scheme: light)"
     />
+    <meta
+      name="theme-color"
+      content="#12151c"
+      media="(prefers-color-scheme: dark)"
+    />
+    <link
+      rel="preload"
+      href="fonts/instrument-sans-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="stylesheet" href="fonts/fonts.css" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -136,15 +150,28 @@
     </footer>
 
     <script type="module">
-      // Inline the diagram so it uses the page's fonts. The <img> stays if this fails.
       const figure = document.getElementById("workflow");
+
+      // Mark which edges of the diagram have more to scroll to, for the fades.
+      function updateFades() {
+        const end = figure.scrollWidth - figure.clientWidth;
+        figure.classList.toggle("more-before", figure.scrollLeft > 1);
+        figure.classList.toggle("more-after", figure.scrollLeft < end - 1);
+      }
+      figure.addEventListener("scroll", updateFades, { passive: true });
+      new ResizeObserver(updateFades).observe(figure);
+
+      // Inline the diagram so it uses the page's fonts. The <img> stays if this fails.
       try {
         const response = await fetch("assets/annox-workflow.svg");
         if (response.ok) {
           const svg = new DOMParser()
             .parseFromString(await response.text(), "image/svg+xml")
             .documentElement;
-          if (svg.localName === "svg") figure.replaceChildren(svg);
+          if (svg.localName === "svg") {
+            figure.replaceChildren(svg);
+            updateFades();
+          }
         }
       } catch {}
     </script>

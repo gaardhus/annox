@@ -66,9 +66,12 @@ site:
     mkdir -p site/assets && cp assets/*.svg assets/*.gif assets/*.png site/assets/
     cp install.sh install.ps1 site/
 
-# Render the social card (og:image) from its SVG source. Needs network access for the fonts.
-og-card:
+# Render the site's PNG images from their SVG sources: the social card (og:image),
+# the iOS home screen icon, and a PNG favicon for browsers without SVG favicons.
+site-images:
     chromium --headless --disable-gpu --hide-scrollbars --virtual-time-budget=8000 --window-size=1200,630 --screenshot="$PWD/assets/og-card.png" "file://$PWD/assets/og-card.svg"
+    rsvg-convert -w 136 -h 136 assets/annox.svg | magick -size 180x180 xc:white - -gravity center -composite -depth 8 assets/apple-touch-icon.png
+    rsvg-convert -w 32 -h 32 assets/annox.svg -o assets/favicon-32.png
 
 # Build the website and serve it on http://localhost:8000.
 serve-site: site
