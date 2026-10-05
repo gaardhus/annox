@@ -40,10 +40,12 @@
   <text class="name" x="212" y="162">annox</text>
 
   <!-- Headline, marked like the site's hero -->
-  <rect class="mark" x="100" y="262" width="809" height="32"/>
-  <rect class="mark" x="100" y="346" width="927" height="32"/>
-  <text class="head" x="104" y="290">Portable annotations for</text>
-  <text class="head" x="104" y="374">any document, in any editor.</text>
+  <rect class="mark" x="100" y="250" width="704" height="32"/>
+  <rect class="mark" x="100" y="334" width="606" height="32"/>
+  <rect class="mark" x="100" y="418" width="423" height="32"/>
+  <text class="head" x="104" y="278">Portable annotations</text>
+  <text class="head" x="104" y="362">for any document,</text>
+  <text class="head" x="104" y="446">in any editor.</text>
 
   <text class="url" x="104" y="526">gaardhus.github.io/annox</text>
 </svg>
