@@ -63,8 +63,12 @@ code-install:
 # Build the website in site/: annox-core as WebAssembly, the logos, and the install scripts.
 site:
     wasm-pack build crates/annox-wasm --target web --no-typescript --no-pack --out-dir ../../site/annox-demo/pkg
-    mkdir -p site/assets && cp assets/*.svg assets/*.gif site/assets/
+    mkdir -p site/assets && cp assets/*.svg assets/*.gif assets/*.png site/assets/
     cp install.sh install.ps1 site/
+
+# Render the social card (og:image) from its SVG source. Needs network access for the fonts.
+og-card:
+    chromium --headless --disable-gpu --hide-scrollbars --virtual-time-budget=8000 --window-size=1200,630 --screenshot="$PWD/assets/og-card.png" "file://$PWD/assets/og-card.svg"
 
 # Build the website and serve it on http://localhost:8000.
 serve-site: site

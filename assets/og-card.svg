@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <!-- Social card (og:image). Render to og-card.png with `just og-card`; the
+       fonts load from Google Fonts, so render it with network access. -->
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@700&amp;family=JetBrains+Mono:wght@500&amp;display=block");
+    .name { font: 700 60px "Instrument Sans", sans-serif; fill: #1f2937; letter-spacing: -0.02em; }
+    .head { font: 700 72px "Instrument Sans", sans-serif; fill: #1f2937; letter-spacing: -0.02em; }
+    .url { font: 500 26px "JetBrains Mono", monospace; fill: #5b6474; }
+    .mark { fill: #facc15; opacity: 0.8; }
+  </style>
+  <defs>
+    <mask id="annox-gap" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
+      <rect width="128" height="128" fill="#fff"/>
+      <path d="M81 36H107a13 13 0 0 1 13 13V59a13 13 0 0 1-13 13H92.2L74.5 83.5L78.1 72H81a13 13 0 0 1-13-13V49a13 13 0 0 1 13-13Z" fill="#000" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+
+  <rect width="1200" height="630" fill="#eceef3"/>
+  <rect x="48" y="48" width="1104" height="534" rx="24" fill="#ffffff" stroke="#d4d8e1" stroke-width="2"/>
+
+  <!-- Logo: assets/annox.svg, light variant -->
+  <g transform="translate(104 96) scale(0.75)">
+    <g mask="url(#annox-gap)">
+      <path d="M27 12H66L88 34V101a15 15 0 0 1-15 15H27a15 15 0 0 1-15-15V27a15 15 0 0 1 15-15Z" fill="#ffffff" stroke="#1f2937" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M66 12V24a10 10 0 0 0 10 10H88" fill="none" stroke="#1f2937" stroke-width="6" stroke-linejoin="round"/>
+      <g stroke="#9ca3af" stroke-width="7" stroke-linecap="round">
+        <path d="M23 40H56"/>
+        <path d="M23 62H50"/>
+      </g>
+      <rect x="18" y="75" width="59" height="18" rx="7" fill="#facc15"/>
+      <path d="M23 84H70" stroke="#1f2937" stroke-width="7" stroke-linecap="round"/>
+    </g>
+    <path d="M81 36H107a13 13 0 0 1 13 13V59a13 13 0 0 1-13 13H92.2L74.5 83.5L78.1 72H81a13 13 0 0 1-13-13V49a13 13 0 0 1 13-13Z" fill="#6366f1" stroke="#6366f1" stroke-width="2" stroke-linejoin="round"/>
+    <g fill="#ffffff">
+      <circle cx="82" cy="54" r="4.5"/>
+      <circle cx="94" cy="54" r="4.5"/>
+      <circle cx="106" cy="54" r="4.5"/>
+    </g>
+  </g>
+  <text class="name" x="212" y="162">annox</text>
+
+  <!-- Headline, marked like the site's hero -->
+  <rect class="mark" x="100" y="262" width="809" height="32"/>
+  <rect class="mark" x="100" y="346" width="927" height="32"/>
+  <text class="head" x="104" y="290">Portable annotations for</text>
+  <text class="head" x="104" y="374">any document, in any editor.</text>
+
+  <text class="url" x="104" y="526">gaardhus.github.io/annox</text>
+</svg>
