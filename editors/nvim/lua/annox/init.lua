@@ -45,6 +45,10 @@ M.peers = {}
 --- Latest state pushed by the server, per buffer: { annotations, document }.
 M.state = {}
 
+--- Whether annotations and others' cursors are drawn. Toggled with
+--- `:Annox overlay`; buffers in suggestion mode draw theirs regardless.
+M.overlay_shown = true
+
 --- `color` blended over the editor background, `alpha` of the way, as "#rrggbb".
 --- A transparent background counts as black, or white with a light 'background'.
 local function tint(color, alpha)
@@ -293,6 +297,9 @@ end
 --- Draws the annotations of `bufnr` as extmarks.
 function M.render(bufnr)
   vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+  if not M.overlay_shown and not M.suggesting[bufnr] then
+    return
+  end
   local state = M.state[bufnr]
   local client = client_for(bufnr)
   if not state or not client then
@@ -379,7 +386,7 @@ end
 function M.render_presence(bufnr)
   vim.api.nvim_buf_clear_namespace(bufnr, presence_ns, 0, -1)
   local client = client_for(bufnr)
-  if not client then
+  if not client or not M.overlay_shown then
     return
   end
   local uri = vim.uri_from_bufnr(bufnr)
@@ -1900,6 +1907,29 @@ function M.suggest_mode(opts)
   M.render(bufnr)
 end
 
+--- Shows or hides annotations and others' cursors in every buffer. Commands
+--- still act on hidden annotations, and a buffer in suggestion mode keeps
+--- showing its own.
+--- opts: { enable? (default: toggle) }
+function M.overlay(opts)
+  opts = opts or {}
+  local enable = opts.enable
+  if enable == nil then
+    enable = not M.overlay_shown
+  end
+  M.overlay_shown = enable
+  vim.g.annox_overlay = enable
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(b) then
+      M.render(b)
+      M.render_presence(b)
+    end
+  end
+  vim.api.nvim_exec_autocmds("User", { pattern = "AnnoxOverlay", modeline = false, data = { enabled = enable } })
+  vim.cmd.redrawstatus({ bang = true })
+  vim.notify("annox: overlay " .. (enable and "on" or "off"), vim.log.levels.INFO)
+end
+
 --- Applies server edits (accepting a suggestion) without turning them into
 --- new suggestions.
 local function on_apply_edit(err, result, ctx)
@@ -1998,6 +2028,13 @@ local subcommands = {
   suggesting = function()
     M.suggest_mode()
   end,
+  overlay = function(o)
+    local arg = o.fargs[2]
+    if arg ~= nil and arg ~= "on" and arg ~= "off" then
+      return vim.notify("annox: usage: :Annox overlay [on|off]", vim.log.levels.ERROR)
+    end
+    M.overlay({ enable = arg and arg == "on" })
+  end,
   edit = function()
     M.edit()
   end,
@@ -2035,6 +2072,7 @@ local subcommands = {
 
 function M.setup(opts)
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
+  vim.g.annox_overlay = M.overlay_shown
   set_highlights()
   vim.api.nvim_create_autocmd("ColorScheme", { callback = set_highlights })
   vim.lsp.config("annox", {
@@ -2087,16 +2125,23 @@ function M.setup(opts)
     if not fn then
       return vim.notify("annox: unknown subcommand " .. tostring(o.fargs[1]), vim.log.levels.ERROR)
     end
-    if o.fargs[1] ~= "init" and not wait_ready(vim.api.nvim_get_current_buf()) then
+    if o.fargs[1] ~= "init" and o.fargs[1] ~= "overlay" and not wait_ready(vim.api.nvim_get_current_buf()) then
       return
     end
     fn(o)
   end, {
-    nargs = 1,
+    nargs = "+",
     range = true,
     bang = true,
-    complete = function()
-      return vim.tbl_keys(subcommands)
+    complete = function(lead, line)
+      local args = vim.split(line, "%s+", { trimempty = true })
+      local words = vim.tbl_keys(subcommands)
+      if #args > 2 or (#args == 2 and line:match("%s$")) then
+        words = args[2] == "overlay" and { "on", "off" } or {}
+      end
+      return vim.tbl_filter(function(w)
+        return vim.startswith(w, lead)
+      end, words)
     end,
   })
 end

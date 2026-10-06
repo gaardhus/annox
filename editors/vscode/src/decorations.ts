@@ -71,6 +71,9 @@ export class Decorations implements vscode.Disposable {
   };
   private readonly disposables: vscode.Disposable[] = [];
   private readonly codeLensChanged = new vscode.EventEmitter<void>();
+  /** Whether annotations and others' cursors are drawn. Documents in
+   * suggestion mode draw theirs regardless. */
+  private shown = true;
 
   constructor(
     private readonly store: Store,
@@ -98,6 +101,14 @@ export class Decorations implements vscode.Disposable {
     );
   }
 
+  /** Shows or hides the decorations in every editor, toggling by default. */
+  setShown(shown = !this.shown): boolean {
+    this.shown = shown;
+    this.renderAll();
+    this.codeLensChanged.fire();
+    return shown;
+  }
+
   renderAll(): void {
     for (const editor of vscode.window.visibleTextEditors) this.render(editor);
   }
@@ -109,6 +120,7 @@ export class Decorations implements vscode.Disposable {
   }
 
   private codeLenses(doc: vscode.TextDocument): vscode.CodeLens[] {
+    if (!this.shown) return [];
     const orphans = this.store.annotations(doc.uri).filter((a) => a.status === "open" && isOrphaned(a)).length;
     if (orphans === 0) return [];
     const title = `$(warning) ${orphans} annotation${orphans === 1 ? "" : "s"} could not be located`;
@@ -136,7 +148,8 @@ export class Decorations implements vscode.Disposable {
       presence: [],
     };
     const labelled = new Map<number, string[]>();
-    for (const a of this.store.annotations(doc.uri)) {
+    const shown = this.shown || this.inline(uri);
+    for (const a of shown ? this.store.annotations(doc.uri) : []) {
       const r = rangeOf(a);
       if (!r || a.status !== "open" || a.deleted) continue;
       const range = doc.validateRange(r);
@@ -173,7 +186,7 @@ export class Decorations implements vscode.Disposable {
         renderOptions: { after: { contentText: truncate(texts.join(" · "), 120) } },
       });
     }
-    for (const peer of this.store.peers) {
+    for (const peer of this.shown ? this.store.peers : []) {
       if (!peer.textDocument || !peer.range || key(peer.textDocument.uri) !== uri) continue;
       const range = doc.validateRange(toRange(peer.range));
       const name = peer.author?.name ?? peer.author?.id ?? "someone";

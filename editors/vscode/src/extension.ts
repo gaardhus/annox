@@ -47,6 +47,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<Api> {
     new AnnotationsView(store),
     ...actions.register(),
     suggesting.onDidChange((uri) => decorations.renderUri(uri)),
+    vscode.commands.registerCommand("annox.toggleOverlay", () => {
+      const shown = decorations.setShown();
+      vscode.window.setStatusBarMessage(`annox: overlay ${shown ? "on" : "off"}`, 2000);
+    }),
     ...presence(annox, store),
     ...workspaceContext(store),
     vscode.workspace.onDidChangeConfiguration(async (e) => {

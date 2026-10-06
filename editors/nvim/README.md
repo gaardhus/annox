@@ -42,6 +42,7 @@ Changes others make to `.annox/`, such as a `git pull`, show up within a second 
 | `:Annox suggest`                          | Suggest a replacement for the selection. The prompt is pre-filled with the current text.                                                                                                                                                                                                 |
 | `:Annox edit`                             | Edit the suggested text of the suggestion under the cursor, or the text of a comment, in a floating window, with the suggestion's original text shown read-only above it. Esc (in normal mode) saves and closes, `:w` saves, `:q!` discards.                                                                                                           |
 | `:Annox suggesting`                       | Turn suggestion mode on or off for the buffer (see below).                                                                                                                                                                                                                               |
+| `:Annox overlay [on\|off]`                | Hide or show annotations and others' cursors in every buffer, toggling with no argument. Commands still act on hidden annotations, and a buffer in suggestion mode keeps showing its own.                                                                                                |
 | `:Annox reply`                            | Reply to the thread under the cursor.                                                                                                                                                                                                                                                    |
 | `:Annox thread`                           | Show the thread under the cursor in a floating window.                                                                                                                                                                                                                                   |
 | `:Annox accept` / `reject`                | Accept or reject the suggestion under the cursor. Accepting edits the buffer, and you can undo as usual.                                                                                                                                                                                 |
@@ -90,6 +91,7 @@ return {
       { "<leader>as", ":Annox suggest<cr>", mode = "x", desc = "Suggest replacement" },
       { "<leader>as", ":Annox suggest<cr>", desc = "Add suggestion" },
       { "<leader>aS", "<cmd>Annox suggesting<cr>", desc = "Toggle suggestion mode" },
+      { "<leader>aT", "<cmd>Annox overlay<cr>", desc = "Toggle overlay" },
       { "<leader>ae", "<cmd>Annox edit<cr>", desc = "Edit annotation" },
       { "<leader>at", "<cmd>Annox thread<cr>", desc = "Show thread" },
       { "<leader>ar", "<cmd>Annox reply<cr>", desc = "Reply" },
@@ -118,6 +120,7 @@ return {
         { "<leader>ah", icon = { icon = "\u{f0652}", color = "yellow" }, mode = "x" },
         { "<leader>as", icon = "\u{f040}" },
         { "<leader>aS", icon = { icon = "\u{f205}", color = "green" } },
+        { "<leader>aT", icon = "\u{f06e}" },
         { "<leader>ae", icon = "\u{f044}" },
         { "<leader>at", icon = "\u{f0e6}" },
         { "<leader>ar", icon = "\u{f112}" },
@@ -163,6 +166,8 @@ With a plain `'statusline'`:
 ```vim
 set statusline+=%{get(b:,'annox_suggesting',0)?'SUGGESTING\ ':''}
 ```
+
+`require("annox").overlay_shown` and `g:annox_overlay` tell whether the overlay is on, and `:Annox overlay` fires `User AnnoxOverlay` with `data = { enabled }`.
 
 `require("annox").orphan_count()` tells how many annotations could not be located. They are also announced in a line above the text.
 

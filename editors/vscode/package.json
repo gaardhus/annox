@@ -67,6 +67,12 @@
         "icon": "$(edit)"
       },
       {
+        "command": "annox.toggleOverlay",
+        "title": "Toggle Overlay",
+        "category": "annox",
+        "icon": "$(eye)"
+      },
+      {
         "command": "annox.reply",
         "title": "Reply",
         "category": "annox"
@@ -305,6 +311,10 @@
         },
         {
           "command": "annox.toggleSuggesting",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.toggleOverlay",
           "when": "annox.inWorkspace"
         },
         {
