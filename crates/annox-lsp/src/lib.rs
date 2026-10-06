@@ -265,6 +265,11 @@ pub(crate) struct Cache {
     /// Per document: loaded events and derived states, which depend only on
     /// storage, so text edits don't re-derive them.
     derived: HashMap<Url, Derived>,
+    /// Per open orphaned annotation: its suggested location (§3.7.4) and the
+    /// text version and target it was computed for. Alignment is the costly
+    /// part of an analysis, so this outlives storage changes, which rebuild
+    /// every analysis but rarely move an orphan's text or target.
+    suggested: HashMap<String, (String, Anchor, Option<Suggested>)>,
 }
 
 /// Loaded events and derived annotation states of one document.
@@ -588,6 +593,19 @@ impl Server<'_> {
         self.open.insert(uri, doc);
     }
 
+    /// [`anchor::suggest`] for annotation `id`, reused while the text
+    /// version and its target are unchanged.
+    fn suggest(&self, id: &str, text: &Text, target: &Anchor) -> Option<Suggested> {
+        if let Some((version, t, s)) = self.cache.borrow().suggested.get(id) {
+            if *version == text.version && t == target {
+                return *s;
+            }
+        }
+        let s = anchor::suggest(text, target);
+        self.cache.borrow_mut().suggested.insert(id.to_owned(), (text.version.clone(), target.clone(), s));
+        s
+    }
+
     /// Loads, replays, and resolves the annotations of `uri` (§5.7.1, §3.7).
     /// Results are cached until storage or the document's text changes.
     fn analyze(&self, uri: &Url) -> Option<Rc<Analysis>> {
@@ -631,7 +649,12 @@ impl Server<'_> {
             let Ok(target) = serde_json::from_value::<Anchor>(state["target"].clone()) else { continue };
             let resolution = anchor::resolve(&text, &target);
             let orphaned = resolution.state == State::Orphaned && state["status"] == "open";
-            let suggested = if orphaned { anchor::suggest(&text, &target) } else { None };
+            let suggested = if orphaned {
+                self.suggest(&id, &text, &target)
+            } else {
+                self.cache.borrow_mut().suggested.remove(&id);
+                None
+            };
             items.push(Item { id, state, target, resolution, suggested });
         }
         let version = text.version.clone();
