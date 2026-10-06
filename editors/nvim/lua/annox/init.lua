@@ -4,55 +4,26 @@
 --- pushes (`annox/didChangeAnnotations`) and sends user actions as `annox/*`
 --- requests. Suggested edits come back as `workspace/applyEdit`, which
 --- Neovim's LSP client applies to the buffer.
-
-local store = require("annox.store")
-local util = require("annox.util")
-local client_for = util.client_for
-local byte_col = util.byte_col
-local first_line = util.first_line
-local request = util.request
-local cursor_position = util.cursor_position
-local visual_range = util.visual_range
-local before = util.before
-local under_cursor = util.under_cursor
-local buffer_annotations = util.buffer_annotations
-local describe = util.describe
-local with_annotation = util.with_annotation
-local with_input = util.with_input
-local target_range = util.target_range
-local find_annotation = util.find_annotation
-local resolved_text = util.resolved_text
-local pick = util.pick
-
-local worddiff = require("annox.worddiff")
-local word_changes = worddiff.word_changes
-local inserted_chunks = worddiff.inserted_chunks
-local mark_words = worddiff.mark_words
-local diff_block = worddiff.diff_block
-
-local highlight = require("annox.highlight")
-local tint = highlight.tint
-local set_highlights = highlight.set_highlights
-local highlight_group = highlight.highlight_group
-
-local render = require("annox.render")
-local send_presence = render.send_presence
-
-local thread = require("annox.thread")
-local open_thread = thread.open_thread
-local style_hover = thread.style_hover
+---
+--- This module sets the plugin up and is its public API, gathered from the
+--- modules next to it. Shared state lives in `annox.store`.
 
 local actions = require("annox.actions")
-local set_status_all = actions.set_status_all
-
-local qflist = require("annox.qflist")
-local refresh_list = qflist.refresh_list
-
-local orphans = require("annox.orphans")
-
 local edit = require("annox.edit")
-
+local highlight = require("annox.highlight")
+local orphans = require("annox.orphans")
+local qflist = require("annox.qflist")
+local render = require("annox.render")
+local store = require("annox.store")
 local suggest_mode = require("annox.suggest_mode")
+local thread = require("annox.thread")
+local util = require("annox.util")
+
+local client_for = util.client_for
+local set_highlights = highlight.set_highlights
+local send_presence = render.send_presence
+local style_hover = thread.style_hover
+local refresh_list = qflist.refresh_list
 local rebase = suggest_mode.rebase
 local sync_tint = suggest_mode.sync_tint
 
@@ -102,8 +73,6 @@ M.undo_suggestion = suggest_mode.undo_suggestion
 M.is_suggesting = suggest_mode.is_suggesting
 M.statusline = suggest_mode.statusline
 M.suggest_mode = suggest_mode.suggest_mode
-
-local ns = store.ns
 
 local function on_annotations(_, result)
   local bufnr = vim.uri_to_bufnr(result.textDocument.uri)

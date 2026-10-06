@@ -396,11 +396,6 @@ function M.commit()
   end)
 end
 
-M.status_action = status_action
-M.is_kind = is_kind
-M.open_in_buffer = open_in_buffer
-M.accept_all = accept_all
 M.set_status_all = set_status_all
-M.bulk_status_action = bulk_status_action
 
 return M

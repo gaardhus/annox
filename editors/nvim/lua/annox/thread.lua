@@ -216,11 +216,7 @@ function M.history(opts)
   end)
 end
 
-M.thread_lines = thread_lines
-M.suggestion_change = suggestion_change
-M.style_diff_blocks = style_diff_blocks
 M.open_thread = open_thread
 M.style_hover = style_hover
-M.event_action = event_action
 
 return M

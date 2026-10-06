@@ -152,7 +152,6 @@ local function diff_block(old, new)
 end
 
 return {
-  tokens = tokens,
   word_changes = word_changes,
   inserted_chunks = inserted_chunks,
   mark_words = mark_words,

@@ -101,7 +101,6 @@ local function highlight_group(a)
 end
 
 return {
-  tint = tint,
   set_highlights = set_highlights,
   highlight_group = highlight_group,
 }

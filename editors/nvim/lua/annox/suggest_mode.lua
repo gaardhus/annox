@@ -368,18 +368,7 @@ function M.suggest_mode(opts)
   render(bufnr)
 end
 
-M.text_of = text_of
-M.line_starts = line_starts
-M.is_continuation = is_continuation
-M.is_word = is_word
-M.changes = changes
-M.offset_position = offset_position
-M.position_offset = position_offset
-M.extendable = extendable
-M.pump = pump
-M.capture = capture
 M.rebase = rebase
 M.sync_tint = sync_tint
-M.mode_changed = mode_changed
 
 return M

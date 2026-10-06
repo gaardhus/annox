@@ -198,7 +198,6 @@ return {
   byte_col = byte_col,
   first_line = first_line,
   request = request,
-  cursor_position = cursor_position,
   visual_range = visual_range,
   before = before,
   under_cursor = under_cursor,

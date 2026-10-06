@@ -80,7 +80,6 @@ function M.list()
   vim.cmd.copen()
 end
 
-M.list_items = list_items
 M.refresh_list = refresh_list
 
 return M

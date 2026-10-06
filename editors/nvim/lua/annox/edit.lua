@@ -274,7 +274,4 @@ function M.resolve_conflict(opts)
   end)
 end
 
-M.open_edit_windows = open_edit_windows
-M.entry_label = entry_label
-
 return M

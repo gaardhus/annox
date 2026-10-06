@@ -232,7 +232,6 @@ local function send_presence()
   )
 end
 
-M.inline = inline
 M.send_presence = send_presence
 
 return M
