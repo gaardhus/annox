@@ -42,6 +42,12 @@ export class Decorations implements vscode.Disposable {
       overviewRulerLane: vscode.OverviewRulerLane.Center,
     }),
     stale: vscode.window.createTextEditorDecorationType(underline("editorWarning.foreground")),
+    // Where an orphaned annotation probably went (§3.7.4).
+    suggested: vscode.window.createTextEditorDecorationType({
+      textDecoration: "underline dashed var(--vscode-editorWarning-foreground)",
+      overviewRulerColor: color("editorWarning.foreground"),
+      overviewRulerLane: vscode.OverviewRulerLane.Right,
+    }),
     conflict: vscode.window.createTextEditorDecorationType(underline("editorError.foreground")),
     point: vscode.window.createTextEditorDecorationType({
       before: { contentText: "◆", color: color("annox.pointForeground"), margin: "0 1px" },
@@ -139,6 +145,7 @@ export class Decorations implements vscode.Disposable {
       suggestion: [],
       draft: [],
       stale: [],
+      suggested: [],
       conflict: [],
       point: [],
       deletion: [],
@@ -150,6 +157,16 @@ export class Decorations implements vscode.Disposable {
     const labelled = new Map<number, string[]>();
     const shown = this.shown || this.inline(uri);
     for (const a of shown ? this.store.annotations(doc.uri) : []) {
+      const s = a.resolution?.suggested;
+      if (s && !a.resolution?.range && a.status === "open" && !a.deleted) {
+        const what = a.kind === "suggestion" ? `→ ${a.edit?.replacement ?? ""}` : (firstLine(a.body) ?? a.label ?? "highlight");
+        const range = doc.validateRange(toRange(s.range));
+        ranges.suggested.push({ range, hoverMessage: `Orphaned ${a.kind} may belong here: ${what} (annox: Show orphans)` });
+        if (labels) {
+          const line = range.start.line;
+          labelled.set(line, [...(labelled.get(line) ?? []), `⚠ orphaned: ${what}`]);
+        }
+      }
       const r = rangeOf(a);
       if (!r || a.status !== "open" || a.deleted) continue;
       const range = doc.validateRange(r);

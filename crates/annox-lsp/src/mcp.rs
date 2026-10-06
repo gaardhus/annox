@@ -37,6 +37,18 @@ struct Tool {
 const ID: (&str, &str, bool, &str) = ("id", "string", true, "Annotation id, from list_annotations.");
 const FILE: (&str, &str, bool, &str) = ("file", "string", true, "Path of the file, relative to the workspace.");
 const QUOTE: (&str, &str, bool, &str) = ("quote", "string", true, "Text to target, exactly as it appears in the file.");
+const NEW_QUOTE: (&str, &str, bool, &str) = (
+    "quote",
+    "string",
+    false,
+    "Text to target, exactly as it appears in the file. Required unless `suggested` is set.",
+);
+const SUGGESTED: (&str, &str, bool, &str) = (
+    "suggested",
+    "boolean",
+    false,
+    "Target the `suggested` location list_annotations shows for an orphaned annotation, instead of a quote. Check that it's right first.",
+);
 const OCCURRENCE: (&str, &str, bool, &str) = (
     "occurrence",
     "integer",
@@ -63,7 +75,7 @@ const TOOLS: &[Tool] = &[
             ("not_author", "string", false, "Skip annotations by this author id."),
             ("mine", "boolean", false, "Only your own annotations."),
             ("others", "boolean", false, "Skip your own annotations."),
-            ("broken", "boolean", false, "Only open annotations that are orphaned or can't be applied, to fix with retarget or reattach."),
+            ("broken", "boolean", false, "Only open annotations that are orphaned or can't be applied, to fix with retarget or reattach. An orphaned one may have a `suggested` location: where its text probably went, with the share of its words found there."),
         ],
         read_only: true,
     },
@@ -175,7 +187,7 @@ const TOOLS: &[Tool] = &[
         command: "retarget",
         description: "Point an open suggestion at new text, with a reviewed replacement. Use it when a suggestion is orphaned or no longer applicable.",
         positional: &["id"],
-        params: &[ID, QUOTE, ("replacement", "string", true, "Replacement for the new quote."), OCCURRENCE],
+        params: &[ID, NEW_QUOTE, SUGGESTED, ("replacement", "string", true, "Replacement for the new quote."), OCCURRENCE],
         read_only: false,
     },
     Tool {
@@ -183,7 +195,7 @@ const TOOLS: &[Tool] = &[
         command: "reattach",
         description: "Point an open comment at new text, when it is orphaned or attached to the wrong passage.",
         positional: &["id"],
-        params: &[ID, QUOTE, OCCURRENCE],
+        params: &[ID, NEW_QUOTE, SUGGESTED, OCCURRENCE],
         read_only: false,
     },
     Tool {

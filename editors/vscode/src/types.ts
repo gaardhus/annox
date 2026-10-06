@@ -26,6 +26,8 @@ export interface Resolution {
   state: string;
   step?: number;
   range?: Range;
+  /** Where an orphaned annotation probably went (§3.7.4). */
+  suggested?: { range: Range; score: number };
 }
 
 export interface AnnotationView {

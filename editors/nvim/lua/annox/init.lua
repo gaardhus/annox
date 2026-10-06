@@ -96,6 +96,9 @@ local function set_highlights()
   end
   local removed = vim.api.nvim_get_hl(0, { name = "Removed", link = false })
   vim.api.nvim_set_hl(0, "AnnoxDeletion", { default = true, strikethrough = M.config.strikethrough, fg = removed.fg })
+  -- Where an orphaned annotation probably went (§3.7.4).
+  local warn = vim.api.nvim_get_hl(0, { name = "DiagnosticWarn", link = false }).fg
+  vim.api.nvim_set_hl(0, "AnnoxSuggested", { default = true, underdashed = true, sp = warn })
   -- The old text above the suggestion edit window.
   vim.api.nvim_set_hl(0, "AnnoxEditOriginal", { default = true, fg = removed.fg })
   -- A suggestion's lines in the thread's diff block: plain text over the diff
@@ -321,6 +324,21 @@ function M.render(bufnr)
     )
   end
   for _, a in ipairs(state.annotations) do
+    -- An orphan's suggested location is marked, not drawn as annotated text.
+    local s = a.resolution and a.resolution.suggested
+    if s and s.range.start.line < line_count then
+      local label = a.kind == "suggestion" and ("→ " .. (a.edit and a.edit.replacement or ""))
+        or first_line(a.body)
+        or a.label
+        or "highlight"
+      pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, s.range.start.line, byte_col(bufnr, s.range.start, enc), {
+        end_row = math.min(s.range["end"].line, line_count - 1),
+        end_col = byte_col(bufnr, s.range["end"], enc),
+        hl_group = "AnnoxSuggested",
+        virt_text = { { "  ⚠ orphaned " .. a.kind .. " may belong here: " .. label, "AnnoxOrphans" } },
+        virt_text_pos = "eol",
+      })
+    end
     local r = a.resolution and a.resolution.range
     if r and r.start.line < line_count then
       local group = highlight_group(a)
@@ -1134,7 +1152,9 @@ function M.thread(opts)
   end)
 end
 
---- Lists orphaned annotations (§3.7.3) and shows the chosen thread.
+--- Lists orphaned annotations (§3.7.3). For a comment with a suggested
+--- location (§3.7.4), jumps there and offers to re-attach it; otherwise
+--- shows the chosen thread.
 function M.orphans()
   local bufnr = vim.api.nvim_get_current_buf()
   local orphans = vim.tbl_filter(function(a)
@@ -1143,10 +1163,29 @@ function M.orphans()
   if #orphans == 0 then
     return vim.notify("annox: no orphaned annotations", vim.log.levels.INFO)
   end
-  vim.ui.select(orphans, { prompt = "Orphaned annotations", format_item = describe }, function(a)
-    if a then
-      open_thread(a, bufnr)
+  local function format(a)
+    local s = a.resolution.suggested
+    return describe(a) .. (s and string.format(" (line %d?)", s.range.start.line + 1) or "")
+  end
+  vim.ui.select(orphans, { prompt = "Orphaned annotations", format_item = format }, function(a)
+    if not a then
+      return
     end
+    local s = a.resolution.suggested
+    local client = client_for(bufnr)
+    if not s or a.kind ~= "comment" or not client then
+      return open_thread(a, bufnr)
+    end
+    local line = s.range.start.line
+    vim.api.nvim_win_set_cursor(0, { line + 1, byte_col(bufnr, s.range.start, client.offset_encoding) })
+    local reattach = string.format("Re-attach to line %d (%d%% of its words)", line + 1, math.floor(s.score * 100))
+    vim.ui.select({ reattach, "Show thread" }, { prompt = describe(a) }, function(choice)
+      if choice == reattach then
+        request(bufnr, "annox/reattach", { annotation = a.id, range = s.range })
+      elseif choice then
+        open_thread(a, bufnr)
+      end
+    end)
   end)
 end
 
@@ -1157,11 +1196,13 @@ function M.list()
   local items = {}
   for _, a in ipairs((M.state[bufnr] or {}).annotations or {}) do
     local r = a.resolution and a.resolution.range
+    local s = a.resolution and a.resolution.suggested
+    local at = r or (s and s.range)
     table.insert(items, {
       bufnr = bufnr,
-      lnum = r and r.start.line + 1 or 1,
-      col = r and client and byte_col(bufnr, r.start, client.offset_encoding) + 1 or 1,
-      text = describe(a) .. (r and "" or " [orphaned]"),
+      lnum = at and at.start.line + 1 or 1,
+      col = at and client and byte_col(bufnr, at.start, client.offset_encoding) + 1 or 1,
+      text = describe(a) .. (r and "" or s and " [orphaned, may belong here]" or " [orphaned]"),
     })
   end
   vim.fn.setqflist({}, " ", { title = "annox", items = items })

@@ -162,7 +162,7 @@ pub enum Command {
         /// The annotation's id, as printed by `annox list`
         id: String,
         #[command(flatten)]
-        at: Quote,
+        at: MoveTo,
         /// The replacement, reviewed against the new text
         #[arg(long, value_name = "TEXT", allow_hyphen_values = true)]
         replace: String,
@@ -174,7 +174,7 @@ pub enum Command {
         /// The annotation's id, as printed by `annox list`
         id: String,
         #[command(flatten)]
-        at: Quote,
+        at: MoveTo,
         #[command(flatten)]
         author: Author,
     },
@@ -212,6 +212,20 @@ pub struct Quote {
     /// Which occurrence of the quote to target (1-based), when it appears more than once
     #[arg(long, value_name = "N")]
     occurrence: Option<usize>,
+}
+
+/// Where `retarget` and `reattach` move an annotation.
+#[derive(clap::Args, Debug)]
+pub struct MoveTo {
+    /// The text to target, exactly as it appears in the file
+    #[arg(long, value_name = "TEXT", allow_hyphen_values = true, required_unless_present = "suggested")]
+    quote: Option<String>,
+    /// Which occurrence of the quote to target (1-based), when it appears more than once
+    #[arg(long, value_name = "N", requires = "quote")]
+    occurrence: Option<usize>,
+    /// Target the suggested location `annox list` shows for an orphaned annotation
+    #[arg(long, conflicts_with = "quote")]
+    suggested: bool,
 }
 
 /// Which annotations `list` prints. Filters combine with AND.
@@ -855,6 +869,13 @@ fn item(
         if let Some((start, end)) = resolution.range {
             view["line"] = json!(line_of(text, start));
             view["quote"] = json!(text.slice(start, end));
+        } else if let Some(s) = anchor::suggest(text, target) {
+            let (start, end) = s.range;
+            view["suggested"] = json!({
+                "line": line_of(text, start),
+                "quote": text.slice(start, end),
+                "score": (s.score * 100.0).round() / 100.0,
+            });
         }
         if state["kind"] == "suggestion" {
             view["applicable"] = json!(suggestion::is_applicable(&resolution));
@@ -876,7 +897,7 @@ fn item(
 /// Points an open annotation at new text: `retarget` for a suggestion, with
 /// its replacement reviewed in the same action (§4.2.1), or `reattach` for a
 /// comment, which writes a `reanchor` (§3.8).
-fn move_target(id: &str, at: &Quote, replace: Option<&str>, who: &Author, cwd: &Path) -> anyhow::Result<Value> {
+fn move_target(id: &str, at: &MoveTo, replace: Option<&str>, who: &Author, cwd: &Path) -> anyhow::Result<Value> {
     let (ws, index) = open_workspace(cwd)?;
     let state = derived(&index, id)?;
     let (command, kind, other) =
@@ -894,7 +915,18 @@ fn move_target(id: &str, at: &Quote, replace: Option<&str>, who: &Author, cwd: &
     let path = document_path(&index, id)?;
     let raw = std::fs::read_to_string(ws.root.join(&path)).with_context(|| format!("can't read {path}"))?;
     let text = Text::from_raw(&raw);
-    let (start, end) = find_quote(&text, at)?;
+    let (start, end) = match &at.quote {
+        Some(quote) => find_quote(&text, &Quote { quote: quote.clone(), occurrence: at.occurrence })?,
+        None => {
+            let target: Anchor = serde_json::from_value(state["target"].clone())?;
+            if anchor::resolve(&text, &target).state != State::Orphaned {
+                bail!("{id} isn't orphaned, so it has no suggested location; pass --quote");
+            }
+            anchor::suggest(&text, &target)
+                .ok_or_else(|| anyhow!("{id} has no suggested location; pass --quote"))?
+                .range
+        }
+    };
     let mut fields = Map::from_iter([("target".into(), json!(anchor::create(&text, start, end, &path)))]);
     let event = if let Some(replace) = replace {
         let replacement = annox_core::text::normalize(replace);

@@ -28,7 +28,7 @@ Annotations are comment threads, under their own **annox** comment provider, so 
 - **To highlight,** select text and run **annox: Highlight**. A highlight is a comment with no body.
 - **To reply,** type in a thread's reply box.
 - **To edit a comment,** use the pencil on it.
-- **The buttons in a thread's header** act on the thread. A suggestion has *Accept*, *Reject*, and *Edit*, or *Re-target* once it's stale. A comment has *Resolve*, a closed thread *Reopen*, an accepted suggestion *Revert*, and a draft *Publish*. An orphaned comment has *Re-attach*, a conflicted annotation *Resolve Conflicts*, and every thread *History*.
+- **The buttons in a thread's header** act on the thread. A suggestion has *Accept*, *Reject*, and *Edit*, or *Re-target* once it's stale. A comment has *Resolve*, a closed thread *Reopen*, an accepted suggestion *Revert*, and a draft *Publish*. An orphaned comment has *Re-attach*, and when its text was reworded rather than removed, the reworded passage gets a dashed underline and *annox: Show orphans* offers to re-attach it there; a conflicted annotation *Resolve Conflicts*, and every thread *History*.
 
 Resolved threads and closed suggestions stay in the panel, marked resolved. Once their text is gone, as with an accepted suggestion whose text was replaced, they leave the editor and the Comments panel, and are listed only in the annox view.
 

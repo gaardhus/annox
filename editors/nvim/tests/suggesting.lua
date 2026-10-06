@@ -383,5 +383,29 @@ wait("orphan notice", function()
 end)
 check(annox.orphan_count(buf) == 1, "orphan count")
 
+-- Reworded text gets a suggested location, marked in the buffer (§3.7.4).
+vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "Intro.", "", "The fast brown fox jumps.", "", "Outro." })
+annox.comment({ range = { start = { line = 2, character = 0 }, ["end"] = { line = 2, character = 25 } }, body = "Why?" })
+wait("second comment", function()
+  return #annox.state[buf].annotations == 2
+end)
+vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "Opening.", "", "A fast brown fox leaps and jumps.", "", "End." })
+local function suggested()
+  for _, a in ipairs(annox.state[buf].annotations) do
+    if a.body == "Why?" and a.resolution.suggested then
+      return a.resolution.suggested
+    end
+  end
+end
+wait("suggested location", suggested)
+check(suggested().range.start.line == 2, "suggested on line 3: " .. vim.inspect(suggested()))
+wait("suggested mark", function()
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, vim.api.nvim_get_namespaces().annox, 0, -1, { details = true })) do
+    if m[4].hl_group == "AnnoxSuggested" and m[2] == 2 then
+      return true
+    end
+  end
+end)
+
 print("annox nvim suggesting: OK")
 vim.cmd.qall({ bang = true })

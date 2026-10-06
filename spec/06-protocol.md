@@ -66,8 +66,9 @@ Unless disabled, the server publishes a diagnostic for every open root annotatio
 | Suggestion, stale but located (step 4 or 6) | resolved range | Information | the above, prefixed with "Stale" |
 | Conflicted annotation | resolved range | Warning | the above, prefixed with "Conflict" |
 | Orphaned annotation(s), including orphaned suggestions | start of the document | Warning | "N annotations could not be located" |
+| Orphaned annotation with a suggested location (§3.7.4) | suggested range | Hint | "Orphaned \<kind\> may belong here: " followed by the above |
 
-`source` is `"annox"`, `code` is the annotation kind, and `data` holds `{ "annotation": <id> }`. Resolved threads and closed suggestions are not published.
+`source` is `"annox"`, `code` is the annotation kind, and `data` holds `{ "annotation": <id> }`, plus `"suggested": true` for a suggested location. Resolved threads and closed suggestions are not published.
 
 ### 6.5.2 Hover
 
@@ -83,6 +84,7 @@ For a range that intersects annotations, `textDocument/codeAction` offers the ap
 | `annox.reject` | `{ annotation }` | open suggestion |
 | `annox.resolve` | `{ annotation }` | open comment thread |
 | `annox.reopen` | `{ annotation }` | resolved thread, or rejected or withdrawn suggestion |
+| `annox.reattachSuggested` | `{ annotation }` | open orphaned comment, at its suggested location: re-attaches it there (§3.8) |
 
 The server lists these commands in `executeCommandProvider`. `annox.accept` follows §6.6.2.
 
@@ -120,6 +122,7 @@ LSP has no standard way to ask the user for free text, so writing comments, repl
 
 - `target` is omitted. Clients work with `resolution.range`.
 - `resolution.range` is absent when the annotation is orphaned.
+- `resolution.suggested` is optional and present only for an open orphaned annotation for which the server has a suggested location (§3.7.4): `{ "range": <Range>, "score": <number> }`. `score`, between 0 and 1, says how much of the quote was found there; how it's computed is up to the server. Clients MUST NOT treat it as resolved. They MAY offer it, and on confirmation re-attach (`annox/reattach`) or re-target (`annox/retarget`) the annotation there.
 - `applicable` is present only for open suggestions (§4.2).
 - `local` is true for local-only annotations (§5.11).
 - `replies` holds the thread's reply AnnotationViews, in the order of §2.5.5. Replies have no `resolution`.

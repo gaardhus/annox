@@ -66,6 +66,10 @@ fn item_view(a: &Analysis, item: &Item, lines: &LineIndex, include_deleted: bool
     if let Some((s, e)) = item.resolution.range {
         resolution["range"] = json!(lines.range(s, e));
     }
+    if let Some(s) = item.suggested {
+        let score = (s.score * 100.0).round() / 100.0;
+        resolution["suggested"] = json!({ "range": lines.range(s.range.0, s.range.1), "score": score });
+    }
     view.insert("resolution".into(), resolution);
     if item.kind() == "suggestion" && item.status() == "open" {
         view.insert("applicable".into(), json!(item.applicable()));

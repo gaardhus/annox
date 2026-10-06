@@ -21,6 +21,7 @@ import {
   isOrphaned,
   key,
   rangeOf,
+  toRange,
 } from "./store.ts";
 import type { Suggesting } from "./suggesting.ts";
 import type {
@@ -673,8 +674,9 @@ export class Actions {
     if (choice) await this.revealAnnotation(editor.document.uri, choice.a);
   }
 
-  /** Lists annotations whose text could not be found (§3.7.3) and opens the
-   * chosen thread. */
+  /** Lists annotations whose text could not be found (§3.7.3). For a comment
+   * with a suggested location (§3.7.4), selects it and offers to re-attach
+   * the comment there; otherwise opens the chosen thread. */
   private async orphans(): Promise<void> {
     const editor = await this.editor();
     if (!editor) return;
@@ -687,12 +689,36 @@ export class Actions {
       orphans.map((a) => ({
         label: describe(a),
         description: authorName(a),
-        detail: a.kind === "comment" ? "Select text and run “annox: Re-attach” to place it again" : undefined,
+        detail: a.resolution?.suggested
+          ? `Probably at line ${a.resolution.suggested.range.start.line + 1}`
+          : a.kind === "comment"
+            ? "Select text and run “annox: Re-attach” to place it again"
+            : undefined,
         a,
       })),
       { placeHolder: "Annotations that could not be located" },
     );
-    if (choice) this.threads.reveal(choice.a.id);
+    if (!choice) return;
+    const s = choice.a.resolution?.suggested;
+    if (!s || choice.a.kind !== "comment") {
+      this.threads.reveal(choice.a.id);
+      return;
+    }
+    const range = toRange(s.range);
+    editor.selection = new vscode.Selection(range.start, range.end);
+    editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+    const reattach = "Re-attach";
+    const answer = await vscode.window.showInformationMessage(
+      `Re-attach “${describe(choice.a)}” to the selected text (${Math.round(s.score * 100)}% of its words)?`,
+      reattach,
+      "Show thread",
+    );
+    if (answer === reattach) {
+      await this.annox.request("annox/reattach", { annotation: choice.a.id, range: s.range });
+      this.threads.reveal(choice.a.id);
+    } else if (answer) {
+      this.threads.reveal(choice.a.id);
+    }
   }
 
   /** Shows every event of an annotation (§2.5.5). */

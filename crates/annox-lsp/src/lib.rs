@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use annox_core::anchor::{self, Anchor, Resolution, State};
+use annox_core::anchor::{self, Anchor, Resolution, State, Suggested};
 use annox_core::ops;
 use annox_core::storage::{Area, Index, Loaded, Workspace};
 use annox_core::suggestion;
@@ -43,7 +43,8 @@ use crate::position::{Encoding, LineIndex};
 /// Spec version implemented (§6.2).
 pub const SPEC_VERSION: &str = "0.1";
 
-const COMMANDS: [&str; 4] = ["annox.accept", "annox.reject", "annox.resolve", "annox.reopen"];
+const COMMANDS: [&str; 5] =
+    ["annox.accept", "annox.reject", "annox.resolve", "annox.reopen", "annox.reattachSuggested"];
 
 // Error codes (§6.6.4).
 const UNKNOWN_ANNOTATION: i32 = 1001;
@@ -278,6 +279,8 @@ pub(crate) struct Item {
     state: Value,
     target: Anchor,
     resolution: Resolution,
+    /// Where an open orphaned annotation probably went (§3.7.4).
+    suggested: Option<Suggested>,
 }
 
 impl Item {
@@ -627,7 +630,9 @@ impl Server<'_> {
             }
             let Ok(target) = serde_json::from_value::<Anchor>(state["target"].clone()) else { continue };
             let resolution = anchor::resolve(&text, &target);
-            items.push(Item { id, state, target, resolution });
+            let orphaned = resolution.state == State::Orphaned && state["status"] == "open";
+            let suggested = if orphaned { anchor::suggest(&text, &target) } else { None };
+            items.push(Item { id, state, target, resolution, suggested });
         }
         let version = text.version.clone();
         let analysis = Rc::new(Analysis { ws, rel, index, loaded, text, items, replies });
@@ -871,6 +876,17 @@ impl Server<'_> {
         for item in a.items.iter().filter(|i| i.is_open()) {
             let Some((start, end)) = item.resolution.range else {
                 orphaned += 1;
+                if let Some(s) = item.suggested {
+                    out.push(Diagnostic {
+                        range: lines.range(s.range.0, s.range.1),
+                        severity: Some(DiagnosticSeverity::HINT),
+                        code: Some(NumberOrString::String(item.kind().to_owned())),
+                        source: Some("annox".into()),
+                        message: format!("Orphaned {} may belong here: {}", item.kind(), summary(item)),
+                        data: Some(json!({ "annotation": item.id, "suggested": true })),
+                        ..Default::default()
+                    });
+                }
                 continue;
             };
             let (mut severity, mut message) = if item.kind() == "suggestion" {
@@ -880,9 +896,7 @@ impl Server<'_> {
                 let text = if item.applicable() { text } else { format!("Stale {text}") };
                 (DiagnosticSeverity::INFORMATION, text)
             } else {
-                let body = item.state["body"].as_str().and_then(|b| b.lines().next()).filter(|l| !l.is_empty());
-                let label = item.state["label"].as_str();
-                (DiagnosticSeverity::HINT, body.or(label).unwrap_or("Highlight").to_owned())
+                (DiagnosticSeverity::HINT, summary(item))
             };
             if item.conflicted() {
                 severity = DiagnosticSeverity::WARNING;
@@ -942,7 +956,7 @@ impl Server<'_> {
         let (from, to) = (lines.offset(p.range.start), lines.offset(p.range.end));
         let mut actions = Vec::new();
         for item in &a.items {
-            let Some((s, e)) = item.resolution.range else { continue };
+            let Some((s, e)) = item.resolution.range.or(item.suggested.map(|s| s.range)) else { continue };
             if s > to || e < from || item.deleted() {
                 continue;
             }
@@ -977,6 +991,14 @@ impl Server<'_> {
         }
         let status = match p.command.as_str() {
             "annox.accept" => return self.accept(id, uri, &a, &annotation, false),
+            "annox.reattachSuggested" => {
+                let (start, end) = item.suggested.map(|s| s.range).unwrap_or_default();
+                let target = anchor::create(&a.text, start, end, &a.rel);
+                let fields = Map::from_iter([("target".into(), json!(target))]);
+                let result = self.write_event(&a, &annotation, "reanchor", fields);
+                self.reply(id, result.map(|_| Value::Null));
+                return self.refresh_all();
+            }
             "annox.reject" => "rejected",
             "annox.resolve" => "resolved",
             _ => "open",
@@ -1047,10 +1069,24 @@ fn offered_commands(item: &Item) -> Vec<(&'static str, &'static str)> {
         }
         ("suggestion", "open") => vec![("annox.reject", "Reject suggestion")],
         ("suggestion", "rejected" | "withdrawn") => vec![("annox.reopen", "Reopen suggestion")],
+        ("comment", "open") if item.suggested.is_some() => {
+            vec![("annox.reattachSuggested", "Re-attach orphaned comment here"), ("annox.resolve", "Resolve thread")]
+        }
         ("comment", "open") => vec![("annox.resolve", "Resolve thread")],
         ("comment", "resolved") => vec![("annox.reopen", "Reopen thread")],
         _ => vec![],
     }
+}
+
+/// A comment's first line of body, or its label, for diagnostics.
+fn summary(item: &Item) -> String {
+    if item.kind() == "suggestion" {
+        let q = &item.target.selectors.quote.exact;
+        let r = item.state["edit"]["replacement"].as_str().unwrap_or_default();
+        return format!("\"{q}\" → \"{r}\"");
+    }
+    let body = item.state["body"].as_str().and_then(|b| b.lines().next()).filter(|l| !l.is_empty());
+    body.or(item.state["label"].as_str()).unwrap_or("Highlight").to_owned()
 }
 
 fn author_line(state: &Value) -> String {

@@ -242,6 +242,43 @@ fn retarget_and_reattach_rescue_stale_annotations() {
 }
 
 #[test]
+fn reattach_to_the_suggested_location() {
+    let dir = setup("# Plan\n\nExisting projects are backfilled to NULL, which means the in-process legacy path.\n\nNext: workers.\n");
+    let c = id(&annox(
+        dir.path(),
+        &[
+            "comment",
+            "paper.md",
+            "--quote",
+            "Existing projects are backfilled to NULL, which means the in-process legacy path.",
+            "--body",
+            "Why?",
+        ],
+    ));
+    assert!(error(dir.path(), &["reattach", &c, "--suggested"]).contains("isn't orphaned"));
+    std::fs::write(dir.path().join("paper.md"), "# Plan\n\nAll existing projects are backfilled to the first line, which means there is no legacy path.\n\nWorkers come next.\n").unwrap();
+    let list = annox(dir.path(), &["list", "--broken"]);
+    let suggested = &list[0]["suggested"];
+    assert_eq!(suggested["line"], 3);
+    assert_eq!(
+        suggested["quote"],
+        "existing projects are backfilled to the first line, which means there is no legacy path."
+    );
+    assert!(error(dir.path(), &["reattach", &c, "--suggested", "--quote", "x"]).contains("cannot be used with"));
+
+    annox(dir.path(), &["reattach", &c, "--suggested"]);
+    let list = annox(dir.path(), &["list"]);
+    assert_eq!(list[0]["resolution"], "exact");
+    assert_eq!(list[0]["quote"], suggested["quote"]);
+    assert!(list[0].get("suggested").is_none());
+
+    // Nothing left to suggest once the text is gone.
+    std::fs::write(dir.path().join("paper.md"), "# Plan\n\nTBD.\n").unwrap();
+    assert!(annox(dir.path(), &["list"])[0].get("suggested").is_none());
+    assert!(error(dir.path(), &["reattach", &c, "--suggested"]).contains("no suggested location"));
+}
+
+#[test]
 fn restore_undoes_delete() {
     let dir = setup(DOC);
     let c = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "Section 3", "--body", "Which?"]));

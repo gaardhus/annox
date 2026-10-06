@@ -202,3 +202,73 @@ fn diagnostics_hover_and_accept() {
     client.notify("exit", Value::Null);
     server.join().unwrap();
 }
+
+#[test]
+fn reattach_an_orphan_to_its_suggested_location() {
+    let before = "# Plan\n\nExisting projects are backfilled to NULL, which means the legacy path.\n\nNext: workers.\n";
+    let after = "# Plan\n\nAll existing projects are backfilled to 0.5, which means no legacy path.\n\nWorkers next.\n";
+    let dir = tempfile::tempdir().unwrap();
+    let ws = Workspace::init(dir.path()).unwrap();
+    let file = dir.path().join("plan.md");
+    std::fs::write(&file, before).unwrap();
+    let quote = "Existing projects are backfilled to NULL, which means the legacy path.";
+    let start = before.find(quote).unwrap();
+    let new = NewAnnotation {
+        kind: "comment",
+        start,
+        end: start + quote.len(),
+        body: Some("Why NULL?"),
+        label: None,
+        replacement: None,
+        local: false,
+        reverts: None,
+    };
+    let author = json!({ "id": "mailto:ada@example.org", "name": "Ada" });
+    let comment =
+        ops::create_annotation(&ws, &Index::read(&ws), "plan.md", &Text::from_raw(before), &new, &author).unwrap();
+    std::fs::write(&file, after).unwrap();
+
+    let (server_conn, client_conn) = Connection::memory();
+    let server = std::thread::spawn(move || annox_lsp::run(&server_conn).unwrap());
+    let mut client = Client { conn: client_conn, next: 0 };
+    let uri = lsp_types::Url::from_file_path(&file).unwrap().to_string();
+    let init = client.request("initialize", json!({ "capabilities": {} }));
+    client.response(&init).unwrap();
+    client.notify("initialized", json!({}));
+    client.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "markdown", "version": 1, "text": after } }),
+    );
+
+    // The orphan warning, plus a hint where the comment probably belongs.
+    let diags = client.diagnostics();
+    let hint = diags.iter().find(|d| d["data"]["suggested"] == true).unwrap_or_else(|| panic!("{diags:#?}"));
+    assert_eq!(hint["message"], "Orphaned comment may belong here: Why NULL?");
+    let line = after.lines().nth(2).unwrap();
+    let from = line.find("existing").unwrap();
+    assert_eq!(
+        hint["range"],
+        json!({ "start": { "line": 2, "character": from }, "end": { "line": 2, "character": line.len() } })
+    );
+
+    let actions = client.request(
+        "textDocument/codeAction",
+        json!({ "textDocument": { "uri": uri }, "range": hint["range"], "context": { "diagnostics": [] } }),
+    );
+    let actions = client.response(&actions).unwrap();
+    let titles: Vec<&str> = actions.as_array().unwrap().iter().map(|a| a["title"].as_str().unwrap()).collect();
+    assert_eq!(titles, ["Re-attach orphaned comment here", "Resolve thread"]);
+
+    let reattach = client.request(
+        "workspace/executeCommand",
+        json!({ "command": "annox.reattachSuggested", "arguments": [{ "annotation": comment.id }] }),
+    );
+    assert_eq!(client.response(&reattach).unwrap(), Value::Null);
+    let state = &Index::read(&ws).load("plan.md").derive()[&comment.id];
+    assert_eq!(state["target"]["selectors"]["quote"]["exact"], &line[from..]);
+
+    let shutdown = client.request("shutdown", Value::Null);
+    client.response(&shutdown).unwrap();
+    client.notify("exit", Value::Null);
+    server.join().unwrap();
+}

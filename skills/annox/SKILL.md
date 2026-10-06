@@ -45,7 +45,7 @@ annox list --author ID / --not-author ID
 
 Each entry has `id`, `path`, `kind` (`comment` or `suggestion`), `status`, `author`, `body` (null for a highlight), `quote` (the text it's attached to, as it reads now), `line`, `resolution`, and `replies`. Suggestions also have `replacement` and `applicable`, and `reverts` if they undo an accepted suggestion.
 
-- `resolution: "orphaned"` means the quoted text is gone from the file. Fix it with `reattach` or `retarget` (below), or tell the user.
+- `resolution: "orphaned"` means the quoted text is gone from the file. Fix it with `reattach` or `retarget` (below), or tell the user. If it has `suggested` (where the text probably went, as `line`, `quote`, and `score`: the share of its words found there), check that the suggested quote is the same passage reworded, then use `--suggested`. When it's unclear, ask the user rather than guessing.
 - `applicable: false` means the suggestion can't be applied as is. Use `retarget` to fix it.
 
 ## Writing
@@ -62,6 +62,7 @@ annox status ID withdrawn           # suggestions: open | rejected | withdrawn
 annox edit ID --body "…"            # change your own comment
 annox retarget ID --quote "new text" --replace "…"   # move a suggestion to new text
 annox reattach ID --quote "new text"                 # move a comment to new text
+annox reattach ID --suggested                        # ...to its suggested location
 annox delete ID / annox restore ID
 ```
 
