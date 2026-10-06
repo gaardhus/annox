@@ -491,6 +491,8 @@ local function send_presence()
   )
 end
 
+local refresh_list
+
 local function on_annotations(_, result)
   local bufnr = vim.uri_to_bufnr(result.textDocument.uri)
   if not vim.api.nvim_buf_is_loaded(bufnr) then
@@ -514,6 +516,7 @@ local function on_annotations(_, result)
     s.views = fresh
   end
   M.render(bufnr)
+  refresh_list(bufnr)
 end
 
 --- Sends an `annox/*` request for the current buffer.
@@ -1270,9 +1273,11 @@ function M.orphans(opts)
   end)
 end
 
---- Puts the buffer's annotations in the quickfix list.
-function M.list()
-  local bufnr = vim.api.nvim_get_current_buf()
+--- Quickfix list ids made by `M.list`, by buffer, so they can follow edits.
+local lists = {}
+
+--- The buffer's annotations as quickfix items, in document order.
+local function list_items(bufnr)
   local client = client_for(bufnr)
   local items = {}
   for _, a in ipairs((M.state[bufnr] or {}).annotations or {}) do
@@ -1284,9 +1289,58 @@ function M.list()
       lnum = at and at.start.line + 1 or 1,
       col = at and client and byte_col(bufnr, at.start, client.offset_encoding) + 1 or 1,
       text = describe(a) .. (r and "" or s and " [orphaned, may belong here]" or " [orphaned]"),
+      placed = at ~= nil,
+      user_data = a.id,
     })
   end
-  vim.fn.setqflist({}, " ", { title = "annox", items = items })
+  -- Document order, with orphans that have nowhere to point last.
+  table.sort(items, function(x, y)
+    if x.placed ~= y.placed then
+      return x.placed
+    end
+    if x.lnum ~= y.lnum then
+      return x.lnum < y.lnum
+    end
+    return x.col < y.col
+  end)
+  return items
+end
+
+--- Rebuilds the buffer's `M.list` quickfix list, if it is still around, and
+--- keeps the current entry on the same annotation or the one that followed it.
+function refresh_list(bufnr)
+  local id = lists[bufnr]
+  if not id then
+    return
+  end
+  local old = vim.fn.getqflist({ id = id, items = 0, idx = 0 })
+  if old.id == 0 then
+    lists[bufnr] = nil
+    return
+  end
+  local items = list_items(bufnr)
+  local index = {}
+  for i, item in ipairs(items) do
+    index[item.user_data] = i
+  end
+  -- The first annotation at or after the current entry that survived, or the
+  -- last one.
+  local idx = #items
+  for i = math.max(old.idx, 1), #old.items do
+    if index[old.items[i].user_data] then
+      idx = index[old.items[i].user_data]
+      break
+    end
+  end
+  vim.fn.setqflist({}, "r", { id = id, items = items, idx = math.max(idx, 1) })
+end
+
+--- Puts the buffer's annotations in the quickfix list, which then follows
+--- them as they are accepted, resolved, or moved.
+function M.list()
+  local bufnr = vim.api.nvim_get_current_buf()
+  vim.fn.setqflist({}, " ", { title = "annox", items = list_items(bufnr) })
+  lists[bufnr] = vim.fn.getqflist({ id = 0 }).id
   vim.cmd.copen()
 end
 
