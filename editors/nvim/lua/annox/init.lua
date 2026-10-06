@@ -45,6 +45,11 @@ local style_hover = thread.style_hover
 local actions = require("annox.actions")
 local set_status_all = actions.set_status_all
 
+local qflist = require("annox.qflist")
+local refresh_list = qflist.refresh_list
+
+local orphans = require("annox.orphans")
+
 local M = {}
 
 -- Reading or setting these fields of this module goes through to the store.
@@ -81,10 +86,10 @@ M.commit = actions.commit
 M.reopen = actions.reopen
 M.reject = actions.reject
 M.resolve = actions.resolve
+M.list = qflist.list
+M.orphans = orphans.orphans
 
 local ns = store.ns
-
-local refresh_list
 
 local function on_annotations(_, result)
   local bufnr = vim.uri_to_bufnr(result.textDocument.uri)
@@ -110,174 +115,6 @@ local function on_annotations(_, result)
   end
   M.render(bufnr)
   refresh_list(bufnr)
-end
-
---- Lists orphaned annotations (§3.7.3), to fix one at a time or to resolve
---- every orphaned comment at once. Picking one offers what applies to it:
---- moving it to its suggested location (§3.7.4) or to the selection,
---- closing it, or showing its thread. opts: { visual? }
-function M.orphans(opts)
-  opts = opts or {}
-  local bufnr = vim.api.nvim_get_current_buf()
-  local client = client_for(bufnr)
-  if not client then
-    return request(bufnr)
-  end
-  local orphans = vim.tbl_filter(function(a)
-    return a.status == "open" and a.resolution and a.resolution.state == "orphaned"
-  end, (store.state[bufnr] or {}).annotations or {})
-  if #orphans == 0 then
-    return vim.notify("annox: no orphaned annotations", vim.log.levels.INFO)
-  end
-  local comments = vim.tbl_filter(function(a)
-    return a.kind == "comment"
-  end, orphans)
-  local items = vim.list_extend({}, orphans)
-  local resolve_all = {}
-  if #comments > 1 then
-    table.insert(items, resolve_all)
-  end
-  local function format(a)
-    if a == resolve_all then
-      return string.format("Resolve all %d orphaned comments", #comments)
-    end
-    local s = a.resolution.suggested
-    return describe(a) .. (s and string.format(" (line %d?)", s.range.start.line + 1) or "")
-  end
-  local selection = opts.visual and visual_range(bufnr, client.offset_encoding)
-  vim.ui.select(items, { prompt = "Orphaned annotations", format_item = format }, function(a)
-    if a == resolve_all then
-      return set_status_all(bufnr, comments, "resolved", "Resolve", "orphaned comment")
-    elseif not a then
-      return
-    end
-    local comment = a.kind == "comment"
-    local function move(range)
-      if comment then
-        return request(bufnr, "annox/reattach", { annotation = a.id, range = range })
-      end
-      with_input(nil, "Replace with: ", a.edit and a.edit.replacement, function(replacement)
-        request(bufnr, "annox/retarget", { annotation = a.id, range = range, replacement = replacement })
-      end)
-    end
-    local verb = comment and "Re-attach" or "Re-target"
-    local actions = {
-      {
-        "Show thread",
-        function()
-          open_thread(a, bufnr)
-        end,
-      },
-    }
-    local s = a.resolution.suggested
-    if s then
-      vim.api.nvim_win_set_cursor(0, { s.range.start.line + 1, byte_col(bufnr, s.range.start, client.offset_encoding) })
-      local label =
-        string.format("%s to line %d (%d%% of its words)", verb, s.range.start.line + 1, math.floor(s.score * 100))
-      table.insert(actions, {
-        label,
-        function()
-          move(s.range)
-        end,
-      })
-    end
-    if selection then
-      table.insert(actions, {
-        verb .. " to the selection",
-        function()
-          move(selection)
-        end,
-      })
-    end
-    local status = comment and "resolved" or "rejected"
-    table.insert(actions, {
-      comment and "Resolve thread" or "Reject suggestion",
-      function()
-        request(bufnr, "annox/setStatus", { annotation = a.id, status = status })
-      end,
-    })
-    vim.ui.select(actions, {
-      prompt = describe(a),
-      format_item = function(x)
-        return x[1]
-      end,
-    }, function(x)
-      if x then
-        x[2]()
-      end
-    end)
-  end)
-end
-
---- Quickfix list ids made by `M.list`, by buffer, so they can follow edits.
-local lists = {}
-
---- The buffer's annotations as quickfix items, in document order.
-local function list_items(bufnr)
-  local client = client_for(bufnr)
-  local items = {}
-  for _, a in ipairs((store.state[bufnr] or {}).annotations or {}) do
-    local r = a.resolution and a.resolution.range
-    local s = a.resolution and a.resolution.suggested
-    local at = r or (s and s.range)
-    table.insert(items, {
-      bufnr = bufnr,
-      lnum = at and at.start.line + 1 or 1,
-      col = at and client and byte_col(bufnr, at.start, client.offset_encoding) + 1 or 1,
-      text = describe(a) .. (r and "" or s and " [orphaned, may belong here]" or " [orphaned]"),
-      placed = at ~= nil,
-      user_data = a.id,
-    })
-  end
-  -- Document order, with orphans that have nowhere to point last.
-  table.sort(items, function(x, y)
-    if x.placed ~= y.placed then
-      return x.placed
-    end
-    if x.lnum ~= y.lnum then
-      return x.lnum < y.lnum
-    end
-    return x.col < y.col
-  end)
-  return items
-end
-
---- Rebuilds the buffer's `M.list` quickfix list, if it is still around, and
---- keeps the current entry on the same annotation or the one that followed it.
-function refresh_list(bufnr)
-  local id = lists[bufnr]
-  if not id then
-    return
-  end
-  local old = vim.fn.getqflist({ id = id, items = 0, idx = 0 })
-  if old.id == 0 then
-    lists[bufnr] = nil
-    return
-  end
-  local items = list_items(bufnr)
-  local index = {}
-  for i, item in ipairs(items) do
-    index[item.user_data] = i
-  end
-  -- The first annotation at or after the current entry that survived, or the
-  -- last one.
-  local idx = #items
-  for i = math.max(old.idx, 1), #old.items do
-    if index[old.items[i].user_data] then
-      idx = index[old.items[i].user_data]
-      break
-    end
-  end
-  vim.fn.setqflist({}, "r", { id = id, items = items, idx = math.max(idx, 1) })
-end
-
---- Puts the buffer's annotations in the quickfix list, which then follows
---- them as they are accepted, resolved, or moved.
-function M.list()
-  local bufnr = vim.api.nvim_get_current_buf()
-  vim.fn.setqflist({}, " ", { title = "annox", items = list_items(bufnr) })
-  lists[bufnr] = vim.fn.getqflist({ id = 0 }).id
-  vim.cmd.copen()
 end
 
 local word_ns = vim.api.nvim_create_namespace("annox_words")
