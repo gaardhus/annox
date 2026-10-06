@@ -237,6 +237,45 @@ export async function run(): Promise<void> {
     await doc.save();
   });
 
+  step("an orphan is re-attached to its suggested location from the orphans picker", async () => {
+    await focus();
+    const c = await exec("annox.comment", { range: range(2, line(2)), body: "Small how?" });
+    await wait("comment", () => get(c.id));
+    const original = [1, 2, 3].map(line);
+    const lines = { start: { line: 1, character: 0 }, end: { line: 3, character: original[2].length } };
+    const reworded = [
+      "In Section 3, we prove that the bound is tight!",
+      "Here the constant is small and the proof is quite short.",
+      "Finally, we conclude with open problems.",
+    ];
+    await edit(lines, reworded.join("\n"));
+    const s = await wait("suggested", () => get(c.id)?.resolution?.suggested);
+    assert.equal(s.range.start.line, 2);
+    // With nothing selected, pick the orphan, then the suggested location.
+    editor.selection = new vscode.Selection(0, 0, 0, 0);
+    const pick = vscode.window.showQuickPick;
+    const offered: string[][] = [];
+    // biome-ignore lint/suspicious/noExplicitAny: stubbing the picker
+    (vscode.window as any).showQuickPick = async (items: (vscode.QuickPickItem & { a?: AnnotationView })[]) => {
+      offered.push(items.map((i) => i.label));
+      return offered.length === 1 ? items.find((i) => i.a?.id === c.id) : items[1];
+    };
+    try {
+      await exec("annox.orphans");
+    } finally {
+      // biome-ignore lint/suspicious/noExplicitAny: restoring the picker
+      (vscode.window as any).showQuickPick = pick;
+    }
+    assert.equal(offered[1].length, 3);
+    assert.equal(offered[1][0], "$(comment-discussion) Show thread");
+    assert.match(offered[1][1], /Re-attach to line 3 \(\d+% of its words\)/);
+    assert.equal(offered[1][2], "$(check) Resolve thread");
+    await wait("attached", () => get(c.id)?.resolution?.state === "exact");
+    await edit({ start: lines.start, end: { line: 3, character: line(3).length } }, original.join("\n"));
+    await exec("annox.resolveThread", { annotation: c.id });
+    await doc.save();
+  });
+
   step("a closed annotation whose text is gone leaves the editor for the annox view", async () => {
     await focus();
     const c = await exec("annox.comment", { range: range(3, "conclude"), body: "Done." });

@@ -931,13 +931,15 @@ impl Server<'_> {
         let a = self.analyze(&doc.text_document.uri)?;
         let lines = LineIndex::new(&a.text, self.encoding);
         let offset = lines.offset(doc.position);
+        // Orphans are shown at their suggested location (§3.7.4).
+        let at = |i: &Item| i.resolution.range.or(i.suggested.map(|s| s.range));
         let hits: Vec<&Item> = a
             .items
             .iter()
             .filter(|i| i.is_open())
-            .filter(|i| i.resolution.range.is_some_and(|(s, e)| s <= offset && offset <= e))
+            .filter(|i| at(i).is_some_and(|(s, e)| s <= offset && offset <= e))
             .collect();
-        let first = hits.first()?.resolution.range?;
+        let first = at(hits.first()?)?;
         let sections: Vec<String> = hits.iter().map(|i| thread_markdown(i, a.replies.get(&i.id))).collect();
         Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
@@ -1115,6 +1117,15 @@ fn diff_block(old: &str, new: &str) -> String {
 /// then the root and its replies.
 fn thread_markdown(item: &Item, replies: Option<&Vec<Value>>) -> String {
     let mut parts = Vec::new();
+    if let (None, Some(s)) = (item.resolution.range, item.suggested) {
+        let mut note =
+            format!("⚠ **Orphaned {}, may belong here** ({:.0}% of its words).", item.kind(), s.score * 100.0);
+        if item.kind() == "comment" {
+            let quote: Vec<String> = item.target.selectors.quote.exact.lines().map(|l| format!("> {l}")).collect();
+            note.push_str(&format!(" It was on:\n\n{}", quote.join("\n")));
+        }
+        parts.push(note);
+    }
     if item.kind() == "suggestion" {
         let r = item.state["edit"]["replacement"].as_str().unwrap_or_default();
         let stale = if item.applicable() { "" } else { " (stale)" };

@@ -251,6 +251,15 @@ fn reattach_an_orphan_to_its_suggested_location() {
         json!({ "start": { "line": 2, "character": from }, "end": { "line": 2, "character": line.len() } })
     );
 
+    let hover = client
+        .request("textDocument/hover", json!({ "textDocument": { "uri": uri }, "position": hint["range"]["start"] }));
+    let hover = client.response(&hover).unwrap();
+    let markdown = hover["contents"]["value"].as_str().unwrap();
+    assert!(markdown.starts_with("⚠ **Orphaned comment, may belong here** ("), "{markdown}");
+    assert!(markdown.contains(&format!("It was on:\n\n> {quote}")), "{markdown}");
+    assert!(markdown.contains("Why NULL?"), "{markdown}");
+    assert_eq!(hover["range"], hint["range"]);
+
     let actions = client.request(
         "textDocument/codeAction",
         json!({ "textDocument": { "uri": uri }, "range": hint["range"], "context": { "diagnostics": [] } }),

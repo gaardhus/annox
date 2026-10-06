@@ -373,10 +373,12 @@ wait("comment", function()
   return #annox.state[buf].annotations == 1
 end)
 vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "Something else entirely." })
-wait("orphan notice", function()
-  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, vim.api.nvim_get_namespaces().annox, 0, -1, { details = true })) do
-    local lines = m[4].virt_lines
-    if lines and lines[1][1][1]:find("1 annotation could not be located", 1, true) then
+local function orphan_diagnostics()
+  return vim.diagnostic.get(buf, { namespace = vim.api.nvim_get_namespaces().annox_orphans })
+end
+wait("orphan warning", function()
+  for _, d in ipairs(orphan_diagnostics()) do
+    if d.lnum == 0 and d.severity == vim.diagnostic.severity.WARN and d.message:find("^1 annotation could not") then
       return true
     end
   end
@@ -399,12 +401,62 @@ local function suggested()
 end
 wait("suggested location", suggested)
 check(suggested().range.start.line == 2, "suggested on line 3: " .. vim.inspect(suggested()))
+wait("suggested hint", function()
+  for _, d in ipairs(orphan_diagnostics()) do
+    if
+      d.lnum == 2
+      and d.severity == vim.diagnostic.severity.HINT
+      and d.message:find("may belong here: Why?", 1, true)
+    then
+      return true
+    end
+  end
+end)
 wait("suggested mark", function()
   for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, vim.api.nvim_get_namespaces().annox, 0, -1, { details = true })) do
     if m[4].hl_group == "AnnoxSuggested" and m[2] == 2 then
       return true
     end
   end
+end)
+
+-- Picking an orphan offers what applies to it.
+local actions
+local select0 = vim.ui.select
+vim.ui.select = function(items, o, done)
+  if o.prompt == "Orphaned annotations" then
+    for _, a in ipairs(items) do
+      if a.body == "Why?" then
+        return done(a)
+      end
+    end
+  end
+  actions = vim.tbl_map(o.format_item, items)
+  done(nil)
+end
+annox.orphans()
+vim.ui.select = select0
+check(actions and actions[1] == "Show thread", vim.inspect(actions))
+check(actions[2]:find("^Re%-attach to line 3 %(%d+%% of its words%)$") ~= nil, vim.inspect(actions))
+check(actions[3] == "Resolve thread" and #actions == 3, vim.inspect(actions))
+
+-- The orphans picker offers the suggested location, then resolves all.
+local prompts = {}
+local select = vim.ui.select
+vim.ui.select = function(items, o, done)
+  local labels = vim.tbl_map(o.format_item or tostring, items)
+  table.insert(prompts, labels)
+  if #prompts == 1 then
+    return done(items[#items]) -- "Resolve all"
+  end
+  done(items[1])
+end
+annox.orphans()
+vim.ui.select = select
+check(prompts[1][#prompts[1]] == "Resolve all 2 orphaned comments", "resolve all offered: " .. vim.inspect(prompts))
+check(prompts[2][1] == "Resolve all 2", "confirmation: " .. vim.inspect(prompts))
+wait("orphans resolved", function()
+  return annox.orphan_count(buf) == 0
 end)
 
 print("annox nvim suggesting: OK")

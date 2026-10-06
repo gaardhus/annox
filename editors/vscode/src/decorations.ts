@@ -161,7 +161,7 @@ export class Decorations implements vscode.Disposable {
       if (s && !a.resolution?.range && a.status === "open" && !a.deleted) {
         const what = a.kind === "suggestion" ? `→ ${a.edit?.replacement ?? ""}` : (firstLine(a.body) ?? a.label ?? "highlight");
         const range = doc.validateRange(toRange(s.range));
-        ranges.suggested.push({ range, hoverMessage: `Orphaned ${a.kind} may belong here: ${what} (annox: Show orphans)` });
+        ranges.suggested.push({ range, hoverMessage: `Orphaned ${a.kind} may belong here: ${what} (annox: Fix Annotations That Could Not Be Located)` });
         if (labels) {
           const line = range.start.line;
           labelled.set(line, [...(labelled.get(line) ?? []), `⚠ orphaned: ${what}`]);

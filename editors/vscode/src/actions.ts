@@ -674,9 +674,10 @@ export class Actions {
     if (choice) await this.revealAnnotation(editor.document.uri, choice.a);
   }
 
-  /** Lists annotations whose text could not be found (§3.7.3). For a comment
-   * with a suggested location (§3.7.4), selects it and offers to re-attach
-   * the comment there; otherwise opens the chosen thread. */
+  /** Lists annotations whose text could not be found (§3.7.3), to fix one
+   * at a time or to resolve every orphaned comment at once. Picking one
+   * offers what applies to it: moving it to its suggested location (§3.7.4)
+   * or to the selection, closing it, or showing its thread. */
   private async orphans(): Promise<void> {
     const editor = await this.editor();
     if (!editor) return;
@@ -685,40 +686,66 @@ export class Actions {
       info("no annotations that could not be located");
       return;
     }
-    const choice = await vscode.window.showQuickPick(
-      orphans.map((a) => ({
-        label: describe(a),
-        description: authorName(a),
-        detail: a.resolution?.suggested
-          ? `Probably at line ${a.resolution.suggested.range.start.line + 1}`
-          : a.kind === "comment"
-            ? "Select text and run “annox: Re-attach” to place it again"
-            : undefined,
-        a,
-      })),
-      { placeHolder: "Annotations that could not be located" },
-    );
+    const comments = orphans.filter((a) => a.kind === "comment");
+    type Item = vscode.QuickPickItem & { a?: AnnotationView };
+    const items: Item[] = orphans.map((a) => ({
+      label: describe(a),
+      description: authorName(a),
+      detail: a.resolution?.suggested ? `Probably at line ${a.resolution.suggested.range.start.line + 1}` : undefined,
+      a,
+    }));
+    if (comments.length > 1) {
+      items.push({ label: "", kind: vscode.QuickPickItemKind.Separator });
+      items.push({ label: `$(check-all) Resolve all ${comments.length} orphaned comments` });
+    }
+    const choice = await vscode.window.showQuickPick(items, { placeHolder: "Annotations that could not be located" });
     if (!choice) return;
-    const s = choice.a.resolution?.suggested;
-    if (!s || choice.a.kind !== "comment") {
-      this.threads.reveal(choice.a.id);
+    const a = choice.a;
+    if (!a) {
+      const verb = `Resolve All ${comments.length}`;
+      if (!(await confirm(`Resolve ${comments.length} orphaned comments?`, verb))) return;
+      const results = await Promise.all(
+        comments.map((c) => this.annox.request("annox/setStatus", { annotation: c.id, status: "resolved" }, true)),
+      );
+      const failed = results.filter((r) => r === undefined).length;
+      (failed ? warn : info)(`resolved ${comments.length - failed}${failed ? `; ${failed} failed` : ""}`);
       return;
     }
-    const range = toRange(s.range);
-    editor.selection = new vscode.Selection(range.start, range.end);
-    editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
-    const reattach = "Re-attach";
-    const answer = await vscode.window.showInformationMessage(
-      `Re-attach “${describe(choice.a)}” to the selected text (${Math.round(s.score * 100)}% of its words)?`,
-      reattach,
-      "Show thread",
-    );
-    if (answer === reattach) {
-      await this.annox.request("annox/reattach", { annotation: choice.a.id, range: s.range });
-      this.threads.reveal(choice.a.id);
-    } else if (answer) {
-      this.threads.reveal(choice.a.id);
+    const comment = a.kind === "comment";
+    const verb = comment ? "Re-attach" : "Re-target";
+    const move = async (range: Range) => {
+      if (comment) {
+        await this.annox.request("annox/reattach", { annotation: a.id, range });
+      } else {
+        const replacement = await vscode.window.showInputBox({
+          prompt: "Replace the new text with",
+          value: a.edit?.replacement ?? "",
+        });
+        if (replacement === undefined) return;
+        await this.annox.request("annox/retarget", { annotation: a.id, range, replacement });
+      }
+      this.threads.reveal(a.id);
+    };
+    const actions: { label: string; run: () => unknown }[] = [
+      { label: "$(comment-discussion) Show thread", run: () => this.threads.reveal(a.id) },
+    ];
+    const selection = editor.selection.isEmpty ? undefined : fromRange(editor.selection);
+    const s = a.resolution?.suggested;
+    if (s) {
+      const range = toRange(s.range);
+      editor.selection = new vscode.Selection(range.start, range.end);
+      editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+      const where = `line ${range.start.line + 1} (${Math.round(s.score * 100)}% of its words)`;
+      actions.push({ label: `$(pin) ${verb} to ${where}`, run: () => move(s.range) });
     }
+    if (selection) actions.push({ label: `$(selection) ${verb} to the selection`, run: () => move(selection) });
+    const status = comment ? "resolved" : "rejected";
+    actions.push({
+      label: comment ? "$(check) Resolve thread" : "$(close) Reject suggestion",
+      run: () => this.annox.request("annox/setStatus", { annotation: a.id, status }),
+    });
+    const action = await vscode.window.showQuickPick(actions, { placeHolder: describe(a) });
+    await action?.run();
   }
 
   /** Shows every event of an annotation (§2.5.5). */

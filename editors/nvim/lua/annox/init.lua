@@ -11,6 +11,8 @@ local ns = vim.api.nvim_create_namespace("annox")
 -- Diff blocks styled in floats, some opened by other code: kept apart from
 -- `ns`, so clearing them never touches the marks of an annotated buffer.
 local diff_ns = vim.api.nvim_create_namespace("annox_diff")
+-- Diagnostics about annotations that could not be located (§3.7.3).
+local orphan_ns = vim.api.nvim_create_namespace("annox_orphans")
 
 M.config = {
   cmd = { "annox", "lsp" },
@@ -89,7 +91,6 @@ local function set_highlights()
     AnnoxPresence = "DiagnosticVirtualTextHint",
     AnnoxPresenceRange = "Visual",
     AnnoxInsertion = "Added",
-    AnnoxOrphans = "DiagnosticVirtualTextWarn",
   }
   for group, link in pairs(links) do
     vim.api.nvim_set_hl(0, group, { default = true, link = link })
@@ -300,6 +301,7 @@ end
 --- Draws the annotations of `bufnr` as extmarks.
 function M.render(bufnr)
   vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+  vim.diagnostic.reset(orphan_ns, bufnr)
   if not M.overlay_shown and not M.suggesting[bufnr] then
     return
   end
@@ -310,35 +312,54 @@ function M.render(bufnr)
   end
   local enc = client.offset_encoding
   local line_count = vim.api.nvim_buf_line_count(bufnr)
-  -- Orphaned annotations have no place in the text, so say so above it (§3.7.3).
+  -- Orphaned annotations have no place in the text, so they are reported as
+  -- diagnostics (§3.7.3): a warning on the first line, and a hint where each
+  -- one probably went (§3.7.4), which also gets a dashed underline.
+  local diagnostics = {}
   local orphans = M.orphan_count(bufnr)
   if orphans > 0 then
-    local text =
-      string.format("⚠ %d annotation%s could not be located (:Annox orphans)", orphans, orphans == 1 and "" or "s")
-    vim.api.nvim_buf_set_extmark(
-      bufnr,
-      ns,
-      0,
-      0,
-      { virt_lines = { { { text, "AnnoxOrphans" } } }, virt_lines_above = true }
-    )
+    table.insert(diagnostics, {
+      lnum = 0,
+      col = 0,
+      severity = vim.diagnostic.severity.WARN,
+      source = "annox",
+      message = string.format(
+        "%d annotation%s could not be located (:Annox orphans)",
+        orphans,
+        orphans == 1 and "" or "s"
+      ),
+    })
   end
   for _, a in ipairs(state.annotations) do
-    -- An orphan's suggested location is marked, not drawn as annotated text.
     local s = a.resolution and a.resolution.suggested
     if s and s.range.start.line < line_count then
       local label = a.kind == "suggestion" and ("→ " .. (a.edit and a.edit.replacement or ""))
         or first_line(a.body)
-        or a.label
+        or first_line(a.label)
         or "highlight"
-      pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, s.range.start.line, byte_col(bufnr, s.range.start, enc), {
-        end_row = math.min(s.range["end"].line, line_count - 1),
-        end_col = byte_col(bufnr, s.range["end"], enc),
-        hl_group = "AnnoxSuggested",
-        virt_text = { { "  ⚠ orphaned " .. a.kind .. " may belong here: " .. label, "AnnoxOrphans" } },
-        virt_text_pos = "eol",
+      local sl, el = s.range.start.line, math.min(s.range["end"].line, line_count - 1)
+      local sc, ec = byte_col(bufnr, s.range.start, enc), byte_col(bufnr, s.range["end"], enc)
+      pcall(
+        vim.api.nvim_buf_set_extmark,
+        bufnr,
+        ns,
+        sl,
+        sc,
+        { end_row = el, end_col = ec, hl_group = "AnnoxSuggested" }
+      )
+      table.insert(diagnostics, {
+        lnum = sl,
+        col = sc,
+        end_lnum = el,
+        end_col = ec,
+        severity = vim.diagnostic.severity.HINT,
+        source = "annox",
+        message = string.format("Orphaned %s may belong here: %s (:Annox orphans)", a.kind, label),
       })
     end
+  end
+  vim.diagnostic.set(orphan_ns, bufnr, diagnostics)
+  for _, a in ipairs(state.annotations) do
     local r = a.resolution and a.resolution.range
     if r and r.start.line < line_count then
       local group = highlight_group(a)
@@ -351,7 +372,7 @@ function M.render(bufnr)
       }
       local label = a.kind == "suggestion" and ("→ " .. (a.edit and a.edit.replacement or ""))
         or first_line(a.body)
-        or a.label
+        or first_line(a.label)
       if inline(bufnr, a) then
         -- Deleted text struck through, followed by the inserted text.
         if sl ~= el or sc ~= ec then
@@ -571,7 +592,7 @@ local function describe(a)
   if a.kind == "suggestion" then
     return string.format("suggestion → %s", a.edit and a.edit.replacement or "")
   end
-  return string.format("comment: %s", first_line(a.body) or a.label or "(highlight)")
+  return string.format("comment: %s", first_line(a.body) or first_line(a.label) or "(highlight)")
 end
 
 --- Calls `fn(id)` with `opts.annotation`, or with the annotation under the
@@ -1152,38 +1173,98 @@ function M.thread(opts)
   end)
 end
 
---- Lists orphaned annotations (§3.7.3). For a comment with a suggested
---- location (§3.7.4), jumps there and offers to re-attach it; otherwise
---- shows the chosen thread.
-function M.orphans()
+--- Lists orphaned annotations (§3.7.3), to fix one at a time or to resolve
+--- every orphaned comment at once. Picking one offers what applies to it:
+--- moving it to its suggested location (§3.7.4) or to the selection,
+--- closing it, or showing its thread. opts: { visual? }
+function M.orphans(opts)
+  opts = opts or {}
   local bufnr = vim.api.nvim_get_current_buf()
+  local client = client_for(bufnr)
+  if not client then
+    return request(bufnr)
+  end
   local orphans = vim.tbl_filter(function(a)
-    return a.resolution and a.resolution.state == "orphaned"
+    return a.status == "open" and a.resolution and a.resolution.state == "orphaned"
   end, (M.state[bufnr] or {}).annotations or {})
   if #orphans == 0 then
     return vim.notify("annox: no orphaned annotations", vim.log.levels.INFO)
   end
+  local comments = vim.tbl_filter(function(a)
+    return a.kind == "comment"
+  end, orphans)
+  local items = vim.list_extend({}, orphans)
+  local resolve_all = {}
+  if #comments > 1 then
+    table.insert(items, resolve_all)
+  end
   local function format(a)
+    if a == resolve_all then
+      return string.format("Resolve all %d orphaned comments", #comments)
+    end
     local s = a.resolution.suggested
     return describe(a) .. (s and string.format(" (line %d?)", s.range.start.line + 1) or "")
   end
-  vim.ui.select(orphans, { prompt = "Orphaned annotations", format_item = format }, function(a)
-    if not a then
+  local selection = opts.visual and visual_range(bufnr, client.offset_encoding)
+  vim.ui.select(items, { prompt = "Orphaned annotations", format_item = format }, function(a)
+    if a == resolve_all then
+      return set_status_all(bufnr, comments, "resolved", "Resolve", "orphaned comment")
+    elseif not a then
       return
     end
-    local s = a.resolution.suggested
-    local client = client_for(bufnr)
-    if not s or a.kind ~= "comment" or not client then
-      return open_thread(a, bufnr)
+    local comment = a.kind == "comment"
+    local function move(range)
+      if comment then
+        return request(bufnr, "annox/reattach", { annotation = a.id, range = range })
+      end
+      with_input(nil, "Replace with: ", a.edit and a.edit.replacement, function(replacement)
+        request(bufnr, "annox/retarget", { annotation = a.id, range = range, replacement = replacement })
+      end)
     end
-    local line = s.range.start.line
-    vim.api.nvim_win_set_cursor(0, { line + 1, byte_col(bufnr, s.range.start, client.offset_encoding) })
-    local reattach = string.format("Re-attach to line %d (%d%% of its words)", line + 1, math.floor(s.score * 100))
-    vim.ui.select({ reattach, "Show thread" }, { prompt = describe(a) }, function(choice)
-      if choice == reattach then
-        request(bufnr, "annox/reattach", { annotation = a.id, range = s.range })
-      elseif choice then
-        open_thread(a, bufnr)
+    local verb = comment and "Re-attach" or "Re-target"
+    local actions = {
+      {
+        "Show thread",
+        function()
+          open_thread(a, bufnr)
+        end,
+      },
+    }
+    local s = a.resolution.suggested
+    if s then
+      vim.api.nvim_win_set_cursor(0, { s.range.start.line + 1, byte_col(bufnr, s.range.start, client.offset_encoding) })
+      local label =
+        string.format("%s to line %d (%d%% of its words)", verb, s.range.start.line + 1, math.floor(s.score * 100))
+      table.insert(actions, {
+        label,
+        function()
+          move(s.range)
+        end,
+      })
+    end
+    if selection then
+      table.insert(actions, {
+        verb .. " to the selection",
+        function()
+          move(selection)
+        end,
+      })
+    end
+    local status = comment and "resolved" or "rejected"
+    table.insert(actions, {
+      comment and "Resolve thread" or "Reject suggestion",
+      function()
+        request(bufnr, "annox/setStatus", { annotation = a.id, status = status })
+      end,
+    })
+    vim.ui.select(actions, {
+      prompt = describe(a),
+      format_item = function(x)
+        return x[1]
+      end,
+    }, function(x)
+      if x then
+        x[2]()
       end
     end)
   end)
@@ -2100,8 +2181,8 @@ local subcommands = {
   thread = function()
     M.thread()
   end,
-  orphans = function()
-    M.orphans()
+  orphans = function(o)
+    M.orphans({ visual = o.range > 0 })
   end,
   list = function()
     M.list()

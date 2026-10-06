@@ -5,7 +5,7 @@
 - **Anchoring (§3.7.2), suggestions (§4.2, §4.3.5).** A new step 6 finds a quote whose text was edited between its unchanged prefix and suffix, and orphaned is now step 7. Suggestions found by step 6 are stale. Accepting a suggestion re-anchors the open comments whose text it changed (D47).
 - **Data model (§2.4), suggestions (§4.3.4), protocol (§6.6.2).** An accepted suggestion is undone by a new suggestion that restores its original text, found with the applied-text search. Its `create` event carries an optional `reverts` id linking it to the original. `annox/revert` creates it, or reuses an open one, and with `accept` applies it. It refuses a suggestion that's already reverted.
 - **Protocol (§6), order (§2.5.5).** `annox/history` returns the events of the whole thread, replies included, interleaved by id. §2.5.5 defines that interleaving.
-- **Protocol (§6.5, §6.6.1).** An orphaned annotation's view may carry `resolution.suggested`, a suggested location (§3.7.4) with a score. The server marks it with a Hint diagnostic and offers `annox.reattachSuggested` there for comments (D48).
+- **Protocol (§6.5, §6.6.1).** An orphaned annotation's view may carry `resolution.suggested`, a suggested location (§3.7.4) with a score. The server marks it with a Hint diagnostic, shows the thread on hover there, and offers `annox.reattachSuggested` there for comments (D48).
 - **Protocol (§6.6.2).** An optional `annox/commit` request commits the workspace's uncommitted annotation files to version control, or with `dryRun` reports what it would commit.
 
 ## 0.1 — 2026-09-29
