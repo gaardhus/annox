@@ -5,51 +5,35 @@
 --- requests. Suggested edits come back as `workspace/applyEdit`, which
 --- Neovim's LSP client applies to the buffer.
 
+local store = require("annox.store")
+
 local M = {}
 
-local ns = vim.api.nvim_create_namespace("annox")
+-- Reading or setting these fields of this module goes through to the store.
+local shared = { config = true, state = true, peers = true, suggesting = true, overlay_shown = true }
+setmetatable(M, {
+  __index = function(_, k)
+    if shared[k] then
+      return store[k]
+    end
+  end,
+  __newindex = function(t, k, v)
+    if shared[k] then
+      store[k] = v
+    else
+      rawset(t, k, v)
+    end
+  end,
+})
+
+local ns = store.ns
 -- Diff blocks styled in floats, some opened by other code: kept apart from
 -- `ns`, so clearing them never touches the marks of an annotated buffer.
 local diff_ns = vim.api.nvim_create_namespace("annox_diff")
 -- Diagnostics about annotations that could not be located (§3.7.3).
 local orphan_ns = vim.api.nvim_create_namespace("annox_orphans")
 
-M.config = {
-  cmd = { "annox", "lsp" },
-  --- Author for new events ({ id = "mailto:…", name = "…" }). Defaults to
-  --- the git identity on the server side (§2.7).
-  author = nil,
-  --- Show the first line of each comment at the end of its line.
-  virtual_text = true,
-  --- Share your document and cursor with others through a sync hub (§7.8).
-  --- Others' cursors are always shown.
-  presence = true,
-  --- Draw suggestions inline, as struck-through and inserted text, even
-  --- outside suggestion mode.
-  inline_suggestions = false,
-  --- Key that undoes your last suggestion while in suggestion mode, or false
-  --- to leave undo alone.
-  suggest_undo_key = "u",
-  --- Tint the line numbers and cursor line of windows in suggestion mode.
-  suggest_tint = true,
-  --- Mark the words that changed within a suggestion, diff-so-fancy style,
-  --- inline and in the thread, hover and edit windows.
-  word_diff = true,
-  --- Strike through the deleted text of inline suggestions.
-  strikethrough = true,
-}
-
 local presence_ns = vim.api.nvim_create_namespace("annox_presence")
-
---- Others' presence, as last pushed by the server.
-M.peers = {}
-
---- Latest state pushed by the server, per buffer: { annotations, document }.
-M.state = {}
-
---- Whether annotations and others' cursors are drawn. Toggled with
---- `:Annox overlay`; buffers in suggestion mode draw theirs regardless.
-M.overlay_shown = true
 
 --- `color` blended over the editor background, `alpha` of the way, as "#rrggbb".
 --- A transparent background counts as black, or white with a light 'background'.
@@ -96,7 +80,11 @@ local function set_highlights()
     vim.api.nvim_set_hl(0, group, { default = true, link = link })
   end
   local removed = vim.api.nvim_get_hl(0, { name = "Removed", link = false })
-  vim.api.nvim_set_hl(0, "AnnoxDeletion", { default = true, strikethrough = M.config.strikethrough, fg = removed.fg })
+  vim.api.nvim_set_hl(
+    0,
+    "AnnoxDeletion",
+    { default = true, strikethrough = store.config.strikethrough, fg = removed.fg }
+  )
   -- Where an orphaned annotation probably went (§3.7.4).
   local warn = vim.api.nvim_get_hl(0, { name = "DiagnosticWarn", link = false }).fg
   vim.api.nvim_set_hl(0, "AnnoxSuggested", { default = true, underdashed = true, sp = warn })
@@ -159,19 +147,16 @@ local function highlight_group(a)
   return "AnnoxComment"
 end
 
---- Suggestion mode state per buffer (see "Suggestion mode" below).
-M.suggesting = {}
-
 --- Whether suggestions in `bufnr` are drawn as struck-through and inserted
 --- text instead of underlined.
 local function inline(bufnr, a)
-  return a.kind == "suggestion" and a.applicable and (M.config.inline_suggestions or M.suggesting[bufnr] ~= nil)
+  return a.kind == "suggestion" and a.applicable and (store.config.inline_suggestions or store.suggesting[bufnr] ~= nil)
 end
 
 --- The number of open annotations in `bufnr` whose text could not be found,
 --- e.g. for a statusline.
 function M.orphan_count(bufnr)
-  local state = M.state[bufnr or vim.api.nvim_get_current_buf()]
+  local state = store.state[bufnr or vim.api.nvim_get_current_buf()]
   local n = 0
   for _, a in ipairs(state and state.annotations or {}) do
     if a.resolution and a.resolution.state == "orphaned" then
@@ -200,7 +185,7 @@ end
 --- everything changed.
 local function word_changes(old, new)
   local del, add = {}, {}
-  if not M.config.word_diff or old == "" or new == "" then
+  if not store.config.word_diff or old == "" or new == "" then
     return del, add
   end
   local ta, oa = tokens(old)
@@ -302,10 +287,10 @@ end
 function M.render(bufnr)
   vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
   vim.diagnostic.reset(orphan_ns, bufnr)
-  if not M.overlay_shown and not M.suggesting[bufnr] then
+  if not store.overlay_shown and not store.suggesting[bufnr] then
     return
   end
-  local state = M.state[bufnr]
+  local state = store.state[bufnr]
   local client = client_for(bufnr)
   if not state or not client then
     return
@@ -406,7 +391,7 @@ function M.render(bufnr)
         mark.end_row, mark.end_col, mark.hl_group = el, ec, group
         pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, sl, sc, mark)
       end
-      if M.config.virtual_text and label then
+      if store.config.virtual_text and label then
         local replies = #(a.replies or {})
         local text = replies > 0 and string.format("%s (+%d)", label, replies) or label
         if a["local"] then
@@ -425,12 +410,12 @@ end
 function M.render_presence(bufnr)
   vim.api.nvim_buf_clear_namespace(bufnr, presence_ns, 0, -1)
   local client = client_for(bufnr)
-  if not client or not M.overlay_shown then
+  if not client or not store.overlay_shown then
     return
   end
   local uri = vim.uri_from_bufnr(bufnr)
   local line_count = vim.api.nvim_buf_line_count(bufnr)
-  for _, peer in ipairs(M.peers) do
+  for _, peer in ipairs(store.peers) do
     local r = peer.range
     if peer.textDocument and peer.textDocument.uri == uri and r and r.start.line < line_count then
       local author = peer.author or {}
@@ -454,7 +439,7 @@ end
 
 --- Handles `annox/didChangePresence` (§6.6.3).
 function M.on_presence(_, result)
-  M.peers = result.peers or {}
+  store.peers = result.peers or {}
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(b) then
       M.render_presence(b)
@@ -465,7 +450,7 @@ end
 --- Sends the cursor as presence, at most every 150 ms (§7.8.1).
 local presence_timer
 local function send_presence()
-  if not M.config.presence then
+  if not store.config.presence then
     return
   end
   presence_timer = presence_timer or vim.uv.new_timer()
@@ -503,8 +488,8 @@ local function on_annotations(_, result)
   local annotations = vim.tbl_filter(function(a)
     return a.status == nil or a.status == "open"
   end, result.annotations)
-  M.state[bufnr] = { annotations = annotations, document = result.document }
-  local s = M.suggesting[bufnr]
+  store.state[bufnr] = { annotations = annotations, document = result.document }
+  local s = store.suggesting[bufnr]
   if s then
     -- Keep only suggestions that can still be extended.
     local fresh = {}
@@ -564,7 +549,7 @@ end
 
 --- Annotations whose range contains the cursor.
 local function under_cursor(bufnr)
-  local state, client = M.state[bufnr], client_for(bufnr)
+  local state, client = store.state[bufnr], client_for(bufnr)
   if not state or not client then
     return {}
   end
@@ -588,7 +573,7 @@ local function under_cursor(bufnr)
 end
 
 local function buffer_annotations(bufnr, keep)
-  return vim.tbl_filter(keep, (M.state[bufnr] or {}).annotations or {})
+  return vim.tbl_filter(keep, (store.state[bufnr] or {}).annotations or {})
 end
 
 local function describe(a)
@@ -712,7 +697,7 @@ end
 local thread_lines, open_thread, style_hover
 
 local function find_annotation(bufnr, id)
-  for _, a in ipairs((M.state[bufnr] or {}).annotations or {}) do
+  for _, a in ipairs((store.state[bufnr] or {}).annotations or {}) do
     if a.id == id then
       return a
     end
@@ -1149,7 +1134,7 @@ function style_hover(win, fbuf)
     not vim.api.nvim_win_is_valid(win)
     or vim.api.nvim_win_get_buf(win) ~= fbuf
     or vim.b[fbuf].annox_own_float
-    or M.state[fbuf]
+    or store.state[fbuf]
     or source == fbuf
     or not client_for(source)
   then
@@ -1189,7 +1174,7 @@ function M.orphans(opts)
   end
   local orphans = vim.tbl_filter(function(a)
     return a.status == "open" and a.resolution and a.resolution.state == "orphaned"
-  end, (M.state[bufnr] or {}).annotations or {})
+  end, (store.state[bufnr] or {}).annotations or {})
   if #orphans == 0 then
     return vim.notify("annox: no orphaned annotations", vim.log.levels.INFO)
   end
@@ -1280,7 +1265,7 @@ local lists = {}
 local function list_items(bufnr)
   local client = client_for(bufnr)
   local items = {}
-  for _, a in ipairs((M.state[bufnr] or {}).annotations or {}) do
+  for _, a in ipairs((store.state[bufnr] or {}).annotations or {}) do
     local r = a.resolution and a.resolution.range
     local s = a.resolution and a.resolution.suggested
     local at = r or (s and s.range)
@@ -1554,7 +1539,7 @@ function M.edit(opts)
           if field == "replacement" then
             method = "annox/retarget"
             params = { annotation = a.id, range = a.resolution.range, replacement = new }
-            local s = M.suggesting[bufnr]
+            local s = store.suggesting[bufnr]
             if s then
               table.insert(s.undo, { id = a.id, range = a.resolution.range, replacement = a.edit.replacement })
             end
@@ -1854,7 +1839,7 @@ end
 --- Sends the next queued operation, one at a time so that each change can
 --- extend the suggestion the previous one created.
 local function pump(bufnr)
-  local s, client = M.suggesting[bufnr], client_for(bufnr)
+  local s, client = store.suggesting[bufnr], client_for(bufnr)
   if not s or s.busy or #s.queue == 0 or not client then
     return
   end
@@ -1928,7 +1913,7 @@ end
 
 --- Turns the buffer's edits into suggestions and puts its text back.
 local function capture(bufnr)
-  local s = M.suggesting[bufnr]
+  local s = store.suggesting[bufnr]
   if not s or vim.api.nvim_get_mode().mode:find("^i") then
     return
   end
@@ -1960,7 +1945,7 @@ end
 --- Makes the buffer's current text the base, after a change that is not a
 --- suggestion (an accepted suggestion, or reloading the file).
 local function rebase(bufnr)
-  local s = M.suggesting[bufnr]
+  local s = store.suggesting[bufnr]
   if s then
     s.base = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     s.queue = {}
@@ -1971,7 +1956,7 @@ end
 --- what it was before it was extended.
 function M.undo_suggestion(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
-  local s = M.suggesting[bufnr]
+  local s = store.suggesting[bufnr]
   local entry = s and table.remove(s.undo)
   if not entry then
     return vim.notify("annox: no suggestion to undo", vim.log.levels.INFO)
@@ -1982,7 +1967,7 @@ end
 
 --- Whether suggestion mode is on in `bufnr`, e.g. for a statusline.
 function M.is_suggesting(bufnr)
-  return M.suggesting[bufnr or vim.api.nvim_get_current_buf()] ~= nil
+  return store.suggesting[bufnr or vim.api.nvim_get_current_buf()] ~= nil
 end
 
 --- A statusline label for suggestion mode in `bufnr`, or "" when it's off.
@@ -1995,7 +1980,7 @@ local tint_groups = { "LineNr", "CursorLineNr", "CursorLine" }
 --- Adds or removes the suggestion mode tint in `win`'s 'winhighlight',
 --- keeping any other entries.
 local function sync_tint(win)
-  local on = M.config.suggest_tint and M.suggesting[vim.api.nvim_win_get_buf(win)] ~= nil
+  local on = store.config.suggest_tint and store.suggesting[vim.api.nvim_win_get_buf(win)] ~= nil
   local old = vim.api.nvim_get_option_value("winhighlight", { win = win })
   local entries = vim.tbl_filter(function(e)
     return not e:find(":AnnoxSuggesting", 1, true)
@@ -2014,7 +1999,7 @@ end
 --- Shows that suggestion mode changed in `bufnr`: the tint, `b:annox_suggesting`,
 --- the `User AnnoxSuggesting` event and the statusline.
 local function mode_changed(bufnr)
-  local on = M.suggesting[bufnr] ~= nil
+  local on = store.suggesting[bufnr] ~= nil
   vim.b[bufnr].annox_suggesting = on
   for _, win in ipairs(vim.fn.win_findbuf(bufnr)) do
     sync_tint(win)
@@ -2033,14 +2018,14 @@ function M.suggest_mode(opts)
   local bufnr = vim.api.nvim_get_current_buf()
   local enable = opts.enable
   if enable == nil then
-    enable = M.suggesting[bufnr] == nil
+    enable = store.suggesting[bufnr] == nil
   end
   local group = vim.api.nvim_create_augroup("annox_suggesting_" .. bufnr, { clear = true })
-  local key = M.config.suggest_undo_key
+  local key = store.config.suggest_undo_key
   if not enable then
-    if M.suggesting[bufnr] then
+    if store.suggesting[bufnr] then
       capture(bufnr)
-      M.suggesting[bufnr] = nil
+      store.suggesting[bufnr] = nil
       if key then
         pcall(vim.keymap.del, "n", key, { buffer = bufnr })
       end
@@ -2052,7 +2037,7 @@ function M.suggest_mode(opts)
   if not client_for(bufnr) then
     return request(bufnr)
   end
-  M.suggesting[bufnr] = {
+  store.suggesting[bufnr] = {
     base = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false),
     views = {},
     queue = {},
@@ -2091,9 +2076,9 @@ function M.overlay(opts)
   opts = opts or {}
   local enable = opts.enable
   if enable == nil then
-    enable = not M.overlay_shown
+    enable = not store.overlay_shown
   end
-  M.overlay_shown = enable
+  store.overlay_shown = enable
   vim.g.annox_overlay = enable
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(b) then
@@ -2110,7 +2095,7 @@ end
 --- new suggestions.
 local function on_apply_edit(err, result, ctx)
   local response = vim.lsp.handlers["workspace/applyEdit"](err, result, ctx)
-  for bufnr in pairs(M.suggesting) do
+  for bufnr in pairs(store.suggesting) do
     rebase(bufnr)
   end
   return response
@@ -2150,7 +2135,7 @@ end
 --- buffer is ready, and says why not when it isn't.
 local function wait_ready(bufnr)
   local function ready()
-    return client_for(bufnr) ~= nil and M.state[bufnr] ~= nil
+    return client_for(bufnr) ~= nil and store.state[bufnr] ~= nil
   end
   if ready() then
     return true
@@ -2247,12 +2232,12 @@ local subcommands = {
 }
 
 function M.setup(opts)
-  M.config = vim.tbl_deep_extend("force", M.config, opts or {})
-  vim.g.annox_overlay = M.overlay_shown
+  store.config = vim.tbl_deep_extend("force", store.config, opts or {})
+  vim.g.annox_overlay = store.overlay_shown
   set_highlights()
   vim.api.nvim_create_autocmd("ColorScheme", { callback = set_highlights })
   vim.lsp.config("annox", {
-    cmd = M.config.cmd,
+    cmd = store.config.cmd,
     root_dir = function(bufnr, on_dir)
       local root = vim.fs.root(bufnr, { ".annox" })
       if root then
@@ -2260,7 +2245,7 @@ function M.setup(opts)
       end
     end,
     capabilities = { experimental = { annox = { version = "0.1" } } },
-    init_options = { annox = { diagnostics = false, author = M.config.author } },
+    init_options = { annox = { diagnostics = false, author = store.config.author } },
     handlers = {
       ["annox/didChangeAnnotations"] = on_annotations,
       ["annox/didChangePresence"] = M.on_presence,
