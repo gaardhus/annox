@@ -1,0 +1,31 @@
+{
+  "id": "01a116e1-b886-721c-94f4-1f7117585470",
+  "annotation": "01a116e1-b886-721c-94f4-1f7117585470",
+  "after": [],
+  "type": "create",
+  "author": {
+    "id": "urn:agent:claude",
+    "name": "Claude"
+  },
+  "time": "2026-10-07T15:00:54Z",
+  "body": "Typo.",
+  "edit": {
+    "replacement": "when they were written"
+  },
+  "kind": "suggestion",
+  "target": {
+    "path": "proposal.md",
+    "selectors": {
+      "position": {
+        "end": 611,
+        "start": 588
+      },
+      "quote": {
+        "exact": "when they where written",
+        "prefix": "ges describe how systems worked ",
+        "suffix": ".\n   Nothing ties a page to the "
+      }
+    },
+    "version": "sha256:4ce3008d531834f0846aa5d71b1032868e34c5cd74b803a3fdff5245f45b1549"
+  }
+}

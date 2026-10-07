@@ -1,0 +1,14 @@
+{
+  "id": "01a116e7-71b2-771b-aa28-1b5f9bf505ab",
+  "annotation": "01a116e7-71b2-771b-aa28-1b5f9bf505ab",
+  "after": [],
+  "type": "create",
+  "author": {
+    "id": "mailto:sam@example.com",
+    "name": "Sam Reviewer"
+  },
+  "time": "2026-10-07T15:07:09Z",
+  "body": "Links were quick in the dry run; the time goes on permissions. Leaving the estimate as is.",
+  "kind": "reply",
+  "parent": "01a116e1-b897-7171-9025-85e1a91c2779"
+}

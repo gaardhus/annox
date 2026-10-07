@@ -1,0 +1,12 @@
+{
+  "id": "01a116e1-b87c-73ea-874b-3f79484b7d9c",
+  "document": "01a116e1-b87c-73ea-874b-3f79484b7d9c",
+  "after": [],
+  "type": "document",
+  "author": {
+    "id": "urn:agent:claude",
+    "name": "Claude"
+  },
+  "time": "2026-10-07T15:00:54Z",
+  "path": "proposal.md"
+}

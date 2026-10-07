@@ -1,0 +1,14 @@
+{
+  "id": "01a116e1-b8e6-7601-b482-c24f96741f06",
+  "annotation": "01a116e1-b8e6-7601-b482-c24f96741f06",
+  "after": [],
+  "type": "create",
+  "author": {
+    "id": "urn:agent:claude",
+    "name": "Claude"
+  },
+  "time": "2026-10-07T15:00:54Z",
+  "body": "Agreed. A static site generator with client-side search (e.g. Pagefind) would take about two days; we could schedule it for the first sprint after the migration.",
+  "kind": "reply",
+  "parent": "01a116e1-b89b-7573-af5c-d505c3868f9b"
+}

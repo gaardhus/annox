@@ -9,4 +9,5 @@ noice = "noice"
 
 [files]
 # Vendored web fonts; the unicode-range values look like words.
-extend-exclude = ["site/fonts/"]
+# Annotation events store anchor context cut off mid-word.
+extend-exclude = ["site/fonts/", ".annox/"]

@@ -1,0 +1,31 @@
+{
+  "id": "01a116e1-b890-71b5-be80-d356e9001131",
+  "annotation": "01a116e1-b890-71b5-be80-d356e9001131",
+  "after": [],
+  "type": "create",
+  "author": {
+    "id": "urn:agent:claude",
+    "name": "Claude"
+  },
+  "time": "2026-10-07T15:00:54Z",
+  "body": "\"Solves\" overclaims: the Risks section admits search gets worse, and drift is reduced rather than eliminated.",
+  "edit": {
+    "replacement": "Keeping documentation next to the code addresses all three."
+  },
+  "kind": "suggestion",
+  "target": {
+    "path": "proposal.md",
+    "selectors": {
+      "position": {
+        "end": 881,
+        "start": 825
+      },
+      "quote": {
+        "exact": "Keeping documentation next to the code solves all three.",
+        "prefix": "someone else look at it first.\n\n",
+        "suffix": " It is free, it\nchanges in the s"
+      }
+    },
+    "version": "sha256:4ce3008d531834f0846aa5d71b1032868e34c5cd74b803a3fdff5245f45b1549"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "01a116e1-d24d-77a7-9b91-4cb3634855dc",
+  "annotation": "01a116e1-b8eb-7721-ba95-6bbb7f36f8ad",
+  "after": [
+    "01a116e1-b8eb-7721-ba95-6bbb7f36f8ad"
+  ],
+  "type": "edit",
+  "author": {
+    "id": "urn:agent:claude",
+    "name": "Claude"
+  },
+  "time": "2026-10-07T15:01:00Z",
+  "body": "Added a suggestion with a fixed date."
+}

@@ -1,0 +1,28 @@
+{
+  "id": "01a116e1-b89b-7573-af5c-d505c3868f9b",
+  "annotation": "01a116e1-b89b-7573-af5c-d505c3868f9b",
+  "after": [],
+  "type": "create",
+  "author": {
+    "id": "mailto:sam@example.com",
+    "name": "Sam Reviewer"
+  },
+  "time": "2026-10-07T15:00:54Z",
+  "body": "Search is the main thing people use the wiki for. Can we commit to a follow-up date instead of leaving it open?",
+  "kind": "comment",
+  "target": {
+    "path": "proposal.md",
+    "selectors": {
+      "position": {
+        "end": 1581,
+        "start": 1561
+      },
+      "quote": {
+        "exact": "out of scope for now",
+        "prefix": "ive us search back, but that is\n",
+        "suffix": ".\n\n## Decision\n\nWe ask the team "
+      }
+    },
+    "version": "sha256:4ce3008d531834f0846aa5d71b1032868e34c5cd74b803a3fdff5245f45b1549"
+  }
+}

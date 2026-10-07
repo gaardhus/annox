@@ -1,0 +1,28 @@
+{
+  "id": "01a116e1-b8c0-76ca-81df-bd02fd5a4b88",
+  "annotation": "01a116e1-b8c0-76ca-81df-bd02fd5a4b88",
+  "after": [],
+  "type": "create",
+  "author": {
+    "id": "mailto:sam@example.com",
+    "name": "Sam Reviewer"
+  },
+  "time": "2026-10-07T15:00:54Z",
+  "body": "Which month? Please give a date.",
+  "kind": "comment",
+  "target": {
+    "path": "proposal.md",
+    "selectors": {
+      "position": {
+        "end": 1661,
+        "start": 1638
+      },
+      "quote": {
+        "exact": "by the end of the month",
+        "prefix": "e team to approve the migration ",
+        "suffix": ".\n"
+      }
+    },
+    "version": "sha256:4ce3008d531834f0846aa5d71b1032868e34c5cd74b803a3fdff5245f45b1549"
+  }
+}

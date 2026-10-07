@@ -1,0 +1,27 @@
+{
+  "id": "01a116e1-b893-743f-a914-2b542cce3303",
+  "annotation": "01a116e1-b893-743f-a914-2b542cce3303",
+  "after": [],
+  "type": "create",
+  "author": {
+    "id": "urn:agent:claude",
+    "name": "Claude"
+  },
+  "time": "2026-10-07T15:00:54Z",
+  "kind": "comment",
+  "target": {
+    "path": "proposal.md",
+    "selectors": {
+      "position": {
+        "end": 1126,
+        "start": 1102
+      },
+      "quote": {
+        "exact": "fix broken links by hand",
+        "prefix": "to a new `docs/` directory, and ",
+        "suffix": ".\nThe migration should take abou"
+      }
+    },
+    "version": "sha256:4ce3008d531834f0846aa5d71b1032868e34c5cd74b803a3fdff5245f45b1549"
+  }
+}

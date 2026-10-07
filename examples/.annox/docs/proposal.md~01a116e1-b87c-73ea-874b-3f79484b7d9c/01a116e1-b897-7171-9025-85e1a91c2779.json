@@ -1,0 +1,31 @@
+{
+  "id": "01a116e1-b897-7171-9025-85e1a91c2779",
+  "annotation": "01a116e1-b897-7171-9025-85e1a91c2779",
+  "after": [],
+  "type": "create",
+  "author": {
+    "id": "urn:agent:claude",
+    "name": "Claude"
+  },
+  "time": "2026-10-07T15:00:54Z",
+  "body": "Ties the estimate to the step that dominates it.",
+  "edit": {
+    "replacement": "The migration should take about a week, most of it spent on links."
+  },
+  "kind": "suggestion",
+  "target": {
+    "path": "proposal.md",
+    "selectors": {
+      "position": {
+        "end": 1167,
+        "start": 1128
+      },
+      "quote": {
+        "exact": "The migration should take about a week.",
+        "prefix": ", and fix broken links by hand.\n",
+        "suffix": " After that, the hosted wiki bec"
+      }
+    },
+    "version": "sha256:4ce3008d531834f0846aa5d71b1032868e34c5cd74b803a3fdff5245f45b1549"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "01a116e7-71b7-71ec-b118-5f20f8b00e9e",
+  "annotation": "01a116e1-b897-7171-9025-85e1a91c2779",
+  "after": [
+    "01a116e1-b897-7171-9025-85e1a91c2779"
+  ],
+  "type": "status",
+  "author": {
+    "id": "mailto:sam@example.com",
+    "name": "Sam Reviewer"
+  },
+  "time": "2026-10-07T15:07:09Z",
+  "status": "rejected"
+}

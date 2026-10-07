@@ -1,0 +1,31 @@
+{
+  "id": "01a116e1-d211-7745-bf2e-65db09f716aa",
+  "annotation": "01a116e1-d211-7745-bf2e-65db09f716aa",
+  "after": [],
+  "type": "create",
+  "author": {
+    "id": "urn:agent:claude",
+    "name": "Claude"
+  },
+  "time": "2026-10-07T15:01:00Z",
+  "body": "A fixed date, as asked in the review.",
+  "edit": {
+    "replacement": "by 30 October 2026"
+  },
+  "kind": "suggestion",
+  "target": {
+    "path": "proposal.md",
+    "selectors": {
+      "position": {
+        "end": 1661,
+        "start": 1638
+      },
+      "quote": {
+        "exact": "by the end of the month",
+        "prefix": "e team to approve the migration ",
+        "suffix": ".\n"
+      }
+    },
+    "version": "sha256:4ce3008d531834f0846aa5d71b1032868e34c5cd74b803a3fdff5245f45b1549"
+  }
+}

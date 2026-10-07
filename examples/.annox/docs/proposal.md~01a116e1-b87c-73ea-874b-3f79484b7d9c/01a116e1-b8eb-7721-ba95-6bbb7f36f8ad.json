@@ -1,0 +1,14 @@
+{
+  "id": "01a116e1-b8eb-7721-ba95-6bbb7f36f8ad",
+  "annotation": "01a116e1-b8eb-7721-ba95-6bbb7f36f8ad",
+  "after": [],
+  "type": "create",
+  "author": {
+    "id": "urn:agent:claude",
+    "name": "Claude"
+  },
+  "time": "2026-10-07T15:00:54Z",
+  "body": "Changed to a fixed date in the accepted text.",
+  "kind": "reply",
+  "parent": "01a116e1-b8c0-76ca-81df-bd02fd5a4b88"
+}

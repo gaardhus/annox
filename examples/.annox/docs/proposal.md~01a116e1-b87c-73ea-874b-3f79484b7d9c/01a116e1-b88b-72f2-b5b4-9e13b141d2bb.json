@@ -1,0 +1,28 @@
+{
+  "id": "01a116e1-b88b-72f2-b5b4-9e13b141d2bb",
+  "annotation": "01a116e1-b88b-72f2-b5b4-9e13b141d2bb",
+  "after": [],
+  "type": "create",
+  "author": {
+    "id": "urn:agent:claude",
+    "name": "Claude"
+  },
+  "time": "2026-10-07T15:00:54Z",
+  "body": "Where does this number come from? Worth linking the audit log export so readers can check it.",
+  "kind": "comment",
+  "target": {
+    "path": "proposal.md",
+    "selectors": {
+      "position": {
+        "end": 538,
+        "start": 494
+      },
+      "quote": {
+        "exact": "only 12 people edited a page last\n   quarter",
+        "prefix": "ost.** We pay for 40 seats, but ",
+        "suffix": ".\n2. **Drift.** Pages describe h"
+      }
+    },
+    "version": "sha256:4ce3008d531834f0846aa5d71b1032868e34c5cd74b803a3fdff5245f45b1549"
+  }
+}
