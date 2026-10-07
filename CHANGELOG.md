@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/gaardhus/annox/compare/v0.9.0...v0.10.0) - 2026-10-07
+
+### Added
+
+- *(nvim)* Keep the quickfix list in document order and up to date
+- Add annox report --verbose, breaking counts down by status
+
+### Fixed
+
+- *(nvim)* Save an edited suggestion at its current anchor
+- Show a lone ~ in comment bodies instead of striking text through
+
+### Changed
+
+- *(nvim)* Move shared state into annox.store
+- *(nvim)* Move shared helpers into annox.util
+- *(nvim)* Move the word diff into annox.worddiff
+- *(nvim)* Move the highlight groups into annox.highlight
+- *(nvim)* Move drawing annotations and presence into annox.render
+- *(nvim)* Move threads and history into annox.thread
+- *(nvim)* Move annotation commands into annox.actions
+- *(nvim)* Move the orphans picker and quickfix list into their own modules
+- *(nvim)* Move the edit windows and conflict resolution into annox.edit
+- *(nvim)* Move suggestion mode into annox.suggest_mode
+- *(nvim)* Drop the imports and exports the split left unused
+
 ## [0.9.0](https://github.com/gaardhus/annox/compare/v0.8.2...v0.9.0) - 2026-10-06
 
 ### Added
