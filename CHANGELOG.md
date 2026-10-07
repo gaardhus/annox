@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/gaardhus/annox/compare/v0.11.0...v0.12.0) - 2026-10-07
+
+### Added
+
+- *(vscode)* Add a sidebar of the active file's annotations as cards
+
+### Fixed
+
+- *(vscode)* List only open annotations, in document order, like nvim
+- *(vscode)* Show every suggestion as a diff block, like nvim
+
+### Documentation
+
+- Add an annotated example document in examples/
+- *(vscode)* Say how the activity bar icon differs from the main one
+
 ## [0.11.0](https://github.com/gaardhus/annox/compare/v0.10.0...v0.11.0) - 2026-10-07
 
 ### Added
