@@ -661,14 +661,33 @@ export class Actions {
   private async list(): Promise<void> {
     const editor = await this.editor();
     if (!editor) return;
-    const items = this.store.annotations(editor.document.uri).map((a) => {
-      const r = rangeOf(a);
-      const where = r ? `line ${r.start.line + 1}` : "could not be located";
-      const status = a.status === "open" ? "" : ` · ${a.status}`;
-      return { label: describe(a), description: `${authorName(a)} · ${where}${status}`, a };
-    });
+    // Open annotations in document order, as nvim's quickfix list has them;
+    // the annox view is where closed ones are. Orphans with a suggested
+    // location sort there, and orphans with none come last.
+    const at = (a: AnnotationView) => {
+      const s = a.resolution?.suggested?.range;
+      return rangeOf(a)?.start ?? (s ? toRange(s).start : undefined);
+    };
+    const items = this.store
+      .annotations(editor.document.uri)
+      .filter((a) => a.status === "open" && !a.deleted)
+      .sort((x, y) => {
+        const px = at(x);
+        const py = at(y);
+        return px && py ? px.compareTo(py) : px ? -1 : py ? 1 : 0;
+      })
+      .map((a) => {
+        const r = rangeOf(a);
+        const s = a.resolution?.suggested?.range;
+        const where = r
+          ? `line ${r.start.line + 1}`
+          : s
+            ? `could not be located, probably line ${s.start.line + 1}`
+            : "could not be located";
+        return { label: describe(a), description: `${authorName(a)} · ${where}`, a };
+      });
     if (items.length === 0) {
-      info("no annotations in this file");
+      info("no open annotations in this file");
       return;
     }
     const choice = await vscode.window.showQuickPick(items, { placeHolder: "annox annotations", matchOnDescription: true });
