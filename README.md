@@ -105,14 +105,14 @@ Edits always go through `workspace/applyEdit`, and the status event is written o
 
 ## Command line
 
-The `annox` binary also reads and writes annotations directly, printing JSON (`annox report` prints a one-line-per-file summary and `annox history` one line per event, unless given `--json`). It's meant for scripts and AI agents: text is targeted by quoting it, not by offsets, and an ambiguous quote is an error that lists where it occurs.
+The `annox` binary also reads and writes annotations directly, printing JSON (`annox report` prints a one-line-per-file summary, or a per-status breakdown with `--verbose`, and `annox history` one line per event, unless given `--json`). It's meant for scripts and AI agents: text is targeted by quoting it, not by offsets, and an ambiguous quote is an error that lists where it occurs.
 
 ```sh
 annox init [--local]
 annox list [FILE] [--all | --closed] [--kind K] [--status S] [--mine | --others] [--broken]
 annox show ID
 annox history ID [--json]
-annox report [FILE] [--json]
+annox report [FILE] [--json | --verbose]
 annox comment paper.md --quote "the bound is tight" --body "Cite Lemma 4?"
 annox highlight paper.md --quote "the bound is tight"
 annox suggest paper.md --quote "teh" --replace "the" --body "typo"

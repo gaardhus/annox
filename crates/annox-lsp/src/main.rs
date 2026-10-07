@@ -84,7 +84,10 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Annotations(command) => {
             let render: Option<fn(&serde_json::Value) -> String> = match command {
-                annox_lsp::cli::Command::Report { json: false, .. } => Some(annox_lsp::cli::render_report),
+                annox_lsp::cli::Command::Report { json: false, verbose: false, .. } => {
+                    Some(annox_lsp::cli::render_report)
+                }
+                annox_lsp::cli::Command::Report { verbose: true, .. } => Some(annox_lsp::cli::render_report_verbose),
                 annox_lsp::cli::Command::History { json: false, .. } => Some(annox_lsp::cli::render_history),
                 _ => None,
             };

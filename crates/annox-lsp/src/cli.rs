@@ -45,6 +45,9 @@ pub enum Command {
         /// Print JSON instead of text
         #[arg(long)]
         json: bool,
+        /// Break each document's counts down by status, one line per kind
+        #[arg(short, long, conflicts_with = "json")]
+        verbose: bool,
     },
     /// Print one annotation and its thread as JSON
     Show {
@@ -308,7 +311,7 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
             Ok(json!({ "root": ws.root }))
         }
         Command::List { file, all, closed, filter } => list(file.as_deref(), all, closed, filter, &cwd),
-        Command::Report { file, json: _ } => report(file.as_deref(), &cwd),
+        Command::Report { file, .. } => report(file.as_deref(), &cwd),
         Command::Show { id } => show(&id, &cwd),
         Command::History { id, json: _ } => history(&id, &cwd),
         Command::Comment { file, at, body, meta, author } => {
@@ -746,6 +749,44 @@ pub fn render_report(report: &Value) -> String {
         out.push_str(&format!("{:width$}  {}\n", doc["path"].as_str().unwrap_or_default(), parts.join(" · ")));
     }
     out + &uncommitted
+}
+
+/// `report --verbose`'s output as text: each document's counts broken down
+/// by status, one indented line per kind, leaving out zeros.
+pub fn render_report_verbose(report: &Value) -> String {
+    let documents = report["documents"].as_array().map_or(&[][..], Vec::as_slice);
+    let count = |v: &Value| v.as_u64().unwrap_or(0);
+    let counts = |of: &Value, names: &[&str]| -> Vec<String> {
+        names.iter().filter(|n| count(&of[n]) > 0).map(|n| format!("{} {n}", count(&of[n]))).collect()
+    };
+    let mut out = String::new();
+    for doc in documents {
+        out.push_str(doc["path"].as_str().unwrap_or_default());
+        if doc["missing"] == json!(true) {
+            out.push_str("  (file missing)");
+        }
+        out.push('\n');
+        let uncommitted = match count(&doc["uncommitted"]) {
+            0 => vec![],
+            1 => vec!["1 change".to_owned()],
+            n => vec![format!("{n} changes")],
+        };
+        let rows = [
+            ("comments", counts(&doc["comments"], &["open", "resolved"])),
+            ("suggestions", counts(&doc["suggestions"], &["open", "accepted", "rejected", "withdrawn"])),
+            ("needs work", counts(doc, &["orphaned", "stale", "conflicted"])),
+            ("uncommitted", uncommitted),
+        ];
+        for (label, parts) in rows.iter().filter(|(_, parts)| !parts.is_empty()) {
+            out.push_str(&format!("  {label:11}  {}\n", parts.join(" · ")));
+        }
+    }
+    // The empty report and the workspace-wide line read the same either way.
+    let summary = render_report(&json!({ "documents": [], "uncommitted": report["uncommitted"] }));
+    if documents.is_empty() {
+        return summary;
+    }
+    out + summary.strip_prefix("no annotations\n").unwrap_or(&summary)
 }
 
 /// The events of an annotation's thread in display order (§2.5.5).

@@ -407,6 +407,13 @@ fn report_counts_each_document() {
         "notes.md  file missing · 1 open comment · 1 orphaned\npaper.md  1 open comment · 1 open suggestion · 1 closed\n"
     );
     assert_eq!(cli::render_report(&serde_json::json!({ "documents": [] })), "no annotations\n");
+
+    assert_eq!(
+        cli::render_report_verbose(&report),
+        "notes.md  (file missing)\n  comments     1 open\n  needs work   1 orphaned\n\
+         paper.md\n  comments     1 open · 1 resolved\n  suggestions  1 open\n"
+    );
+    assert_eq!(cli::render_report_verbose(&serde_json::json!({ "documents": [] })), "no annotations\n");
 }
 
 fn git(dir: &Path, args: &[&str]) -> String {
@@ -435,6 +442,9 @@ fn commit_takes_only_annotation_events() {
     assert_eq!((&report["uncommitted"], &report["documents"][0]["uncommitted"]), (&5.into(), &2.into()));
     assert!(cli::render_report(&report).contains("2 uncommitted changes"));
     assert!(cli::render_report(&report).ends_with("5 files to commit; see `annox commit --dry-run`\n"));
+    let verbose = cli::render_report_verbose(&report);
+    assert!(verbose.contains("\n  uncommitted  2 changes\n"));
+    assert!(verbose.ends_with("5 files to commit; see `annox commit --dry-run`\n"));
 
     let planned = annox(dir.path(), &["commit", "--dry-run"]);
     assert_eq!(planned["commit"], Value::Null);
