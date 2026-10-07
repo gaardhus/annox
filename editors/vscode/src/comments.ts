@@ -61,6 +61,24 @@ export function changeMarkdown(original: string | undefined, replacement: string
   return `Replace ${code(original)} with ${code(replacement)}`;
 }
 
+/** `md` with each lone `~` escaped, outside code: GFM reads a pair of them as
+ * strikethrough, but authors mostly mean "approximately". `~~` is kept. */
+export function escapeTildes(md: string): string {
+  let fenced = false;
+  return md
+    .split("\n")
+    .map((line) => {
+      if (/^\s*(```|~~~)/.test(line)) {
+        fenced = !fenced;
+        return line;
+      }
+      if (fenced) return line;
+      // Code spans are kept whole; elsewhere a `~` without a `~` or `\` next to it is escaped.
+      return line.replace(/(`+)[^]*?\1|(?<![~\\])~(?!~)/g, (m) => (m === "~" ? "\\~" : m));
+    })
+    .join("\n");
+}
+
 function markdown(text: string): vscode.MarkdownString {
   const md = new vscode.MarkdownString(text);
   md.supportThemeIcons = true;
@@ -225,7 +243,7 @@ export class Threads implements vscode.Disposable {
     if (conflicted.length) {
       lines.push(`$(warning) **Conflicting changes:** ${conflicted.join(", ")}. Use *Resolve Conflicts*.`);
     }
-    if (a.body) lines.push(a.body);
+    if (a.body) lines.push(escapeTildes(a.body));
     else if (a.label) lines.push(`*${a.label}*`);
     else if (a.kind === "comment") lines.push("*(highlight)*");
     return markdown(lines.join("\n\n"));
@@ -278,7 +296,7 @@ export class Threads implements vscode.Disposable {
         return c;
       };
       const list = [build(a, true, this.rootBody(a, doc))];
-      for (const r of a.replies ?? []) list.push(build(r, false, markdown(r.body ?? "")));
+      for (const r of a.replies ?? []) list.push(build(r, false, markdown(escapeTildes(r.body ?? ""))));
       entry.comments = comments;
       thread.comments = list;
       thread.label = threadLabel(a);

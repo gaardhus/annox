@@ -12,7 +12,8 @@ const VERSIONS: [&str; 3] = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const INSTRUCTIONS: &str = "Annotations (comments and suggested edits) on files in an annox workspace. \
 Target text by quoting it exactly; if a quote occurs more than once, quote more of it or pass `occurrence`. \
 To propose changes to someone's prose, prefer `suggest` over editing the file, so they can review each change. \
-Read review comments with `list_annotations`, and answer with `reply`, `suggest`, and `set_status`.";
+Read review comments with `list_annotations`, and answer with `reply`, `suggest`, and `set_status`. \
+Bodies are Markdown: write ≈ or \"about\" rather than `~`, since two single tildes strike through the text between them.";
 
 pub struct Config {
     /// Directory commands run in: file paths are relative to it.

@@ -1136,6 +1136,51 @@ fn diff_block(old: &str, new: &str) -> String {
     out + &fence
 }
 
+/// `md` with each lone `~` escaped, outside code: GFM reads a pair of them as
+/// strikethrough, but authors mostly mean "approximately". `~~` is kept.
+fn escape_tildes(md: &str) -> String {
+    let mut out = Vec::new();
+    let mut fenced = false;
+    for line in md.split('\n') {
+        let t = line.trim_start();
+        if t.starts_with("```") || t.starts_with("~~~") {
+            fenced = !fenced;
+            out.push(line.to_string());
+            continue;
+        }
+        if fenced {
+            out.push(line.to_string());
+            continue;
+        }
+        let b = line.as_bytes();
+        let (mut escaped, mut start, mut code, mut j) = (String::new(), 0, 0, 0);
+        while j < b.len() {
+            if b[j] == b'`' {
+                let n = b[j..].iter().take_while(|&&c| c == b'`').count();
+                code = if code == 0 {
+                    n
+                } else if code == n {
+                    0
+                } else {
+                    code
+                };
+                j += n;
+                continue;
+            }
+            let prev = j.checked_sub(1).map(|i| b[i]);
+            if b[j] == b'~' && code == 0 && !matches!(prev, Some(b'~' | b'\\')) && b.get(j + 1) != Some(&b'~') {
+                escaped.push_str(&line[start..j]);
+                escaped.push('\\');
+                start = j;
+            }
+            j += 1;
+        }
+        escaped.push_str(&line[start..]);
+        out.push(escaped);
+    }
+    out.join("\n")
+}
+
 /// A thread as Markdown (§6.5.2): the proposed change first for suggestions,
 /// then the root and its replies.
 fn thread_markdown(item: &Item, replies: Option<&Vec<Value>>) -> String {
@@ -1162,12 +1207,25 @@ fn thread_markdown(item: &Item, replies: Option<&Vec<Value>>) -> String {
         header.push_str(" · relocated");
     }
     match item.state["body"].as_str() {
-        Some(body) => parts.push(format!("{header}\n\n{body}")),
+        Some(body) => parts.push(format!("{header}\n\n{}", escape_tildes(body))),
         None => parts.push(header),
     }
     for reply in replies.into_iter().flatten().filter(|r| r["deleted"] == json!(false)) {
         // A thematic break renders as a full-width rule between messages.
-        parts.push(format!("---\n\n{}\n\n{}", author_line(reply), reply["body"].as_str().unwrap_or_default()));
+        let body = escape_tildes(reply["body"].as_str().unwrap_or_default());
+        parts.push(format!("---\n\n{}\n\n{body}", author_line(reply)));
     }
     parts.join("\n\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_tildes;
+
+    #[test]
+    fn lone_tildes_are_escaped_outside_code() {
+        let body = "less than ~0.1. With ~all, ~~struck~~, `a ~b~`, \\~ kept\n```\nx ~ y\n```";
+        let want = "less than \\~0.1. With \\~all, ~~struck~~, `a ~b~`, \\~ kept\n```\nx ~ y\n```";
+        assert_eq!(escape_tildes(body), want);
+    }
 }

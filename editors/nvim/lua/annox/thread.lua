@@ -22,6 +22,61 @@ local M = {}
 -- `ns`, so clearing them never touches the marks of an annotated buffer.
 local diff_ns = vim.api.nvim_create_namespace("annox_diff")
 
+--- `md` with each lone `~` escaped, outside code: GFM reads a pair of them as
+--- strikethrough, but authors mostly mean "approximately". `~~` is kept.
+local function escape_tildes(md)
+  local out, fenced = {}, false
+  for _, line in ipairs(vim.split(md, "\n")) do
+    if line:match("^%s*```") or line:match("^%s*~~~") then
+      fenced = not fenced
+    elseif not fenced then
+      local parts, start, code, j = {}, 1, 0, 1
+      while j <= #line do
+        local c = line:sub(j, j)
+        if c == "`" then
+          local n = #line:match("^`+", j)
+          if code == 0 then
+            code = n
+          elseif code == n then
+            code = 0
+          end
+          j = j + n
+        else
+          local prev, next_ = line:sub(j - 1, j - 1), line:sub(j + 1, j + 1)
+          if c == "~" and code == 0 and prev ~= "~" and prev ~= "\\" and next_ ~= "~" then
+            table.insert(parts, line:sub(start, j - 1) .. "\\")
+            start = j
+          end
+          j = j + 1
+        end
+      end
+      table.insert(parts, line:sub(start))
+      line = table.concat(parts)
+    end
+    table.insert(out, line)
+  end
+  return out
+end
+
+--- Hides the backslash of each Markdown escape in float `fbuf`, as Markdown
+--- renderers do: Neovim's own queries only color it.
+local function conceal_escapes(fbuf)
+  local ok, parser = pcall(vim.treesitter.get_parser, fbuf, "markdown")
+  if not ok or not parser then
+    return
+  end
+  parser:parse(true)
+  local query = vim.treesitter.query.parse("markdown_inline", "(backslash_escape) @escape")
+  parser:for_each_tree(function(tree, ltree)
+    if ltree:lang() == "markdown_inline" then
+      for _, node in query:iter_captures(tree:root(), fbuf) do
+        local row, col = node:start()
+        vim.api.nvim_buf_set_extmark(fbuf, diff_ns, row, col, { end_col = col + 1, conceal = "" })
+      end
+    end
+  end)
+end
+
 --- The thread as markdown lines. A suggestion's old text is read from `bufnr`.
 local function thread_lines(a, bufnr)
   local lines = {}
@@ -52,12 +107,12 @@ local function thread_lines(a, bufnr)
     table.insert(lines, "")
   end
   table.insert(lines, person(a) .. (a.status ~= "open" and ("  _" .. a.status .. "_") or ""))
-  vim.list_extend(lines, vim.split(str(a.body), "\n"))
+  vim.list_extend(lines, escape_tildes(str(a.body)))
   for _, r in ipairs(a.replies or {}) do
     -- The markdown float expands a thematic break into a full-width rule.
     table.insert(lines, "---")
     table.insert(lines, person(r))
-    vim.list_extend(lines, vim.split(str(r.body), "\n"))
+    vim.list_extend(lines, escape_tildes(str(r.body)))
   end
   return lines
 end
@@ -122,6 +177,7 @@ local function open_thread(a, bufnr, opts)
   )
   -- Styled here, for `a`, which needn't be under the cursor.
   vim.b[fbuf].annox_own_float = true
+  conceal_escapes(fbuf)
   if a.kind == "suggestion" and bufnr then
     style_diff_blocks(fbuf, { suggestion_change(a, bufnr) })
   end
@@ -149,6 +205,7 @@ local function style_hover(win, fbuf)
     end
   end
   vim.api.nvim_buf_clear_namespace(fbuf, diff_ns, 0, -1)
+  conceal_escapes(fbuf)
   style_diff_blocks(fbuf, changes)
 end
 

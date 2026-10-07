@@ -68,7 +68,7 @@ annox delete ID / annox restore ID
 
 - If the quote occurs more than once, the command fails and lists the lines. Quote a longer passage so it's unique. Use `--occurrence N` (1-based) only when longer text wouldn't be unique either.
 - Quotes may span lines. Use real newlines, not `\n`.
-- `--body` is Markdown.
+- `--body` is Markdown. Write ≈ or "about" rather than `~`, since two single tildes strike through the text between them.
 - `--local` keeps an annotation private to this machine, as a draft. Use it only if the user asks.
 
 ## How to work
