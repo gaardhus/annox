@@ -35,6 +35,8 @@ Resolved threads and closed suggestions stay in the panel, marked resolved. Once
 
 The **annox** view in the panel lists the annotations of the open files: open ones in document order, then closed ones, newest first. Click one to go to it, or, if its text is gone, to read its thread and history.
 
+The **annox** sidebar, in the activity bar, shows the active file's annotations as cards: what each is on, or a suggestion's change as a word diff, its comment and replies, and buttons to act on it. They are grouped into *Needs attention* (orphaned, stale or conflicted), *Drafts*, *Open*, and *Closed*, which is folded. Reply in a card without opening its thread, and press Ctrl+Enter to send. The cards on the text under the cursor are outlined, and scrolled to.
+
 In the editor, annotated text is tinted. Comments are blue and underlined, highlights (comments with no body) blue without the underline, suggestions purple, and drafts green. A stale suggestion has a wavy yellow underline, and a conflicted annotation a red one. An annotation on a point between two characters shows as ◆. The first line of each comment, or each suggested replacement, is shown at the end of its line. Annotations whose text could not be found are counted in a notice at the top of the file. Click it to pick one.
 
 ## Commands

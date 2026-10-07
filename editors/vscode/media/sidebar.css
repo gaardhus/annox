@@ -1,0 +1,205 @@
+/* The annox sidebar. Colors are the theme's, and annox's own (package.json
+   `contributes.colors`), which webviews get as --vscode-annox-* variables. */
+
+body {
+  padding: 0 8px 8px;
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+button {
+  font: inherit;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: none;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+}
+button:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+button.primary {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+button.primary:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.hint {
+  color: var(--vscode-descriptionForeground);
+}
+.center {
+  text-align: center;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: 6px 0;
+}
+.head .file {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.head .count {
+  color: var(--vscode-descriptionForeground);
+}
+.head .bulk {
+  margin-left: auto;
+}
+
+.ghead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 2px 0;
+  color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-foreground));
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-align: left;
+}
+.ghead .chev {
+  width: 1em;
+}
+.ghead .n {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-weight: 400;
+}
+
+.card {
+  --accent: var(--vscode-annox-commentUnderline);
+  margin: 6px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--vscode-widget-border, transparent);
+  border-left: 3px solid var(--accent);
+  border-radius: 3px;
+  background: var(--vscode-editorWidget-background);
+}
+.card.highlight {
+  --accent: var(--vscode-annox-pointForeground);
+}
+.card.suggestion {
+  --accent: var(--vscode-charts-purple);
+}
+.card.drafts {
+  --accent: var(--vscode-charts-green);
+}
+.card.attention {
+  --accent: var(--vscode-editorWarning-foreground);
+}
+.card.closed {
+  --accent: var(--vscode-disabledForeground);
+  opacity: 0.8;
+}
+.card.selected {
+  outline: 1px solid var(--vscode-focusBorder);
+  background: var(--vscode-list-inactiveSelectionBackground);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}
+.meta .author {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+.meta .kind {
+  text-transform: capitalize;
+}
+.meta .where {
+  margin-left: auto;
+}
+.badge {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.quote {
+  margin: 4px 0;
+  padding: 0 0 0 6px;
+  border-left: 2px solid var(--vscode-textBlockQuote-border);
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+.diff {
+  margin: 4px 0;
+  font-family: var(--vscode-editor-font-family);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diff del {
+  color: var(--vscode-annox-deletionForeground);
+}
+.diff ins {
+  color: var(--vscode-annox-insertionForeground);
+  text-decoration: none;
+  background: var(--vscode-diffEditor-insertedTextBackground);
+}
+.body {
+  margin: 4px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.note {
+  margin: 4px 0;
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.replies {
+  margin: 4px 0;
+  padding: 0 0 0 8px;
+  border-left: 1px solid var(--vscode-widget-border, var(--vscode-descriptionForeground));
+  list-style: none;
+}
+.replies li + li {
+  margin-top: 4px;
+}
+.replies .body {
+  margin: 0;
+}
+
+.reply-box textarea {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 4px;
+  padding: 4px;
+  resize: vertical;
+  border: 1px solid var(--vscode-input-border, transparent);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+}
+.reply-box textarea:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}

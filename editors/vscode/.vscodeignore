@@ -1,5 +1,7 @@
 **
 !dist/extension.js
+!dist/sidebar.js
+!media/**
 !package.json
 !README.md
 !LICENSE

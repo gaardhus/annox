@@ -12,6 +12,7 @@ import { Annox } from "./client.ts";
 import { Threads } from "./comments.ts";
 import { Decorations } from "./decorations.ts";
 import { HistoryDocs, Scratch } from "./scratch.ts";
+import { Sidebar } from "./sidebar/provider.ts";
 import { Store, fromRange } from "./store.ts";
 import { Suggesting } from "./suggesting.ts";
 import { AnnotationsView } from "./view.ts";
@@ -22,6 +23,7 @@ export interface Api {
   store: Store;
   threads: Threads;
   suggesting: Suggesting;
+  sidebar: Sidebar;
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<Api> {
@@ -35,6 +37,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Api> {
   const decorations = new Decorations(store, (uri) => suggesting.isOn(uri));
   const scratch = new Scratch();
   const history = new HistoryDocs();
+  const sidebar = new Sidebar(context.extensionUri, store);
   const actions = new Actions(annox, store, threads, suggesting, scratch, history);
   context.subscriptions.push(
     store,
@@ -45,6 +48,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Api> {
     scratch,
     history,
     new AnnotationsView(store),
+    sidebar,
     ...actions.register(),
     suggesting.onDidChange((uri) => decorations.renderUri(uri)),
     vscode.commands.registerCommand("annox.toggleOverlay", () => {
@@ -63,7 +67,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Api> {
     }),
   );
   await annox.start();
-  return { annox, store, threads, suggesting };
+  return { annox, store, threads, suggesting, sidebar };
 }
 
 /** Shares the cursor with collaborators on a sync hub (§7.8), at most every

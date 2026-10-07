@@ -23,6 +23,14 @@ if (!fs.existsSync(bin)) {
 // The extension and the suite, built the way `npm run build` builds the extension.
 const build = { bundle: true, external: ["vscode"], format: "cjs", platform: "node", target: "node20", sourcemap: true };
 await esbuild.build({ ...build, entryPoints: [path.join(extension, "src/extension.ts")], outfile: path.join(extension, "dist/extension.js") });
+await esbuild.build({
+  bundle: true,
+  format: "iife",
+  platform: "browser",
+  target: "es2022",
+  entryPoints: [path.join(extension, "src/sidebar/webview.ts")],
+  outfile: path.join(extension, "dist/sidebar.js"),
+});
 await esbuild.build({ ...build, entryPoints: [path.join(here, "suite.ts")], outfile: path.join(extension, "out/suite.js") });
 
 const log = path.join(extension, "out/e2e.log");

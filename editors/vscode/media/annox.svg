@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="24" height="24">
+  <!-- assets/annox.svg in one colour, for the activity bar, which draws icons as a mask -->
+  <defs>
+    <mask id="gap" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
+      <rect width="128" height="128" fill="#fff"/>
+      <path d="M81 36H107a13 13 0 0 1 13 13V59a13 13 0 0 1-13 13H92.2L74.5 83.5L78.1 72H81a13 13 0 0 1-13-13V49a13 13 0 0 1 13-13Z" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+    </mask>
+    <mask id="dots" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
+      <rect width="128" height="128" fill="#fff"/>
+      <circle cx="82" cy="54" r="5"/>
+      <circle cx="94" cy="54" r="5"/>
+      <circle cx="106" cy="54" r="5"/>
+    </mask>
+  </defs>
+  <g mask="url(#gap)" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M27 12H66L88 34V101a15 15 0 0 1-15 15H27a15 15 0 0 1-15-15V27a15 15 0 0 1 15-15Z"/>
+    <path d="M66 12V24a10 10 0 0 0 10 10H88"/>
+    <path d="M25 40H56M25 62H50"/>
+    <rect x="25" y="76" width="38" height="16" rx="6" fill="#fff" stroke="none"/>
+  </g>
+  <path mask="url(#dots)" fill="#fff" d="M81 36H107a13 13 0 0 1 13 13V59a13 13 0 0 1-13 13H92.2L74.5 83.5L78.1 72H81a13 13 0 0 1-13-13V49a13 13 0 0 1 13-13Z"/>
+</svg>

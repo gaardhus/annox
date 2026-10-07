@@ -444,6 +444,36 @@ export async function run(): Promise<void> {
     assert.match(git("status", "--porcelain", "paper.tex"), /paper\.tex/, "the document is left alone");
   });
 
+  step("the sidebar lists the active file's annotations as cards", async () => {
+    await focus();
+    const c = await exec("annox.comment", { range: range(2, "proof"), body: "Shorter?" });
+    const s = await exec("annox.suggest", { range: range(2, "small"), replacement: "tiny" });
+    await wait("pushed", () => get(c.id) && get(s.id));
+    const state = api.sidebar.state();
+    assert.equal(state.file, "paper.tex");
+    assert.ok(state.inWorkspace);
+    const comment = state.cards.find((x) => x.id === c.id);
+    assert.equal(comment?.group, "open");
+    assert.equal(comment?.quote, "proof");
+    assert.equal(comment?.line, 3);
+    assert.deepEqual(comment?.actions, ["resolve", "reply"]);
+    const suggestion = state.cards.find((x) => x.id === s.id);
+    assert.deepEqual(suggestion?.diff, [
+      { op: "-", text: "small" },
+      { op: "+", text: "tiny" },
+    ]);
+    assert.ok(state.cards.some((x) => x.group === "closed"), "closed annotations are listed too");
+    const at = range(2, "proof").start;
+    editor.selection = new vscode.Selection(at.line, at.character + 1, at.line, at.character + 1);
+    assert.deepEqual(api.sidebar.state().selected, [c.id]);
+    // Its script runs in the webview.
+    await vscode.commands.executeCommand("annox.sidebar.focus");
+    await wait("sidebar loaded", () => api.sidebar.loaded);
+    await focus();
+    await exec("annox.rejectSuggestion", { annotation: s.id });
+    await exec("annox.resolveThread", { annotation: c.id });
+  });
+
   step("initializing a workspace", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "annox-init-"));
     await exec("annox.init", { root: dir, confirm: false });

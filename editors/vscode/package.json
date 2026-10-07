@@ -246,6 +246,13 @@
       }
     ],
     "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "annox-sidebar",
+          "title": "annox",
+          "icon": "media/annox.svg"
+        }
+      ],
       "panel": [
         {
           "id": "annox",
@@ -255,6 +262,14 @@
       ]
     },
     "views": {
+      "annox-sidebar": [
+        {
+          "id": "annox.sidebar",
+          "type": "webview",
+          "name": "This File",
+          "icon": "media/annox.svg"
+        }
+      ],
       "annox": [
         {
           "id": "annox.annotations",
@@ -743,11 +758,13 @@
     ]
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
+    "build": "npm run build:extension && npm run build:sidebar",
+    "build:extension": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
+    "build:sidebar": "esbuild src/sidebar/webview.ts --bundle --outfile=dist/sidebar.js --format=iife --platform=browser --target=es2022 --sourcemap",
     "check": "tsc --noEmit",
     "test:unit": "node --test \"test/unit/*.test.ts\"",
     "test:e2e": "node test/e2e/run.mjs",
-    "package": "cp ../../LICENSE . && npm run build -- --minify && npx --yes @vscode/vsce@4 package --no-dependencies"
+    "package": "cp ../../LICENSE . && npm run build:extension -- --minify && npm run build:sidebar -- --minify && npx --yes @vscode/vsce@4 package --no-dependencies"
   },
   "dependencies": {
     "diff": "^9.0.0",
