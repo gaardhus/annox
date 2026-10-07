@@ -85,16 +85,7 @@ powershell -ExecutionPolicy ByPass -c "& ([scriptblock]::Create((irm https://gaa
 
 Later, `annox update` installs the newest release over the binary you run it from, and also updates the skill if it's installed. Pass `--version vX.Y.Z` to pick a release.
 
-To build from source and work on annox:
-
-```sh
-cargo test               # unit, conformance, and end-to-end server tests
-cargo build --release    # produces target/release/annox
-just hooks               # install the git hooks (needs prek and just)
-just check               # run the checks CI runs
-```
-
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat: …`, `fix(nvim): …`). A commit-msg hook and CI check them with [committed](https://github.com/crate-ci/committed) (see `committed.toml`), and PR titles too, since PRs are squash-merged. Releases are automated: every push to `main` updates a release PR that bumps the version and `CHANGELOG.md` with [git-cliff](https://git-cliff.org) (see `cliff.toml`), and merging that PR tags `vX.Y.Z` and attaches `annox` binaries and the VS Code extension to the GitHub release. The binary, the crates, and the editor plugins share that one version; the spec is versioned separately.
+To build from source with `cargo build --release`, see [Contributing](#contributing).
 
 The server implements:
 
@@ -199,3 +190,7 @@ The identity is taken from the first of these that is set:
 4. Git's `user.email` and `user.name`, as `mailto:` plus the email.
 
 A name alone only renames the identity from the next step down. An id without a name stands on its own, so an agent's `ANNOX_AUTHOR=urn:agent:claude` never picks up your name. If `config.json` is invalid, the CLI refuses to write, and `annox lsp` logs a warning and uses git's identity.
+
+## Contributing
+
+Contributions are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers building and testing, changing the spec, and commit conventions. For anything bigger than a small fix, please open an issue first.
