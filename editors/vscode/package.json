@@ -181,6 +181,12 @@
         "icon": "$(history)"
       },
       {
+        "command": "annox.showHere",
+        "title": "Show All Annotations Here",
+        "category": "annox",
+        "icon": "$(search)"
+      },
+      {
         "command": "annox.commit",
         "title": "Commit Annotations",
         "category": "annox",
@@ -394,6 +400,10 @@
           "when": "annox.inWorkspace"
         },
         {
+          "command": "annox.showHere",
+          "when": "annox.inWorkspace"
+        },
+        {
           "command": "annox.open",
           "when": "false"
         }
@@ -548,6 +558,10 @@
         {
           "command": "annox.history",
           "group": "3_more@2"
+        },
+        {
+          "command": "annox.showHere",
+          "group": "3_more@3"
         }
       ],
       "editor/title": [

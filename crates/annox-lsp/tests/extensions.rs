@@ -311,6 +311,53 @@ fn revert_suggests_or_applies_the_original_text() {
 }
 
 #[test]
+fn annotations_at_include_closed_ones() {
+    let mut f = setup();
+    let uri = f.uri.clone();
+    let create = |c: &mut Client, fields: Value| {
+        let mut params = json!({ "textDocument": { "uri": uri } });
+        params.as_object_mut().unwrap().extend(fields.as_object().unwrap().clone());
+        c.call("annox/create", params)["id"].as_str().unwrap().to_owned()
+    };
+    let resolved = create(&mut f.client, json!({ "kind": "comment", "range": range(1, 3, 12), "body": "Which?" }));
+    f.client.call("annox/setStatus", json!({ "annotation": resolved, "status": "resolved" }));
+    let accepted = create(
+        &mut f.client,
+        json!({ "kind": "suggestion", "range": range(1, 14, 27), "replacement": "we show that" }),
+    );
+    let id = f.client.request("annox/accept", json!({ "annotation": accepted }));
+    f.client.answer_apply_edit(true);
+    f.client.response(&id).unwrap();
+    let applied = DOC.replace("we prove that", "we show that");
+    f.client.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": uri, "version": 2 }, "contentChanges": [{ "text": applied }] }),
+    );
+    let open = create(&mut f.client, json!({ "kind": "comment", "range": range(1, 31, 36), "body": "tight?" }));
+
+    let mut at = |r: Value| -> Vec<Value> {
+        let result = f.client.call("annox/annotationsAt", json!({ "textDocument": { "uri": uri }, "range": r }));
+        result["annotations"].as_array().unwrap().clone()
+    };
+    let hits = at(range(1, 14, 20));
+    assert_eq!(hits.len(), 1);
+    assert_eq!(
+        (&hits[0]["id"], &hits[0]["status"], &hits[0]["quote"], &hits[0]["at"]),
+        (&json!(accepted), &json!("accepted"), &json!("we prove that"), &range(1, 14, 26)),
+        "an accepted suggestion is on the text it put in"
+    );
+    assert!(hits[0].get("resolution").is_none(), "a closed one isn't resolved");
+    let mut ids: Vec<String> = at(range(1, 0, 40)).iter().map(|v| v["id"].as_str().unwrap().to_owned()).collect();
+    ids.sort();
+    let mut all = vec![resolved.clone(), accepted, open];
+    all.sort();
+    assert_eq!(ids, all);
+    let point = at(range(1, 5, 5));
+    assert_eq!((point.len(), &point[0]["id"]), (1, &json!(resolved)), "a point inside the text counts");
+    f.client.shutdown();
+}
+
+#[test]
 fn move_document_keeps_annotations() {
     let mut f = setup();
     let uri = f.uri.clone();

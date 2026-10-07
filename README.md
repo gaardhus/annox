@@ -101,6 +101,7 @@ The `annox` binary also reads and writes annotations directly, printing JSON (`a
 ```sh
 annox init [--local]
 annox list [FILE] [--all | --closed] [--kind K] [--status S] [--mine | --others] [--broken]
+annox list paper.md --quote "the bound is tight"   # everything on that text, closed annotations too
 annox show ID
 annox history ID [--json]
 annox report [FILE] [--json | --verbose]

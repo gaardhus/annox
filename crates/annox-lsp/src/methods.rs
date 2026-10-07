@@ -31,11 +31,6 @@ fn io_failure(e: std::io::Error) -> Failure {
     (INTERNAL_ERROR, e.to_string())
 }
 
-/// Whether two ranges share text, or a point range touches the other range.
-fn overlaps((s1, e1): (usize, usize), (s2, e2): (usize, usize)) -> bool {
-    (s1 < e2 && s2 < e1) || (s1 == e1 && s2 <= s1 && s1 <= e2) || (s2 == e2 && s1 <= s2 && s2 <= e1)
-}
-
 impl Server<'_> {
     /// Dispatches an extension request. Requests that apply edits reply later
     /// (§6.6.2 "Applying edits"); all others reply here.
@@ -47,6 +42,7 @@ impl Server<'_> {
             "annox/resolveConflict" => return self.m_resolve_conflict(id, &params),
             "annox/create" => return self.m_create_or_init(id, params),
             "annox/annotations" => self.m_annotations(&params),
+            "annox/annotationsAt" => self.m_annotations_at(&params),
             "annox/reply" => self.m_reply(&params),
             "annox/publish" => self.m_publish(&params),
             "annox/edit" => self.m_edit(&params),
@@ -60,7 +56,8 @@ impl Server<'_> {
             "annox/commit" => self.m_commit(&params),
             _ => fail(-32601, format!("unknown method {method}")),
         };
-        let changed = !matches!(method.as_str(), "annox/annotations" | "annox/history" | "annox/commit");
+        let changed =
+            !matches!(method.as_str(), "annox/annotations" | "annox/annotationsAt" | "annox/history" | "annox/commit");
         self.reply(id, result);
         if changed {
             self.refresh_all();
@@ -108,6 +105,18 @@ impl Server<'_> {
             "annotations": views::views(&a, self.encoding, include_closed, include_deleted),
             "document": views::document_info(&a),
         }))
+    }
+
+    /// Everything on a range, closed annotations included, without changing
+    /// what `annox/annotations` pushes.
+    fn m_annotations_at(&mut self, params: &Value) -> Result<Value, Failure> {
+        let uri = uri_param(&params["textDocument"], "uri")?;
+        let range = range_param(params)?;
+        let include_deleted = params["includeDeleted"].as_bool().unwrap_or(false);
+        self.invalidate();
+        let a = self.analyze_uri(&uri)?;
+        let around = self.offsets(&a, range);
+        Ok(json!({ "annotations": views::views_at(&a, self.encoding, around, include_deleted) }))
     }
 
     /// Creates an annotation, first offering to create a workspace if the
@@ -423,7 +432,9 @@ impl Server<'_> {
                 Ok(applied) if applied.resolution.step >= 3 && !confirmed => {
                     Some((NEEDS_REVIEW, "relocated by partial context; accept individually"))
                 }
-                Ok(applied) if edits.iter().any(|(s, e, _)| overlaps((*s, *e), (applied.start, applied.end))) => {
+                Ok(applied)
+                    if edits.iter().any(|(s, e, _)| anchor::overlaps((*s, *e), (applied.start, applied.end))) =>
+                {
                     Some((OVERLAP, "overlaps a suggestion already in this batch"))
                 }
                 Ok(applied) => {

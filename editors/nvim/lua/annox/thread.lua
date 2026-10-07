@@ -12,6 +12,7 @@ local under_cursor = util.under_cursor
 local with_annotation = util.with_annotation
 local find_annotation = util.find_annotation
 local resolved_text = util.resolved_text
+local target_range = util.target_range
 local word_changes = worddiff.word_changes
 local mark_words = worddiff.mark_words
 local diff_block = worddiff.diff_block
@@ -77,6 +78,15 @@ local function conceal_escapes(fbuf)
   end)
 end
 
+--- The text suggestion `a` replaces: the quote it was made on once it's
+--- closed, if the view has one (`annox/annotationsAt`), else read from `bufnr`.
+local function old_text(a, bufnr)
+  if a.status ~= "open" and type(a.quote) == "string" then
+    return a.quote
+  end
+  return bufnr and resolved_text(a, bufnr) or ""
+end
+
 --- The thread as markdown lines. A suggestion's old text is read from `bufnr`.
 local function thread_lines(a, bufnr)
   local lines = {}
@@ -88,9 +98,9 @@ local function thread_lines(a, bufnr)
     return string.format("**%s** · %s", author.name or author.id or "unknown", x.created or "")
   end
   if a.kind == "suggestion" then
-    local stale = a.applicable and "" or " (stale)"
+    local stale = (a.status == "open" and not a.applicable) and " (stale)" or ""
     table.insert(lines, string.format("**Suggestion%s:**", stale))
-    local old = bufnr and resolved_text(a, bufnr) or ""
+    local old = old_text(a, bufnr)
     vim.list_extend(lines, diff_block(old, type(a.edit) == "table" and str(a.edit.replacement) or ""))
     -- LSP decodes JSON null as vim.NIL, which is truthy.
     if type(a.reverts) == "string" then
@@ -120,7 +130,7 @@ end
 --- The old and new text of suggestion `a`, as shown in its diff block.
 local function suggestion_change(a, bufnr)
   local new = type(a.edit) == "table" and a.edit.replacement
-  return { old = resolved_text(a, bufnr), new = type(new) == "string" and new or "" }
+  return { old = old_text(a, bufnr), new = type(new) == "string" and new or "" }
 end
 
 --- Styles the diff blocks of `changes` ({ old, new }) wherever they show in
@@ -270,6 +280,39 @@ function M.history(opts)
       end
       vim.lsp.util.open_floating_preview(lines, "text", { border = "rounded", focus_id = "annox-history" })
     end)
+  end)
+end
+
+--- Shows every annotation on the selection or under the cursor, closed and
+--- accepted ones included, oldest first: everything said about that text.
+function M.here(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  local params = { textDocument = { uri = vim.uri_from_bufnr(bufnr) }, range = target_range(bufnr, opts) }
+  request(bufnr, "annox/annotationsAt", params, function(result)
+    local all = result.annotations or {}
+    if #all == 0 then
+      return vim.notify("annox: no annotations on this text", vim.log.levels.INFO)
+    end
+    table.sort(all, function(x, y)
+      return (x.created or "") < (y.created or "")
+    end)
+    local lines, changes = {}, {}
+    for i, a in ipairs(all) do
+      if i > 1 then
+        table.insert(lines, "")
+      end
+      table.insert(lines, string.format("## Line %d · %s %s", a.at.start.line + 1, a.status, a.kind))
+      table.insert(lines, "")
+      vim.list_extend(lines, thread_lines(a, bufnr))
+      if a.kind == "suggestion" then
+        table.insert(changes, suggestion_change(a, bufnr))
+      end
+    end
+    local fbuf = vim.lsp.util.open_floating_preview(lines, "markdown", { border = "rounded", focus_id = "annox-here" })
+    vim.b[fbuf].annox_own_float = true
+    conceal_escapes(fbuf)
+    style_diff_blocks(fbuf, changes)
   end)
 end
 

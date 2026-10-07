@@ -39,6 +39,7 @@ annox list --mine --kind suggestion  # your own suggestions
 annox list --broken                  # orphaned, or suggestions that can't be applied
 annox list --status resolved         # only these statuses (comma-separated)
 annox list --author ID / --not-author ID
+annox list paper.md --quote TEXT     # everything on this text, closed too: check before commenting
 ```
 
 `--mine` and `--others` use your identity (see above).

@@ -121,6 +121,7 @@ export class Actions {
       "annox.retarget": (arg) => this.retarget(arg),
       "annox.resolveConflicts": (arg) => this.resolveConflict(arg),
       "annox.history": (arg) => this.showHistory(arg),
+      "annox.showHere": (arg) => this.showHere(arg),
       "annox.open": (arg) => this.open(arg),
       "annox.commit": (arg) => this.commit(options(arg)),
       "annox.restartServer": () => this.annox.restart(),
@@ -758,6 +759,27 @@ export class Actions {
     const actions = eventActions(events);
     const lines = events.map((e, i) => `${e.time ?? ""}  ${authorName(e).padEnd(width)}  ${actions[i]}`);
     await this.history.show(`History of ${describe(t.view).slice(0, 40)}`, lines.join("\n"));
+  }
+
+  /** Shows every annotation on the selection or at the cursor, closed and
+   * accepted ones included, oldest first: everything said about that text. */
+  private async showHere(arg: Arg): Promise<void> {
+    const editor = await this.editor();
+    if (!editor) return;
+    const range = options(arg).range ?? fromRange(editor.selection);
+    const result = await this.annox.request<{ annotations: AnnotationView[] }>("annox/annotationsAt", {
+      textDocument: { uri: editor.document.uri.toString() },
+      range,
+    });
+    if (!result) return;
+    const all = result.annotations.sort((x, y) => (x.created ?? "").localeCompare(y.created ?? ""));
+    if (all.length === 0) {
+      info("no annotations on this text");
+      return;
+    }
+    const where = (a: AnnotationView) => (a.at ? `Line ${a.at.start.line + 1} · ` : "");
+    const sections = all.map((a) => threadMarkdown(a, this.store, `${where(a)}${a.status} ${describe(a)}`, editor.document));
+    await this.history.show(`Annotations on line ${range.start.line + 1}.md`, sections.join("\n"));
   }
 
   // Repairs ---------------------------------------------------------------

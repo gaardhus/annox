@@ -81,6 +81,11 @@ impl Resolution {
     const ORPHANED: Resolution = Resolution { state: State::Orphaned, range: None, step: 7 };
 }
 
+/// Whether two ranges share text, or a point range touches the other range.
+pub fn overlaps((s1, e1): (usize, usize), (s2, e2): (usize, usize)) -> bool {
+    (s1 < e2 && s2 < e1) || (s1 == e1 && s2 <= s1 && s1 <= e2) || (s2 == e2 && s1 <= s2 && s2 <= e1)
+}
+
 /// Resolves `anchor` against the current document `doc` (§3.7.2).
 pub fn resolve(doc: &Text, anchor: &Anchor) -> Resolution {
     let d = &doc.chars;

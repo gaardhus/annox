@@ -344,6 +344,26 @@ export async function run(): Promise<void> {
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
   });
 
+  step("everything on some text, closed annotations included", async () => {
+    await focus();
+    await exec("annox.showHere", { range: range(3, "conclude") });
+    const shown = await wait("annotations page", () => {
+      const d = vscode.window.activeTextEditor?.document;
+      return d?.uri.scheme === "annox-history" ? d : undefined;
+    });
+    assert.match(shown.getText(), /resolved comment: Done\./);
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    // An accepted suggestion is on the text it put in, shown with what it replaced.
+    await focus();
+    await exec("annox.showHere", { range: range(1, "prove") });
+    const accepted = await wait("accepted page", () => {
+      const d = vscode.window.activeTextEditor?.document;
+      return d?.uri.scheme === "annox-history" && d.getText().includes("accepted") ? d : undefined;
+    });
+    assert.match(accepted.getText(), /Replace `show` with `prove`/);
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+  });
+
   step("presence is sent as the cursor moves", async () => {
     await focus();
     const sent: { selection: Range }[] = [];

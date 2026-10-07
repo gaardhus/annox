@@ -178,6 +178,28 @@ wait("comment to resolve", function()
   return #annotations() == 0
 end)
 
+-- Everything on some text, closed annotations included.
+annox.here({ range = range(1, 0, 20) })
+local here_text
+wait("annotations-here float", function()
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_config(w).relative ~= "" then
+      here_text = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(w), 0, -1, false), "\n")
+      return true
+    end
+  end
+end)
+check(
+  here_text:find("resolved comment", 1, true) and here_text:find("Which section?", 1, true),
+  "the resolved comment is shown: " .. here_text
+)
+check(here_text:find("accepted suggestion", 1, true) ~= nil, "the accepted revert is shown: " .. here_text)
+for _, w in ipairs(vim.api.nvim_list_wins()) do
+  if vim.api.nvim_win_get_config(w).relative ~= "" then
+    vim.api.nvim_win_close(w, true)
+  end
+end
+
 local function find(pred)
   for _, a in ipairs(annotations()) do
     if pred(a) then

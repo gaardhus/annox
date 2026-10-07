@@ -52,6 +52,7 @@ M.render_presence = render.render_presence
 M.on_presence = render.on_presence
 M.thread = thread.thread
 M.history = thread.history
+M.here = thread.here
 M.comment = actions.comment
 M.highlight = actions.highlight
 M.suggest = actions.suggest
@@ -214,6 +215,9 @@ local subcommands = {
   end,
   history = function()
     M.history()
+  end,
+  here = function(o)
+    M.here({ visual = o.range > 0 })
   end,
   suggest = function(o)
     M.suggest({ visual = o.range > 0 })

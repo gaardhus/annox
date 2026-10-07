@@ -77,6 +77,8 @@ const TOOLS: &[Tool] = &[
             ("mine", "boolean", false, "Only your own annotations."),
             ("others", "boolean", false, "Skip your own annotations."),
             ("broken", "boolean", false, "Only open annotations that are orphaned or can't be applied, to fix with retarget or reattach. An orphaned one may have a `suggested` location: where its text probably went, with the share of its words found there."),
+            ("quote", "string", false, "Only annotations on this text, exactly as it appears in `file` (required), including resolved, accepted, rejected and withdrawn ones unless `status` is given: everything said about a passage. An accepted suggestion is on the text it put in."),
+            OCCURRENCE,
         ],
         read_only: true,
     },

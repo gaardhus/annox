@@ -238,7 +238,7 @@ pub struct Filter {
     /// Only comments or only suggestions
     #[arg(long, value_name = "KIND", value_parser = ["comment", "suggestion"])]
     kind: Option<String>,
-    /// Only these statuses (repeatable or comma-separated) [default: open, or any with --all or --closed]
+    /// Only these statuses (repeatable or comma-separated) [default: open, or any with --all, --closed or --quote]
     #[arg(long, value_name = "S", value_delimiter = ',',
           value_parser = ["open", "resolved", "accepted", "rejected", "withdrawn"])]
     status: Vec<String>,
@@ -257,6 +257,12 @@ pub struct Filter {
     /// Only open annotations that need fixing: orphaned, or suggestions that can't be applied
     #[arg(long)]
     broken: bool,
+    /// Only annotations on this text in FILE, closed ones included. An accepted suggestion is on the text it put in
+    #[arg(long, value_name = "TEXT", allow_hyphen_values = true, requires = "file")]
+    quote: Option<String>,
+    /// Which occurrence of the quote to look at (1-based), when it appears more than once
+    #[arg(long, value_name = "N", requires = "quote")]
+    occurrence: Option<usize>,
 }
 
 /// Options of a new comment or suggestion.
@@ -613,6 +619,14 @@ fn list(file: Option<&str>, all: bool, closed: bool, mut filter: Filter, cwd: &P
     let mut out = Vec::new();
     for path in paths {
         let text = std::fs::read_to_string(ws.root.join(&path)).ok().map(|raw| Text::from_raw(&raw));
+        let quoted = match (&filter.quote, &text) {
+            (Some(quote), Some(text)) => {
+                let at = Quote { quote: quote.clone(), occurrence: filter.occurrence };
+                Some((text, find_quote(text, &at)?))
+            }
+            (Some(_), None) => bail!("can't read {path}"),
+            (None, _) => None,
+        };
         let states = index.load(&path).derive();
         for (id, state) in &states {
             if state["kind"] == "reply" {
@@ -621,14 +635,25 @@ fn list(file: Option<&str>, all: bool, closed: bool, mut filter: Filter, cwd: &P
             let is_closed = state["status"] != "open";
             let deleted = state["deleted"] != json!(false);
             let status_ok = if filter.status.is_empty() {
-                all || closed || !is_closed
+                all || closed || quoted.is_some() || !is_closed
             } else {
                 filter.status.iter().any(|s| state["status"] == json!(s))
             };
             if !status_ok || (deleted && !all) || !filter.matches_state(state) {
                 continue;
             }
-            let view = item(id, state, &path, text.as_ref(), &states, &index, all);
+            let mut view = item(id, state, &path, text.as_ref(), &states, &index, all);
+            if let Some((text, around)) = quoted {
+                let target = serde_json::from_value(state["target"].clone()).ok();
+                match target.and_then(|target| suggestion::current_range(text, &target, state)) {
+                    Some(range) if anchor::overlaps(range, around) => {
+                        if view.get("line").is_none() {
+                            view["line"] = json!(line_of(text, range.0));
+                        }
+                    }
+                    _ => continue,
+                }
+            }
             if !filter.broken || is_broken(&view) {
                 out.push(view);
             }

@@ -149,7 +149,7 @@ open ──withdraw─▶ withdrawn ──reopen──▶ open
 
 Suggestions that are `accepted`, `rejected`, or `withdrawn` are **closed**.
 
-- Clients SHOULD NOT resolve closed suggestions against the current document. After it is applied, an accepted suggestion's quote no longer exists, and that is expected.
+- Clients SHOULD NOT resolve closed suggestions against the current document. After it is applied, an accepted suggestion's quote no longer exists, and that is expected. A lookup of what was said about some text, such as `annox/annotationsAt` (§6.6.2), may locate them, and an accepted one by its replacement.
 - A closed suggestion MUST NOT be presented as orphaned. §3.7.3 applies to open annotations only.
 - Clients MUST NOT rewrite the anchors of closed suggestions. The anchor, together with the applied version, records exactly what changed.
 

@@ -48,6 +48,11 @@ export interface AnnotationView {
   local?: boolean;
   conflicts?: Record<string, ConflictEntry[]>;
   replies?: AnnotationView[];
+  /** From `annox/annotationsAt`: the text it was made on. */
+  quote?: string;
+  /** From `annox/annotationsAt`: where its text is now; an accepted
+   * suggestion's is its replacement. */
+  at?: Range;
 }
 
 export interface DocumentInfo {

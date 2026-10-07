@@ -1,9 +1,10 @@
 //! Wire types of the extension methods (§6.6.1): AnnotationView,
 //! ConflictEntry, and DocumentInfo.
 
-use annox_core::anchor::State;
+use annox_core::anchor::{self, State};
 use annox_core::event::Event;
 use annox_core::storage::Area;
+use annox_core::suggestion;
 use serde_json::{json, Map, Value};
 
 use crate::position::{Encoding, LineIndex};
@@ -98,6 +99,32 @@ pub(crate) fn views(a: &Analysis, encoding: Encoding, include_closed: bool, incl
         .filter(|i| include_closed || !is_closed(i))
         .filter(|i| include_deleted || !i.deleted())
         .map(|i| item_view(a, i, &lines, include_deleted))
+        .collect()
+}
+
+/// AnnotationViews of the roots whose text overlaps `around`, closed ones
+/// included, each with the `quote` it was made on and the range `at` which
+/// its text is now: an accepted suggestion's is its replacement (§6.6.2).
+/// Closed ones have no `resolution`.
+pub(crate) fn views_at(a: &Analysis, encoding: Encoding, around: (usize, usize), include_deleted: bool) -> Vec<Value> {
+    let lines = LineIndex::new(&a.text, encoding);
+    a.items
+        .iter()
+        .filter(|i| include_deleted || !i.deleted())
+        .filter_map(|i| {
+            let range = suggestion::current_range(&a.text, &i.target, &i.state)?;
+            if !anchor::overlaps(range, around) {
+                return None;
+            }
+            let mut view = item_view(a, i, &lines, include_deleted);
+            // `at` is where a closed one is; it isn't resolved (§4.4.1).
+            if is_closed(i) {
+                view.as_object_mut().unwrap().remove("resolution");
+            }
+            view["quote"] = json!(i.target.selectors.quote.exact);
+            view["at"] = json!(lines.range(range.0, range.1));
+            Some(view)
+        })
         .collect()
 }
 

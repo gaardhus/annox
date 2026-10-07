@@ -32,12 +32,21 @@ function order(a: AnnotationView, b: AnnotationView): number {
   return ra ? 1 : rb ? -1 : 0;
 }
 
-/** The thread as Markdown, for annotations without a place in the text. */
-export function threadMarkdown(a: AnnotationView, store: Store): string {
+/** The thread as Markdown, for annotations without a place in the text. An
+ * open suggestion's old text is read from `doc`. */
+export function threadMarkdown(
+  a: AnnotationView,
+  store: Store,
+  heading = describe(a),
+  doc?: vscode.TextDocument,
+): string {
   const person = (x: AnnotationView) => `**${authorName(x)}** · ${x.created ?? ""}`;
-  const lines = [`# ${describe(a)}`, ""];
+  const lines = [`# ${heading}`, ""];
   lines.push(`${person(a)} · *${a.status}*`, "");
-  if (a.kind === "suggestion") lines.push(changeMarkdown(undefined, a.edit?.replacement ?? ""), "");
+  // A closed suggestion's text is gone or changed; `quote` is what it replaced.
+  const r = rangeOf(a);
+  const original = a.status !== "open" ? a.quote : r && doc ? doc.getText(doc.validateRange(r)) : undefined;
+  if (a.kind === "suggestion") lines.push(changeMarkdown(original, a.edit?.replacement ?? ""), "");
   for (const link of store.revertLinks(a)) lines.push(link, "");
   if (a.body) lines.push(escapeTildes(a.body), "");
   for (const r of a.replies ?? []) lines.push("---", "", person(r), "", escapeTildes(r.body ?? ""), "");

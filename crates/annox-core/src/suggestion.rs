@@ -108,6 +108,24 @@ pub fn applied_text_search(doc: &Text, target: &Anchor, replacement: &str) -> Op
     nearest(&starts, target.selectors.position.start).map(|c| (c, c + replacement.chars().count()))
 }
 
+/// Where the text of an annotation with `state` and `target` is now, for
+/// finding what was said about some text (§6.6.2 `annox/annotationsAt`),
+/// closed annotations included. An accepted suggestion's text is its
+/// replacement. Unlike `applied_text_search`, that's resolved like an anchor,
+/// so it's still found after nearby edits change its context, at the risk of a
+/// wrong match.
+pub fn current_range(doc: &Text, target: &Anchor, state: &Value) -> Option<(usize, usize)> {
+    match state["edit"]["replacement"].as_str() {
+        Some(replacement) if state["status"] == "accepted" => {
+            let mut applied = target.clone();
+            applied.selectors.position.end = applied.selectors.position.start + replacement.chars().count();
+            applied.selectors.quote.exact = replacement.to_owned();
+            anchor::resolve(doc, &applied).range
+        }
+        _ => anchor::resolve(doc, target).range,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;

@@ -323,6 +323,49 @@ fn list_filters() {
 }
 
 #[test]
+fn list_by_quote_includes_closed_annotations() {
+    let dir = setup(DOC);
+    let list = |args: &[&str]| -> Vec<Value> { annox(dir.path(), args).as_array().unwrap().clone() };
+    let ids = |args: &[&str]| -> Vec<String> {
+        let mut ids: Vec<String> = list(args).iter().map(id).collect();
+        ids.sort();
+        ids
+    };
+    let sorted = |mut v: Vec<String>| {
+        v.sort();
+        v
+    };
+    let elsewhere = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "Section 3", "--body", "Which?"]));
+    let accepted = id(&annox(dir.path(), &["suggest", "paper.md", "--quote", "teh", "--replace", "the"]));
+    annox(dir.path(), &["accept", &accepted]);
+    let open = id(&annox(
+        dir.path(),
+        &["comment", "paper.md", "--quote", "bound is tight", "--occurrence", "1", "--body", "x"],
+    ));
+    let rejected = id(&annox(dir.path(), &["suggest", "paper.md", "--quote", "prove", "--replace", "show"]));
+    annox(dir.path(), &["status", &rejected, "rejected"]);
+    let deleted = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "we prove", "--body", "x"]));
+    annox(dir.path(), &["delete", &deleted]);
+    let deletion =
+        id(&annox(dir.path(), &["suggest", "paper.md", "--quote", " is tight", "--occurrence", "2", "--replace", ""]));
+    annox(dir.path(), &["accept", &deletion]);
+
+    let quote = ["list", "paper.md", "--quote", "prove that the bound"];
+    assert_eq!(ids(&quote), sorted(vec![accepted.clone(), open.clone(), rejected.clone()]));
+    let shown = list(&quote).into_iter().find(|v| v["id"] == accepted.as_str()).unwrap();
+    assert_eq!((&shown["line"], &shown["quote"], &shown["replacement"]), (&1.into(), &"teh".into(), &"the".into()));
+    assert!(!ids(&quote).contains(&elsewhere));
+    assert!(ids(&[&quote[..], &["--all"]].concat()).contains(&deleted));
+    assert_eq!(ids(&[&quote[..], &["--status", "open"]].concat()), vec![open.clone()]);
+    assert_eq!(
+        ids(&["list", "paper.md", "--quote", "The bound."]),
+        vec![deletion],
+        "an accepted deletion is where it cut"
+    );
+    assert!(error(dir.path(), &["list", "--quote", "prove"]).contains("FILE"));
+}
+
+#[test]
 fn show_prints_one_thread() {
     let dir = setup(DOC);
     let c = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "Section 3", "--body", "Which?"]));
