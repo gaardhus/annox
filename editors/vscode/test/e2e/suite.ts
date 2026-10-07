@@ -126,7 +126,7 @@ export async function run(): Promise<void> {
     await wait("applicable", () => get(s.id)?.applicable);
     const thread = await wait("thread", () => api.threads.threadOf(s.id));
     assert.match(thread.contextValue ?? "", /\bsuggestion\b.*\bopen\b.*\bapplicable\b/);
-    assert.match((thread.comments[0].body as vscode.MarkdownString).value, /Replace `prove` with `show`/);
+    assert.match((thread.comments[0].body as vscode.MarkdownString).value, /^- prove\n\+ show$/m);
     await exec("annox.acceptSuggestion", thread);
     await wait("text changed", () => line(1) === "In Section 3, we show that the bound is tight.");
     await wait("accepted", () => get(s.id)?.status === "accepted");
@@ -360,7 +360,7 @@ export async function run(): Promise<void> {
       const d = vscode.window.activeTextEditor?.document;
       return d?.uri.scheme === "annox-history" && d.getText().includes("accepted") ? d : undefined;
     });
-    assert.match(accepted.getText(), /Replace `show` with `prove`/);
+    assert.match(accepted.getText(), /^- show\n\+ prove$/m);
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
   });
 

@@ -46,19 +46,15 @@ function code(s: string): string {
   return `${fence}${pad}${s}${pad}${fence}`;
 }
 
-/** The proposed change, given the text it replaces when it is known. */
+/** The proposed change, given the text it replaces when it is known: a diff
+ * of the old lines and the new, as nvim shows it. */
 export function changeMarkdown(original: string | undefined, replacement: string): string {
-  const multiline = (s: string) => s.includes("\n") || s.length > 80;
-  if (original !== undefined && (multiline(original) || multiline(replacement))) {
-    const lines = (s: string, sign: string) => (s === "" ? [] : s.split("\n").map((l) => sign + l));
-    const body = [...lines(original, "-"), ...lines(replacement, "+")].join("\n");
-    const fence = body.includes("```") ? "````" : "```";
-    return `${fence}diff\n${body}\n${fence}`;
-  }
   if (original === undefined) return `Replace with ${code(replacement)}`;
-  if (original === "") return `Insert ${code(replacement)}`;
-  if (replacement === "") return `Delete ${code(original)}`;
-  return `Replace ${code(original)} with ${code(replacement)}`;
+  const lines = (s: string, sign: string) => (s === "" ? [] : s.split("\n").map((l) => sign + l));
+  const body = [...lines(original, "- "), ...lines(replacement, "+ ")].join("\n");
+  const longest = Math.max(2, ...(body.match(/`+/g) ?? []).map((m) => m.length));
+  const fence = "`".repeat(longest + 1);
+  return `${fence}diff\n${body}\n${fence}`;
 }
 
 /** `md` with each lone `~` escaped, outside code: GFM reads a pair of them as
