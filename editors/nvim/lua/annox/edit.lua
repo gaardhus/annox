@@ -9,6 +9,7 @@ local client_for = util.client_for
 local request = util.request
 local under_cursor = util.under_cursor
 local buffer_annotations = util.buffer_annotations
+local find_annotation = util.find_annotation
 local with_input = util.with_input
 local target_range = util.target_range
 local resolved_text = util.resolved_text
@@ -146,9 +147,14 @@ function M.edit(opts)
         field == "replacement" and resolved_text(a, bufnr) or ""
       )
       vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, { buffer = edit_buf, callback = layout })
+      -- Set when a save is refused, so Esc keeps the window and its text.
+      local refused = false
       vim.keymap.set("n", "<Esc>", function()
         if vim.bo[edit_buf].modified then
           vim.cmd.write()
+          if refused then
+            return
+          end
         end
         vim.api.nvim_win_close(0, true)
       end, { buffer = edit_buf, desc = "annox: save and close" })
@@ -157,18 +163,27 @@ function M.edit(opts)
         callback = function()
           local new = table.concat(vim.api.nvim_buf_get_lines(edit_buf, 0, -1, false), "\n")
           local method, params
+          refused = false
           if field == "replacement" then
+            -- `retarget` sets the anchor too. The document may have changed
+            -- since the window opened, so anchor where the suggestion is now.
+            local current = find_annotation(bufnr, a.id)
+            local range = current and current.applicable and current.resolution and current.resolution.range
+            if not range then
+              refused = true
+              local why = current and "is stale; use :Annox retarget" or "is no longer open"
+              return vim.notify("annox: this suggestion " .. why, vim.log.levels.WARN)
+            end
             method = "annox/retarget"
-            params = { annotation = a.id, range = a.resolution.range, replacement = new }
+            params = { annotation = a.id, range = range, replacement = new }
             local s = store.suggesting[bufnr]
             if s then
-              table.insert(s.undo, { id = a.id, range = a.resolution.range, replacement = a.edit.replacement })
+              table.insert(s.undo, { id = a.id, range = range, replacement = current.edit.replacement })
             end
           else
             method, params = "annox/edit", { annotation = a.id, body = new ~= "" and new or vim.NIL }
           end
-          request(bufnr, method, params, function(view)
-            a = view
+          request(bufnr, method, params, function()
             if vim.api.nvim_buf_is_valid(edit_buf) then
               vim.bo[edit_buf].modified = false
             end

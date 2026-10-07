@@ -283,6 +283,51 @@ end)
 check(#prompts == 1 and prompts[1] == "Reject 2 suggestions?", "one prompt: " .. vim.inspect(prompts))
 check(text() == "he slow very nice brown cat.", "rejecting leaves the text")
 
+-- Saving the edit window anchors the suggestion where it is now, even if the
+-- document changed while the window was open.
+annox.suggest({ range = line_range(24, 27), replacement = "dog" })
+wait("suggestion on cat", function()
+  return #suggestions() == 1
+end)
+local function moved_to(s, e)
+  return function()
+    local r = suggestions()[1].resolution.range
+    return r ~= nil and r.start.character == s and r["end"].character == e
+  end
+end
+vim.api.nvim_win_set_cursor(0, { 1, 25 })
+annox.edit()
+edit_win = vim.api.nvim_get_current_win()
+vim.api.nvim_buf_set_text(buf, 0, 0, 0, 0, { "Oh, " })
+wait("suggestion moved with the text", moved_to(28, 31))
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "big dog" })
+vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "xt", false)
+wait("edit saved where the suggestion is now", function()
+  return suggestions()[1].edit.replacement == "big dog" and moved_to(28, 31)()
+end)
+check(text() == "Oh, he slow very nice brown cat.", "saving leaves the text")
+-- When the suggestion no longer applies, saving is refused and Esc keeps the
+-- window and its text.
+vim.api.nvim_win_set_cursor(doc_win, { 1, 29 })
+annox.edit()
+edit_win = vim.api.nvim_get_current_win()
+vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "Oh, he slow very nice brown." })
+wait("suggestion no longer applies", function()
+  local s = suggestions()[1]
+  return not (s.applicable and s.resolution.range)
+end)
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "small dog" })
+vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "xt", false)
+check(vim.api.nvim_win_is_valid(edit_win), "edit window kept open")
+check(suggestions()[1].edit.replacement == "big dog", "refused save sent nothing")
+vim.api.nvim_win_close(edit_win, true)
+vim.api.nvim_set_current_win(doc_win)
+vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "he slow very nice brown cat." })
+annox.reject({ annotation = suggestions()[1].id })
+wait("suggestion rejected", function()
+  return #suggestions() == 0
+end)
+
 -- Bulk resolve works the same way for comment threads.
 annox.comment({ range = line_range(3, 7), body = "Slow?" })
 annox.comment({ range = line_range(24, 27), body = "Which cat?" })
