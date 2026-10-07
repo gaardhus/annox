@@ -1,5 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="24" height="24">
-  <!-- assets/annox.svg in one colour, for the activity bar, which draws icons as a mask -->
+  <!-- assets/annox.svg in one colour, for the activity bar, which draws icons as a mask.
+       Differences from the main icon: the page is an outline, not filled; the dots are
+       cut out of the bubble; and the highlighted span is narrower and set in from the
+       page's edge, without the line of text on it, so it reads at 24px. -->
   <defs>
     <mask id="gap" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
       <rect width="128" height="128" fill="#fff"/>
