@@ -36,6 +36,8 @@ export interface AnnotationView {
   author?: Author;
   created?: string;
   body?: string | null;
+  /** Who last changed the body, if anyone did (§2.5.6). */
+  editedBy?: { author?: Author } | null;
   label?: string | null;
   status: string;
   edit?: { replacement: string } | null;

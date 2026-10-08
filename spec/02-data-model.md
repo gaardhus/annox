@@ -70,6 +70,8 @@ Changes the body or label of an annotation. At least one of the following must b
 
 A field that isn't present is not changed.
 
+Anyone MAY edit any annotation, not only its author, so that a typo can be fixed or a conflict resolved (§2.5.4) when the author is unavailable. Readers can't tell an edit from the original text, so Viewers and Clients MUST mark an annotation whose body was edited (`editedBy`, §2.5.6), for example with "edited", and when the editor isn't the annotation's author, MUST also name the editor, e.g. "Ada · edited by Bob". An edit that changes only the label isn't marked.
+
 ### `status`
 
 Changes the status of a root.
@@ -168,6 +170,7 @@ The derived state of an annotation has this shape. It is used by the test vector
   "created": "2026-09-28T14:33:00Z",
   "target": { "…": "§3.5" },
   "body": "Is this bound tight?",
+  "editedBy": { "author": { "id": "mailto:ada@example.org", "name": "Ada Lovelace" }, "time": "2026-09-28T14:35:00Z" },
   "label": null,
   "status": "open",
   "deleted": false,
@@ -176,6 +179,7 @@ The derived state of an annotation has this shape. It is used by the test vector
 ```
 
 - `author` and `created` come from the `create` event.
+- `editedBy` is `{ author, time }` from the event that wrote the current `body` if that event is an `edit`, and `null` otherwise (§2.4). When `body` is conflicted, that is the head its provisional value comes from.
 - For suggestions, `replacement` appears as `edit.replacement`, and `appliedVersion` appears when `status` is `accepted`. `retargetedBy` is `{ author, time }` from the event that wrote the current `replacement` if that event is a `retarget`, and `null` otherwise (§4.2.1). `reverts` appears only if the `create` event has it. For replies, `parent` is present and `target`, `label`, and `status` are omitted.
 - `conflicts` maps each conflicted field name to the ids of its competing events, sorted by ascending id. The field itself holds the provisional value.
 

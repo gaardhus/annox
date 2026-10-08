@@ -77,6 +77,7 @@ fn create_reply_edit_publish() {
     assert_eq!(comment["resolution"]["range"], range(1, 0, 12));
     assert_eq!(comment["local"], false);
     assert!(comment.get("target").is_none(), "views omit target");
+    assert_eq!(comment["editedBy"], Value::Null);
     let id = comment["id"].as_str().unwrap().to_owned();
 
     let reply = c.call("annox/reply", json!({ "parent": id, "body": "Section 3." }));
@@ -85,6 +86,8 @@ fn create_reply_edit_publish() {
 
     let edited = c.call("annox/edit", json!({ "annotation": id, "body": "Which section exactly?" }));
     assert_eq!(edited["body"], "Which section exactly?");
+    assert_eq!(edited["editedBy"]["author"], comment["author"]);
+    assert_eq!(edited["replies"][0]["editedBy"], Value::Null);
     assert_eq!(edited["replies"][0]["body"], "Section 3.");
 
     // A local draft, then published (§5.11).

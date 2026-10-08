@@ -903,7 +903,15 @@ fn item(
         .values()
         .filter(|r| r["kind"] == "reply" && r["parent"] == json!(id))
         .filter(|r| deleted_replies || r["deleted"] == json!(false))
-        .map(|r| json!({ "id": r["id"], "author": r["author"], "created": r["created"], "body": r["body"] }))
+        .map(|r| {
+            json!({
+                "id": r["id"],
+                "author": r["author"],
+                "created": r["created"],
+                "body": r["body"],
+                "editedBy": r["editedBy"],
+            })
+        })
         .collect();
     let target: Option<Anchor> = serde_json::from_value(state["target"].clone()).ok();
     let quote = target.as_ref().map(|t| t.selectors.quote.exact.clone());
@@ -916,6 +924,7 @@ fn item(
         "created": state["created"],
         "label": state["label"],
         "body": state["body"],
+        "editedBy": state["editedBy"],
         "quote": quote,
     });
     if state["kind"] == "suggestion" {

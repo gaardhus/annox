@@ -261,6 +261,10 @@ pub fn derive_annotation(events: &[Event], id: &str) -> Option<Value> {
         out.insert("target".into(), fields.values["target"].clone());
     }
     out.insert("body".into(), fields.values["body"].clone());
+    let source = fields.sources["body"];
+    let edited =
+        if source.kind == "edit" { json!({ "author": source.author, "time": source.time }) } else { Value::Null };
+    out.insert("editedBy".into(), edited);
     if kind != "reply" {
         out.insert("label".into(), fields.values["label"].clone());
         let status = &fields.values["status"];

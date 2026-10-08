@@ -1115,9 +1115,18 @@ fn summary(item: &Item) -> String {
 }
 
 fn author_line(state: &Value) -> String {
-    let author = &state["author"];
-    let name = author["name"].as_str().or(author["id"].as_str()).unwrap_or("unknown");
-    format!("**{name}** · {}", state["created"].as_str().unwrap_or_default())
+    let name = |a: &Value| a["name"].as_str().or(a["id"].as_str()).unwrap_or("unknown").to_owned();
+    let mut line = format!("**{}** · {}", name(&state["author"]), state["created"].as_str().unwrap_or_default());
+    // Edits are marked, with the editor named if it isn't the author (§2.4).
+    let editor = &state["editedBy"]["author"];
+    if editor.is_object() {
+        if editor["id"] == state["author"]["id"] {
+            line.push_str(" · edited");
+        } else {
+            line.push_str(&format!(" · edited by {}", name(editor)));
+        }
+    }
+    line
 }
 
 /// A change as a fenced `diff` block, so editors color the old text red and

@@ -297,6 +297,13 @@ wait("conflict to resolve", function()
   return a and next(a.conflicts) == nil and a.body == "merged"
 end)
 
+-- Resolving wrote an edit by the draft's own author, so it's marked but not named.
+annox.thread({ annotation = draft.id })
+check(#floats() == 1, "expected the draft's thread float")
+shown = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(floats()[1]), 0, -1, false), "\n")
+check(shown:find(" · _edited_\n", 1, true), "edited mark: " .. shown)
+vim.api.nvim_win_close(floats()[1], true)
+
 annox.history({ annotation = draft.id })
 wait("history float", function()
   for _, w in ipairs(vim.api.nvim_list_wins()) do

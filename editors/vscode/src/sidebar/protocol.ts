@@ -27,6 +27,8 @@ export interface Segment {
 export interface Reply {
   author: string;
   when: string;
+  /** "edited", or "edited by" someone other than the author. */
+  edited?: string;
   body: string;
 }
 
@@ -38,6 +40,7 @@ export interface Card {
   draft: boolean;
   author: string;
   when: string;
+  edited?: string;
   /** 1-based, if the annotation has a place in the text. */
   line?: number;
   /** The text a comment is on. */

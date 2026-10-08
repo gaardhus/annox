@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import {
   type Store,
   authorName,
+  editedNote,
   isConflicted,
   isOrphaned,
   key,
@@ -282,12 +283,10 @@ export class Threads implements vscode.Disposable {
           return old;
         }
         const c = new AnnoxComment(view, root, body, editable);
-        if (root) {
-          const tags = [a.local ? "draft" : "", a.status !== "open" ? a.status : ""].filter(Boolean);
-          if (tags.length) c.label = tags.join(", ");
-        } else if (view.local) {
-          c.label = "draft";
-        }
+        const tags = root
+          ? [a.local ? "draft" : "", a.status !== "open" ? a.status : "", editedNote(a) ?? ""]
+          : [view.local ? "draft" : "", editedNote(view) ?? ""];
+        if (tags.some(Boolean)) c.label = tags.filter(Boolean).join(", ");
         comments.set(view.id, c);
         return c;
       };

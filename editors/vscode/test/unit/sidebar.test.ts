@@ -87,3 +87,18 @@ test("ago", () => {
   assert.equal(ago("2026-10-05T12:00:00Z", now), "2d");
   assert.equal(ago("2026-01-01T00:00:00Z", now), "2026-01-01");
 });
+
+test("an edited card or reply says so, and by whom", () => {
+  const html = render(
+    state([
+      card({
+        body: "Which section, exactly?",
+        edited: "edited by Bob",
+        replies: [{ author: "Bob", when: "1d", edited: "edited", body: "The third." }],
+      }),
+    ]),
+    ui(),
+  );
+  assert.match(html, /<span class="edited">edited by Bob<\/span>/);
+  assert.match(html, /<span class="edited">edited<\/span><\/div>/);
+});

@@ -91,6 +91,7 @@ A read-only tool, such as a web preview, an export, or a CI check. A Viewer MUST
 - read storage (§5) and derive annotation state by replay (§2.5);
 - resolve anchors (§3.7) and determine suggestion applicability (§4.2);
 - visibly mark every conflicted annotation (§2.5.3) and every orphaned open annotation (§3.7.3);
+- mark every annotation whose body was edited, naming the editor when it isn't the author (§2.4);
 - pass the test vectors in [`tests/storage.json`](tests/storage.json), [`tests/replay.json`](tests/replay.json), [`tests/anchoring.json`](tests/anchoring.json), and the applicability results in [`tests/suggestions.json`](tests/suggestions.json).
 
 A Viewer MUST NOT write events or modify documents.

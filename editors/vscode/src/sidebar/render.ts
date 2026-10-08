@@ -88,6 +88,10 @@ export function render(state: State, ui: Ui): string {
   return head + groups.join("");
 }
 
+function edited(note: string | undefined): string {
+  return note ? `<span class="edited">${escapeHtml(note)}</span>` : "";
+}
+
 function card(c: Card, selected: boolean, replying: boolean): string {
   const id = escapeHtml(c.id);
   const badges = [c.draft ? "draft" : "", c.group === "closed" ? c.status : ""].filter(Boolean);
@@ -96,6 +100,7 @@ function card(c: Card, selected: boolean, replying: boolean): string {
       <span class="kind">${c.kind}</span>
       <span class="author">${escapeHtml(c.author)}</span>
       ${c.when ? `<span class="when">${escapeHtml(c.when)}</span>` : ""}
+      ${edited(c.edited)}
       ${badges.map((b) => `<span class="badge">${escapeHtml(b)}</span>`).join("")}
       <span class="where">${c.line ? `L${c.line}` : "text gone"}</span>
     </div>`;
@@ -108,7 +113,7 @@ function card(c: Card, selected: boolean, replying: boolean): string {
         .map(
           (r) => `
           <li>
-            <div class="meta"><span class="author">${escapeHtml(r.author)}</span><span class="when">${escapeHtml(r.when)}</span></div>
+            <div class="meta"><span class="author">${escapeHtml(r.author)}</span><span class="when">${escapeHtml(r.when)}</span>${edited(r.edited)}</div>
             <p class="body">${escapeHtml(r.body)}</p>
           </li>`,
         )

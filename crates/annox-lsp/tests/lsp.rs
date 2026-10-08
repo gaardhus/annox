@@ -186,6 +186,13 @@ fn diagnostics_hover_and_accept() {
     assert_eq!(client.response(&reopen).unwrap(), Value::Null);
     let hover = hover_comment(&mut client);
     assert!(hover["contents"]["value"].as_str().unwrap().contains("Which section?"), "{hover}");
+
+    // Bob edits Ada's comment: the hover names him (§2.4).
+    let edit = client.request("annox/edit", json!({ "annotation": comment.id, "body": "Which section, exactly?" }));
+    assert_eq!(client.response(&edit).unwrap()["editedBy"]["author"]["name"], "Bob");
+    let hover = hover_comment(&mut client);
+    let markdown = hover["contents"]["value"].as_str().unwrap();
+    assert!(markdown.starts_with("**Ada** · ") && markdown.contains(" · edited by Bob\n"), "{markdown}");
     client.notify(
         "textDocument/didChange",
         json!({ "textDocument": { "uri": uri, "version": 2 }, "contentChanges": [{ "text": "unrelated\n" }] }),

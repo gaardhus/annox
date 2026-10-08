@@ -392,6 +392,9 @@ fn history_lists_who_did_what() {
     let types: Vec<&str> = events.as_array().unwrap().iter().map(|e| e["type"].as_str().unwrap()).collect();
     assert_eq!(types, ["create", "create", "status", "edit", "status"], "the thread, interleaved");
     assert_eq!(annox(dir.path(), &["history", &r]), events, "a reply shows its thread");
+    let shown = annox(dir.path(), &["show", &c]);
+    assert_eq!(shown["editedBy"], Value::Null);
+    assert_eq!(shown["replies"][0]["editedBy"]["author"]["name"], "Agent");
     let text = cli::render_history(&events);
     let actions: Vec<&str> = text.lines().map(|l| l.split("  ").nth(2).unwrap()).collect();
     assert_eq!(

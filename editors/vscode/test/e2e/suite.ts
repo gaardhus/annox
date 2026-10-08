@@ -105,6 +105,9 @@ export async function run(): Promise<void> {
     await wait("thread shows the edit", () =>
       (thread.comments[0].body as vscode.MarkdownString).value?.includes("exactly"),
     );
+    // Edited by its own author: marked, not named (§2.4).
+    assert.equal(thread.comments[0].label, "edited");
+    assert.equal(thread.comments[1].label, undefined, "the reply wasn't edited");
   });
 
   step("reply from the reply box of a thread", async () => {

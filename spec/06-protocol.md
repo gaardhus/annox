@@ -103,6 +103,7 @@ LSP has no standard way to ask the user for free text, so writing comments, repl
   "author": { "id": "mailto:ada@example.org", "name": "Ada Lovelace" },
   "created": "2026-09-28T14:33:00Z",
   "body": null,
+  "editedBy": null,
   "label": null,
   "status": "open",
   "edit": { "replacement": "we show that" },

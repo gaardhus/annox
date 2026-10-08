@@ -95,7 +95,13 @@ local function thread_lines(a, bufnr)
   end
   local function person(x)
     local author = x.author or {}
-    return string.format("**%s** · %s", author.name or author.id or "unknown", x.created or "")
+    local line = string.format("**%s** · %s", author.name or author.id or "unknown", x.created or "")
+    -- Edits are marked, with the editor named if it isn't the author (§2.4).
+    local by = type(x.editedBy) == "table" and x.editedBy.author
+    if type(by) == "table" then
+      line = line .. (by.id == author.id and " · _edited_" or string.format(" · _edited by %s_", by.name or by.id))
+    end
+    return line
   end
   if a.kind == "suggestion" then
     local stale = (a.status == "open" and not a.applicable) and " (stale)" or ""

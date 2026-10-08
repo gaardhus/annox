@@ -58,6 +58,14 @@ export function authorName(a: { author?: { id: string; name?: string } }): strin
   return a.author?.name ?? a.author?.id ?? "unknown";
 }
 
+/** "edited" if the body was edited, naming the editor if it isn't the author
+ * (§2.4). */
+export function editedNote(a: AnnotationView): string | undefined {
+  const by = a.editedBy?.author;
+  if (!by) return undefined;
+  return by.id === a.author?.id ? "edited" : `edited by ${authorName({ author: by })}`;
+}
+
 /** What each event of a thread's history did, as a past-tense verb, with the
  * first line of its text if it has any. Events that change a reply say so. */
 export function eventActions(events: HistoryEvent[]): string[] {
