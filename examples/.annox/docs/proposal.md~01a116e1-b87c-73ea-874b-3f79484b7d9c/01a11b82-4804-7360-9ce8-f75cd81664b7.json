@@ -1,0 +1,28 @@
+{
+  "id": "01a11b82-4804-7360-9ce8-f75cd81664b7",
+  "annotation": "01a11b82-4804-7360-9ce8-f75cd81664b7",
+  "after": [],
+  "type": "create",
+  "author": {
+    "id": "urn:agent:claude",
+    "name": "Claude"
+  },
+  "time": "2026-10-08T12:34:45Z",
+  "body": "Who owns the snapshot after the shutdown, and how long is it kept?",
+  "kind": "comment",
+  "target": {
+    "path": "proposal.md",
+    "selectors": {
+      "position": {
+        "end": 1225,
+        "start": 1167
+      },
+      "quote": {
+        "exact": "Ops has agreed to keep a snapshot of\nthe old export on S3.",
+        "prefix": "ation should take about a week. ",
+        "suffix": " After that, the hosted wiki bec"
+      }
+    },
+    "version": "sha256:5337d13c66fecf923527f1f75a87de2bf96d9cc1321418076bb2f42366deb753"
+  }
+}

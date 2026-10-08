@@ -1,0 +1,28 @@
+{
+  "id": "01a11b82-47fc-7231-97d1-3025cdf2a4c7",
+  "annotation": "01a11b82-47fc-7231-97d1-3025cdf2a4c7",
+  "after": [],
+  "type": "create",
+  "author": {
+    "id": "mailto:sam@example.com",
+    "name": "Sam Reviewer"
+  },
+  "time": "2026-10-08T12:34:45Z",
+  "body": "Which teams? Support and design both edit the wiki every week, so it matters who we're planning for.",
+  "kind": "comment",
+  "target": {
+    "path": "proposal.md",
+    "selectors": {
+      "position": {
+        "end": 1384,
+        "start": 1320
+      },
+      "quote": {
+        "exact": "Some non-engineers will probably find Git intimidating at first.",
+        "prefix": "d is then shut down.\n\n## Risks\n\n",
+        "suffix": " We can soften\nthis by letting t"
+      }
+    },
+    "version": "sha256:5337d13c66fecf923527f1f75a87de2bf96d9cc1321418076bb2f42366deb753"
+  }
+}

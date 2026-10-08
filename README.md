@@ -27,7 +27,7 @@ Here it is in Neovim: replying to a comment, commenting on a selection, acceptin
   <img src="assets/nvim-demo.gif" alt="annox in Neovim: replying to a comment, commenting on a selection, accepting a suggestion, and suggesting edits in suggestion mode" width="972">
 </p>
 
-To try it, [`examples/`](examples/) has a short proposal, already reviewed by two authors, with open, resolved, accepted, and rejected annotations. Open `examples/proposal.md` in an editor with annox, or run `annox report --verbose` in that directory.
+To try it, [`examples/`](examples/) has a short proposal, already reviewed by two authors, with open, resolved, accepted, rejected, and orphaned annotations. Open `examples/proposal.md` in an editor with annox, or run `annox report --verbose` in that directory.
 
 ## Reference implementation
 

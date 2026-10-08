@@ -36,9 +36,10 @@ fn the_example_still_reads_the_same() {
     let doc = &report["documents"][0];
     assert_eq!(report["documents"].as_array().unwrap().len(), 1, "{report:#}");
     assert_eq!(doc["path"], "proposal.md");
-    assert_eq!(doc["comments"], json!({ "open": 3, "resolved": 1 }), "{doc:#}");
+    assert_eq!(doc["comments"], json!({ "open": 5, "resolved": 1 }), "{doc:#}");
     assert_eq!(doc["suggestions"], json!({ "accepted": 1, "open": 2, "rejected": 1, "withdrawn": 0 }), "{doc:#}");
-    for broken in ["orphaned", "stale", "conflicted"] {
+    assert_eq!(doc["orphaned"], 2, "{doc:#}");
+    for broken in ["stale", "conflicted"] {
         assert_eq!(doc[broken], 0, "{broken}: {doc:#}");
     }
     assert_eq!(doc["missing"], false);
@@ -46,11 +47,16 @@ fn the_example_still_reads_the_same() {
     let all = annox(dir.path(), &["list", "--all"]);
     let all = all.as_array().unwrap();
     for a in all.iter().filter(|a| a["status"] == "open") {
-        assert_ne!(a["resolution"], "orphaned", "{a:#}");
         if a["kind"] == "suggestion" {
+            assert_ne!(a["resolution"], "orphaned", "{a:#}");
             assert_eq!(a["applicable"], true, "{a:#}");
         }
     }
+    // Two comments on an older draft: one passage was reworded, so it has a
+    // suggested location, and one was removed, so it has none.
+    let orphans: Vec<_> = all.iter().filter(|a| a["resolution"] == "orphaned").collect();
+    assert_eq!(orphans.len(), 2, "{orphans:#?}");
+    assert_eq!(orphans.iter().filter(|a| a["suggested"].is_object()).count(), 1, "{orphans:#?}");
     assert!(all.iter().any(|a| a["body"].is_null()), "a highlight");
     assert_eq!(all.iter().map(|a| a["replies"].as_array().unwrap().len()).sum::<usize>(), 3, "replies");
     let authors: std::collections::BTreeSet<_> = all.iter().map(|a| a["author"]["id"].as_str().unwrap()).collect();
