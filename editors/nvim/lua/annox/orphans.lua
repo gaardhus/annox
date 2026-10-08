@@ -18,7 +18,9 @@ local M = {}
 --- Lists orphaned annotations (§3.7.3), to fix one at a time or to resolve
 --- every orphaned comment at once. Picking one offers what applies to it:
 --- moving it to its suggested location (§3.7.4) or to the selection,
---- closing it, or showing its thread. opts: { visual? }
+--- closing it, or showing its thread. With the cursor on the suggested
+--- location of some, only those are offered, and a single one is picked
+--- without asking. opts: { visual? }
 function M.orphans(opts)
   opts = opts or {}
   local bufnr = vim.api.nvim_get_current_buf()
@@ -31,6 +33,10 @@ function M.orphans(opts)
   end, (store.state[bufnr] or {}).annotations or {})
   if #orphans == 0 then
     return vim.notify("annox: no orphaned annotations", vim.log.levels.INFO)
+  end
+  local here = util.orphans_under_cursor(bufnr)
+  if #here > 0 then
+    orphans = here
   end
   local comments = vim.tbl_filter(function(a)
     return a.kind == "comment"
@@ -48,7 +54,7 @@ function M.orphans(opts)
     return describe(a) .. (s and string.format(" (line %d?)", s.range.start.line + 1) or "")
   end
   local selection = opts.visual and visual_range(bufnr, client.offset_encoding)
-  vim.ui.select(items, { prompt = "Orphaned annotations", format_item = format }, function(a)
+  local function on_pick(a)
     if a == resolve_all then
       return set_status_all(bufnr, comments, "resolved", "Resolve", "orphaned comment")
     elseif not a then
@@ -109,7 +115,11 @@ function M.orphans(opts)
         x[2]()
       end
     end)
-  end)
+  end
+  if #here == 1 then
+    return on_pick(here[1])
+  end
+  vim.ui.select(items, { prompt = "Orphaned annotations", format_item = format }, on_pick)
 end
 
 return M

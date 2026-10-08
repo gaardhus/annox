@@ -466,6 +466,7 @@ wait("suggested mark", function()
 end)
 
 -- Picking an orphan offers what applies to it.
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
 local actions
 local select0 = vim.ui.select
 vim.ui.select = function(items, o, done)
@@ -485,7 +486,27 @@ check(actions and actions[1] == "Show thread", vim.inspect(actions))
 check(actions[2]:find("^Re%-attach to line 3 %(%d+%% of its words%)$") ~= nil, vim.inspect(actions))
 check(actions[3] == "Resolve thread" and #actions == 3, vim.inspect(actions))
 
+-- On an orphan's suggested location, it's picked without asking, and
+-- cursor commands point to :Annox orphans.
+vim.api.nvim_win_set_cursor(0, { 3, 4 })
+local orphan_prompts = {}
+vim.ui.select = function(items, o, done)
+  table.insert(orphan_prompts, o.prompt)
+  done(nil)
+end
+annox.orphans()
+vim.ui.select = select0
+check(#orphan_prompts == 1 and orphan_prompts[1] == "comment: Why?", vim.inspect(orphan_prompts))
+local notify0, notified = vim.notify, nil
+vim.notify = function(msg)
+  notified = msg
+end
+annox.resolve()
+vim.notify = notify0
+check(notified == "annox: the annotation here is orphaned, see :Annox orphans", tostring(notified))
+
 -- The orphans picker offers the suggested location, then resolves all.
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
 local prompts = {}
 local select = vim.ui.select
 vim.ui.select = function(items, o, done)

@@ -61,8 +61,8 @@ local function before(a, b)
   return a.line < b.line or (a.line == b.line and a.character <= b.character)
 end
 
---- Annotations whose range contains the cursor.
-local function under_cursor(bufnr)
+--- Annotations for which `range_of(a)` contains the cursor.
+local function at_cursor(bufnr, range_of)
   local state, client = store.state[bufnr], client_for(bufnr)
   if not state or not client then
     return {}
@@ -76,7 +76,7 @@ local function under_cursor(bufnr)
   local after = col < #line and col + vim.str_utf_end(line, col + 1) + 1 or col
   local hits = {}
   for _, a in ipairs(state.annotations) do
-    local r = a.resolution and a.resolution.range
+    local r = range_of(a)
     local empty = r and r.start.line == r["end"].line and r.start.character == r["end"].character
     local touching = empty and r.start.line == row - 1 and byte_col(bufnr, r.start, enc) == after
     if r and (touching or (before(r.start, pos) and before(pos, r["end"]))) then
@@ -84,6 +84,21 @@ local function under_cursor(bufnr)
     end
   end
   return hits
+end
+
+--- Annotations whose range contains the cursor.
+local function under_cursor(bufnr)
+  return at_cursor(bufnr, function(a)
+    return a.resolution and a.resolution.range
+  end)
+end
+
+--- Open orphaned annotations whose suggested location contains the cursor.
+local function orphans_under_cursor(bufnr)
+  return at_cursor(bufnr, function(a)
+    local s = a.status == "open" and a.resolution and a.resolution.state == "orphaned" and a.resolution.suggested
+    return s and s.range
+  end)
 end
 
 local function buffer_annotations(bufnr, keep)
@@ -128,7 +143,12 @@ local function with_annotation(opts, keep, fn)
     return true
   end, under_cursor(vim.api.nvim_get_current_buf()))
   if #hits == 0 then
-    vim.notify("annox: no matching annotation under the cursor", vim.log.levels.INFO)
+    local orphaned = #orphans_under_cursor(vim.api.nvim_get_current_buf()) > 0
+    vim.notify(
+      orphaned and "annox: the annotation here is orphaned, see :Annox orphans"
+        or "annox: no matching annotation under the cursor",
+      vim.log.levels.INFO
+    )
   elseif #hits == 1 then
     fn(hits[1].id)
   else
@@ -222,6 +242,7 @@ return {
   visual_range = visual_range,
   before = before,
   under_cursor = under_cursor,
+  orphans_under_cursor = orphans_under_cursor,
   buffer_annotations = buffer_annotations,
   with_replies = with_replies,
   describe = describe,
