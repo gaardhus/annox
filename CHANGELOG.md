@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0](https://github.com/gaardhus/annox/compare/v0.12.0...v0.13.0) - 2026-10-08
+
+### Added
+
+- Mark edited comments and replies, naming other editors
+- *(nvim)* Edit replies, from :Annox edit or the thread window
+- *(editors)* Delete and restore annotations, and edit suggestion explanations
+
 ## [0.12.0](https://github.com/gaardhus/annox/compare/v0.11.0...v0.12.0) - 2026-10-07
 
 ### Added
