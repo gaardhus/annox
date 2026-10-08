@@ -116,12 +116,7 @@ jobs:
       - name: Run plugin tests
         env:
           ANNOX_BIN: ${{ github.workspace }}/target/debug/annox
-        run: |
-          for t in editors/nvim/tests/*.lua; do
-            echo "::group::$t"
-            nvim --headless --clean -l "$t"
-            echo "::endgroup::"
-          done
+        run: editors/nvim/tests/run.sh
 
   vscode:
     name: VS Code

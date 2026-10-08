@@ -185,8 +185,10 @@ Highlight groups: `AnnoxComment`, `AnnoxHighlight`, `AnnoxSuggestion`, and `Anno
 ## Tests
 
 ```sh
+just test-nvim
+# or, for some of them:
 cargo build -p annox-lsp
-ANNOX_BIN=$PWD/target/debug/annox nvim --headless --clean -l editors/nvim/tests/e2e.lua
-ANNOX_BIN=$PWD/target/debug/annox nvim --headless --clean -l editors/nvim/tests/init.lua
-ANNOX_BIN=$PWD/target/debug/annox nvim --headless --clean -l editors/nvim/tests/suggesting.lua
+ANNOX_BIN=target/debug/annox editors/nvim/tests/run.sh editors/nvim/tests/suggesting.lua
 ```
+
+A test passes only if it prints its `annox nvim <name>: OK` line, since headless Neovim can stop a script early with exit code 0, for example at a prompt the test didn't answer.

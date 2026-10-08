@@ -28,7 +28,7 @@ test:
 
 test-nvim:
     cargo build -p annox-lsp --locked
-    for t in editors/nvim/tests/*.lua; do ANNOX_BIN="$PWD/target/debug/annox" nvim --headless --clean -l "$t" || exit 1; done
+    ANNOX_BIN="$PWD/target/debug/annox" editors/nvim/tests/run.sh
 
 # Record the Neovim demo in assets/nvim-demo.gif. Needs asciinema 3 and agg.
 nvim-demo:
