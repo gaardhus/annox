@@ -35,6 +35,11 @@ nvim-demo:
     cargo build -p annox-lsp --locked
     ANNOX_BIN="$PWD/target/debug/annox" editors/nvim/demo/record.sh assets/nvim-demo.gif
 
+# Render the animated intro (assets/intro/annox-intro.html) to a video. The extension of
+# `out` picks the format: .mp4, .webm, or .gif. Needs uv, ffmpeg, and Chromium.
+intro-video out="target/annox-intro.mp4" theme="light" fps="30" width="1920":
+    uv run assets/intro/render.py "{{ out }}" --theme {{ theme }} --fps {{ fps }} --width {{ width }}
+
 # Type check and test the VS Code extension. The end-to-end test downloads VS Code
 # and runs it on a virtual display when xvfb-run is installed; `just test-vscode show`
 # shows its window instead. The Wayland variables are unset so VS Code uses X11.
