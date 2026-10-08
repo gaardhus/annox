@@ -91,6 +91,10 @@ local function buffer_annotations(bufnr, keep)
 end
 
 local function describe(a)
+  if a.kind == "reply" then
+    local author = a.author or {}
+    return string.format("  reply · %s: %s", author.name or author.id or "unknown", first_line(a.body) or "")
+  end
   if a.kind == "suggestion" then
     return string.format("suggestion → %s", a.edit and a.edit.replacement or "")
   end

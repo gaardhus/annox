@@ -87,9 +87,11 @@ local function old_text(a, bufnr)
   return bufnr and resolved_text(a, bufnr) or ""
 end
 
---- The thread as markdown lines. A suggestion's old text is read from `bufnr`.
+--- The thread as markdown lines, and its messages as { id, header }, root
+--- first, where `header` is the line that starts the message. A suggestion's
+--- old text is read from `bufnr`.
 local function thread_lines(a, bufnr)
-  local lines = {}
+  local lines, messages = {}, {}
   local function str(v)
     return type(v) == "string" and v or ""
   end
@@ -122,15 +124,18 @@ local function thread_lines(a, bufnr)
     table.insert(lines, "⚠ **Conflicting changes:** " .. table.concat(vim.tbl_keys(a.conflicts), ", "))
     table.insert(lines, "")
   end
-  table.insert(lines, person(a) .. (a.status ~= "open" and ("  _" .. a.status .. "_") or ""))
+  local header = person(a) .. (a.status ~= "open" and ("  _" .. a.status .. "_") or "")
+  table.insert(messages, { id = a.id, header = header })
+  table.insert(lines, header)
   vim.list_extend(lines, escape_tildes(str(a.body)))
   for _, r in ipairs(a.replies or {}) do
     -- The markdown float expands a thematic break into a full-width rule.
     table.insert(lines, "---")
+    table.insert(messages, { id = r.id, header = person(r) })
     table.insert(lines, person(r))
     vim.list_extend(lines, escape_tildes(str(r.body)))
   end
-  return lines
+  return lines, messages
 end
 
 --- The old and new text of suggestion `a`, as shown in its diff block.
@@ -186,18 +191,30 @@ end
 
 --- Opens `a`'s thread in a floating window.
 local function open_thread(a, bufnr, opts)
-  local fbuf, win = vim.lsp.util.open_floating_preview(
-    thread_lines(a, bufnr),
-    "markdown",
-    vim.tbl_extend("force", { border = "rounded" }, opts or {})
-  )
+  local lines, messages = thread_lines(a, bufnr)
+  local fbuf, win =
+    vim.lsp.util.open_floating_preview(lines, "markdown", vim.tbl_extend("force", { border = "rounded" }, opts or {}))
   -- Styled here, for `a`, which needn't be under the cursor.
   vim.b[fbuf].annox_own_float = true
   conceal_escapes(fbuf)
   if a.kind == "suggestion" and bufnr then
     style_diff_blocks(fbuf, { suggestion_change(a, bufnr) })
   end
-  return fbuf, win
+  return fbuf, win, messages
+end
+
+--- The id of the message under the cursor in thread float `fbuf`: the last
+--- one whose header is at or above it, matched in order. Lines above the
+--- first header, such as a suggestion's diff, belong to the root.
+local function message_at(fbuf, messages)
+  local row = vim.api.nvim_win_get_cursor(0)[1]
+  local found, want = messages[1], 1
+  for _, line in ipairs(vim.api.nvim_buf_get_lines(fbuf, 0, row, false)) do
+    if messages[want] and line == messages[want].header then
+      found, want = messages[want], want + 1
+    end
+  end
+  return found.id
 end
 
 --- Styles the diff blocks of the suggestions under the cursor in float
@@ -230,9 +247,37 @@ function M.thread(opts)
   with_annotation(opts or {}, nil, function(id)
     local bufnr = vim.api.nvim_get_current_buf()
     local a = find_annotation(bufnr, id)
-    if a then
-      open_thread(a, bufnr, { focus_id = "annox" })
+    if not a then
+      return
     end
+    local source = vim.api.nvim_get_current_win()
+    local fbuf, win, messages = open_thread(a, bufnr, { focus_id = "annox" })
+    -- Running it again focuses the float instead, which then needs no setup.
+    if vim.b[fbuf].annox_thread_keys then
+      return
+    end
+    vim.b[fbuf].annox_thread_keys = true
+    pcall(vim.api.nvim_win_set_config, win, { footer = " e edit · r reply · q close ", footer_pos = "right" })
+    -- Back in the annotated buffer, which the commands act on.
+    local function act(fn)
+      return function()
+        local id = message_at(fbuf, messages)
+        vim.api.nvim_win_close(win, true)
+        if vim.api.nvim_win_is_valid(source) then
+          vim.api.nvim_set_current_win(source)
+        end
+        fn(id)
+      end
+    end
+    local map = function(lhs, fn, desc)
+      vim.keymap.set("n", lhs, act(fn), { buffer = fbuf, nowait = true, desc = desc })
+    end
+    map("e", function(id)
+      require("annox.edit").edit({ annotation = id })
+    end, "annox: edit the message under the cursor")
+    map("r", function()
+      require("annox.actions").reply({ annotation = a.id })
+    end, "annox: reply to the thread")
   end)
 end
 
@@ -310,7 +355,7 @@ function M.here(opts)
       end
       table.insert(lines, string.format("## Line %d · %s %s", a.at.start.line + 1, a.status, a.kind))
       table.insert(lines, "")
-      vim.list_extend(lines, thread_lines(a, bufnr))
+      vim.list_extend(lines, (thread_lines(a, bufnr)))
       if a.kind == "suggestion" then
         table.insert(changes, suggestion_change(a, bufnr))
       end

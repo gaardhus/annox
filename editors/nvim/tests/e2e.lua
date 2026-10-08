@@ -105,6 +105,52 @@ wait("reply", function()
   end
 end)
 
+--- The reply's body once it differs from `old`.
+local function reply_body(old)
+  for _, a in ipairs(annotations()) do
+    if a.id == comment.id and a.replies[1].body ~= old then
+      return a.replies[1].body
+    end
+  end
+end
+
+-- A reply is edited from the thread float: focus it, put the cursor on the
+-- reply, press e.
+local source_win = vim.api.nvim_get_current_win()
+annox.thread({ annotation = comment.id })
+annox.thread({ annotation = comment.id })
+check(#floats() == 1 and vim.api.nvim_get_current_win() == floats()[1], "second :Annox thread focuses the float")
+check(vim.api.nvim_win_get_config(floats()[1]).footer ~= nil, "the thread float shows its keys")
+vim.api.nvim_win_set_cursor(0, { vim.api.nvim_buf_line_count(0), 0 })
+vim.api.nvim_feedkeys("e", "x", false)
+check(vim.api.nvim_buf_get_name(0):find("annox://body/", 1, true), "e opens the edit window")
+check(vim.api.nvim_buf_get_lines(0, 0, -1, false)[1] == "Section 3.", "editing the reply, not the comment")
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "Section 3, Lemma 4." })
+vim.cmd.write()
+vim.api.nvim_win_close(0, true)
+wait("reply edited from the thread", function()
+  return reply_body("Section 3.") == "Section 3, Lemma 4."
+end)
+vim.api.nvim_set_current_win(source_win)
+
+-- :Annox edit offers the comment and its replies.
+local select = vim.ui.select
+local offered
+vim.ui.select = function(items, opts, on_choice)
+  offered = vim.tbl_map(opts.format_item, items)
+  on_choice(items[2])
+end
+annox.edit()
+vim.ui.select = select
+check(offered and #offered == 2 and offered[2]:find("reply", 1, true), "picker: " .. vim.inspect(offered))
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "Section 3." })
+vim.cmd.write()
+vim.api.nvim_win_close(0, true)
+wait("reply edited from the picker", function()
+  return reply_body("Section 3, Lemma 4.") == "Section 3."
+end)
+vim.api.nvim_set_current_win(source_win)
+
 -- A suggestion's thread shows the change as a diff block.
 annox.thread({ annotation = suggestion.id })
 check(#floats() == 1, "expected the suggestion thread float")
