@@ -117,6 +117,34 @@ export async function run(): Promise<void> {
     await wait("reply", () => get(c.id)?.replies?.some((r) => r.body === "From the box."));
   });
 
+  step("a reply is deleted, and restored", async () => {
+    await focus();
+    const c = all().find((a) => a.kind === "comment") as AnnotationView;
+    const thread = api.threads.threadOf(c.id) as vscode.CommentThread;
+    const count = thread.comments.length;
+    const reply = thread.comments[count - 1] as AnnoxComment;
+    assert.match(reply.contextValue, /^annox reply\b/);
+    await exec("annox.deleteComment", reply);
+    await wait("reply hidden", () => thread.comments.length === count - 1);
+    assert.ok(!get(c.id)?.replies?.some((r) => r.id === reply.view.id), "not in the pushed state");
+
+    const pick = vscode.window.showQuickPick;
+    let offered: string[] = [];
+    // biome-ignore lint/suspicious/noExplicitAny: stubbing the picker
+    (vscode.window as any).showQuickPick = async (items: (vscode.QuickPickItem & { a: AnnotationView })[]) => {
+      offered = items.map((i) => i.label);
+      return items.find((i) => i.a.id === reply.view.id);
+    };
+    try {
+      await exec("annox.restore");
+    } finally {
+      // biome-ignore lint/suspicious/noExplicitAny: restoring the picker
+      (vscode.window as any).showQuickPick = pick;
+    }
+    assert.deepEqual(offered, [`reply: ${reply.view.body}`]);
+    await wait("reply restored", () => thread.comments.length === count);
+  });
+
   step("a new comment written in an empty thread", async () => {
     const thread = api.threads.controller.createCommentThread(doc.uri, new vscode.Range(2, 4, 2, 12), []);
     await exec("annox.submitComment", { thread, text: "Which constant?" });
@@ -222,6 +250,16 @@ export async function run(): Promise<void> {
     await wait("replacement edited", () => get(s.id)?.edit?.replacement === "multiplier");
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
     await focus();
+
+    // Its explanation is edited in its thread, like a comment.
+    const thread = await wait("thread", () => api.threads.threadOf(s.id));
+    const root = thread.comments[0] as AnnoxComment;
+    assert.equal(root.contextValue, "annox root suggestion editable");
+    await exec("annox.editExplanation", root);
+    assert.equal(root.mode, vscode.CommentMode.Editing);
+    root.body = "Constant is ambiguous here.";
+    await exec("annox.saveComment", root);
+    await wait("explanation saved", () => get(s.id)?.body === "Constant is ambiguous here.");
     await exec("annox.rejectSuggestion", { annotation: s.id });
   });
 

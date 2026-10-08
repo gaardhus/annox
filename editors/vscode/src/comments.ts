@@ -34,7 +34,10 @@ export class AnnoxComment implements vscode.Comment {
     this.text = view.body ?? "";
     this.author = { name: authorName(view) };
     if (view.created) this.timestamp = new Date(view.created);
-    this.contextValue = ["annox", root ? "root" : "reply", editable ? "editable" : ""].join(" ").trim();
+    const kind = root && view.kind === "suggestion" ? "suggestion" : "";
+    this.contextValue = ["annox", root ? "root" : "reply", kind, editable ? "editable" : ""]
+      .filter(Boolean)
+      .join(" ");
   }
 }
 
@@ -291,7 +294,10 @@ export class Threads implements vscode.Disposable {
         return c;
       };
       const list = [build(a, true, this.rootBody(a, doc))];
-      for (const r of a.replies ?? []) list.push(build(r, false, markdown(escapeTildes(r.body ?? ""))));
+      for (const r of a.replies ?? []) {
+        // Pushed while a restore asked for deleted annotations.
+        if (!r.deleted) list.push(build(r, false, markdown(escapeTildes(r.body ?? ""))));
+      }
       entry.comments = comments;
       thread.comments = list;
       thread.label = threadLabel(a);

@@ -57,6 +57,8 @@ M.comment = actions.comment
 M.highlight = actions.highlight
 M.suggest = actions.suggest
 M.reply = actions.reply
+M.delete = actions.delete
+M.restore = actions.restore
 M.revert = actions.revert
 M.accept = actions.accept
 M.publish = actions.publish
@@ -80,11 +82,16 @@ local function on_annotations(_, result)
   if not vim.api.nvim_buf_is_loaded(bufnr) then
     return
   end
-  -- Only open annotations are shown. The server pushes closed ones too while
-  -- `M.revert` has asked for them.
+  -- Only open annotations are shown. The server pushes closed and deleted
+  -- ones too while `M.revert` or `M.restore` has asked for them.
   local annotations = vim.tbl_filter(function(a)
-    return a.status == nil or a.status == "open"
+    return (a.status == nil or a.status == "open") and not a.deleted
   end, result.annotations)
+  for _, a in ipairs(annotations) do
+    a.replies = vim.tbl_filter(function(r)
+      return not r.deleted
+    end, a.replies or {})
+  end
   store.state[bufnr] = { annotations = annotations, document = result.document }
   local s = store.suggesting[bufnr]
   if s then
@@ -237,6 +244,12 @@ local subcommands = {
   end,
   reply = function()
     M.reply()
+  end,
+  delete = function()
+    M.delete()
+  end,
+  restore = function()
+    M.restore()
   end,
   resolve = function(o)
     M.resolve({ visual = o.range > 0, all = o.bang })

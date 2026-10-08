@@ -151,6 +151,39 @@ wait("reply edited from the picker", function()
 end)
 vim.api.nvim_set_current_win(source_win)
 
+--- The number of replies the comment shows.
+local function reply_count()
+  for _, a in ipairs(annotations()) do
+    if a.id == comment.id then
+      return #a.replies
+    end
+  end
+end
+
+-- d in the thread float deletes the reply, and :Annox restore brings it back.
+annox.thread({ annotation = comment.id })
+annox.thread({ annotation = comment.id })
+vim.api.nvim_win_set_cursor(0, { vim.api.nvim_buf_line_count(0), 0 })
+vim.api.nvim_feedkeys("d", "x", false)
+check(vim.api.nvim_get_current_win() == source_win, "d goes back to the document")
+wait("reply deleted", function()
+  return reply_count() == 0
+end)
+local restorable
+vim.ui.select = function(items, opts, on_choice)
+  restorable = vim.tbl_map(opts.format_item, items)
+  on_choice(items[1])
+end
+annox.restore()
+wait("reply restored", function()
+  return reply_count() == 1
+end)
+vim.ui.select = select
+check(
+  restorable and #restorable == 1 and restorable[1]:find("reply", 1, true),
+  "restorable: " .. vim.inspect(restorable)
+)
+
 -- A suggestion's thread shows the change as a diff block.
 annox.thread({ annotation = suggestion.id })
 check(#floats() == 1, "expected the suggestion thread float")
@@ -192,6 +225,39 @@ wait("hover with marked words", function()
   return #floats() == 1 and words_match(floats()[1])
 end)
 vim.api.nvim_win_close(floats()[1], true)
+
+-- e on a suggestion's author line edits its explanation.
+annox.thread({ annotation = suggestion.id })
+annox.thread({ annotation = suggestion.id })
+vim.api.nvim_win_set_cursor(0, { vim.api.nvim_buf_line_count(0), 0 })
+vim.api.nvim_feedkeys("e", "x", false)
+local edit_name = vim.api.nvim_buf_get_name(0)
+check(edit_name:find("annox://body/" .. suggestion.id, 1, true), "editing the explanation: " .. edit_name)
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "Prove is too strong here." })
+vim.cmd.write()
+vim.api.nvim_win_close(0, true)
+vim.api.nvim_set_current_win(source_win)
+wait("explanation saved", function()
+  for _, a in ipairs(annotations()) do
+    if a.id == suggestion.id then
+      return a.body == "Prove is too strong here."
+    end
+  end
+end)
+-- :Annox edit on a suggestion offers its text first, then its explanation.
+local offered_edit
+vim.ui.select = function(items, opts)
+  offered_edit = vim.tbl_map(opts.format_item, items)
+end
+annox.edit()
+vim.ui.select = select
+check(
+  offered_edit
+    and #offered_edit == 2
+    and offered_edit[1]:find("suggestion →", 1, true)
+    and offered_edit[2]:find("explanation: Prove is too strong here.", 1, true),
+  "offered: " .. vim.inspect(offered_edit)
+)
 
 -- Accept: the server's workspace/applyEdit edits the buffer.
 annox.accept({ annotation = suggestion.id })

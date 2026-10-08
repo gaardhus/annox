@@ -27,7 +27,8 @@ Annotations are comment threads, under their own **annox** comment provider, so 
 - **To comment,** select text and click the **+** in the gutter, or run **annox: Comment**. Write the comment in the thread that opens, then press **Comment**, or **Save Draft** for a local-only draft.
 - **To highlight,** select text and run **annox: Highlight**. A highlight is a comment with no body.
 - **To reply,** type in a thread's reply box.
-- **To edit a comment,** use the pencil on it.
+- **To edit a comment or reply,** use the pencil on it. On a suggestion, the pencil edits its explanation, and *Edit* in the thread's header its suggested text.
+- **To delete a comment, suggestion or reply,** use the trash can on it. Deleting hides it, and the notification offers to undo that. **annox: Restore Deleted Annotation** brings back anything deleted in the file.
 - **The buttons in a thread's header** act on the thread. A suggestion has *Accept*, *Reject*, and *Edit*, or *Re-target* once it's stale. A comment has *Resolve*, a closed thread *Reopen*, an accepted suggestion *Revert*, and a draft *Publish*. An orphaned comment has *Re-attach*, a conflicted annotation *Resolve Conflicts*, and every thread *History*.
 - **To fix orphans,** run *annox: Fix Annotations That Could Not Be Located* (or click the notice at the top). Pick one to move it to its suggested location or to the selection, or to resolve or reject it, or resolve every orphaned comment at once. The suggested location, where the text was reworded rather than removed, gets a dashed underline.
 

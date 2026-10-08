@@ -90,10 +90,27 @@ local function buffer_annotations(bufnr, keep)
   return vim.tbl_filter(keep, (store.state[bufnr] or {}).annotations or {})
 end
 
+--- Each of `roots`, followed by its replies that aren't deleted.
+local function with_replies(roots)
+  local out = {}
+  for _, a in ipairs(roots) do
+    table.insert(out, a)
+    for _, r in ipairs(a.replies or {}) do
+      if not r.deleted then
+        table.insert(out, r)
+      end
+    end
+  end
+  return out
+end
+
 local function describe(a)
   if a.kind == "reply" then
     local author = a.author or {}
     return string.format("  reply · %s: %s", author.name or author.id or "unknown", first_line(a.body) or "")
+  end
+  if a.kind == "suggestion" and a.field == "body" then
+    return string.format("  explanation: %s", first_line(a.body) or "(none yet)")
   end
   if a.kind == "suggestion" then
     return string.format("suggestion → %s", a.edit and a.edit.replacement or "")
@@ -206,6 +223,7 @@ return {
   before = before,
   under_cursor = under_cursor,
   buffer_annotations = buffer_annotations,
+  with_replies = with_replies,
   describe = describe,
   with_annotation = with_annotation,
   with_input = with_input,

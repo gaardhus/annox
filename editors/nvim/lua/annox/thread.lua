@@ -205,7 +205,8 @@ end
 
 --- The id of the message under the cursor in thread float `fbuf`: the last
 --- one whose header is at or above it, matched in order. Lines above the
---- first header, such as a suggestion's diff, belong to the root.
+--- first header, such as a suggestion's diff, belong to the root, and the
+--- second result is true there.
 local function message_at(fbuf, messages)
   local row = vim.api.nvim_win_get_cursor(0)[1]
   local found, want = messages[1], 1
@@ -214,7 +215,7 @@ local function message_at(fbuf, messages)
       found, want = messages[want], want + 1
     end
   end
-  return found.id
+  return found.id, want == 1
 end
 
 --- Styles the diff blocks of the suggestions under the cursor in float
@@ -257,24 +258,31 @@ function M.thread(opts)
       return
     end
     vim.b[fbuf].annox_thread_keys = true
-    pcall(vim.api.nvim_win_set_config, win, { footer = " e edit · r reply · q close ", footer_pos = "right" })
+    local footer = " e edit · r reply · d delete · q close "
+    pcall(vim.api.nvim_win_set_config, win, { footer = footer, footer_pos = "right" })
     -- Back in the annotated buffer, which the commands act on.
     local function act(fn)
       return function()
-        local id = message_at(fbuf, messages)
+        local id, above = message_at(fbuf, messages)
         vim.api.nvim_win_close(win, true)
         if vim.api.nvim_win_is_valid(source) then
           vim.api.nvim_set_current_win(source)
         end
-        fn(id)
+        fn(id, above)
       end
     end
     local map = function(lhs, fn, desc)
       vim.keymap.set("n", lhs, act(fn), { buffer = fbuf, nowait = true, desc = desc })
     end
-    map("e", function(id)
-      require("annox.edit").edit({ annotation = id })
+    -- On a suggestion, the diff above its author edits the suggested text, and
+    -- the rest its explanation.
+    map("e", function(id, above)
+      local field = a.kind == "suggestion" and id == a.id and (above and "replacement" or "body") or nil
+      require("annox.edit").edit({ annotation = id, field = field })
     end, "annox: edit the message under the cursor")
+    map("d", function(id)
+      require("annox.actions").delete({ annotation = id })
+    end, "annox: delete the message under the cursor")
     map("r", function()
       require("annox.actions").reply({ annotation = a.id })
     end, "annox: reply to the thread")

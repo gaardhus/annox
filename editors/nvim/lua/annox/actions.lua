@@ -112,6 +112,67 @@ function M.reply(opts)
   end)
 end
 
+--- Deletes the comment or suggestion under the cursor, or one of its replies,
+--- asking which. Deleting hides it, and `:Annox restore` brings it back.
+--- opts: { annotation? }
+function M.delete(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  local roots = opts.annotation and buffer_annotations(bufnr, function()
+    return true
+  end) or util.under_cursor(bufnr)
+  util.pick(opts, util.with_replies(roots), "Delete", function(a)
+    request(bufnr, "annox/delete", { annotation = a.id }, function()
+      vim.notify(string.format("annox: deleted the %s (:Annox restore brings it back)", a.kind))
+    end)
+  end)
+end
+
+--- Restores a deleted comment, suggestion or reply of the buffer, asking
+--- which, most recently created first. opts: { annotation? }
+function M.restore(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  local function restore(id)
+    request(bufnr, "annox/restore", { annotation = id })
+  end
+  if opts.annotation then
+    return restore(opts.annotation)
+  end
+  -- Deleted annotations aren't pushed, so ask for them once, then go back to
+  -- open ones only, as `M.revert` does.
+  local doc = { uri = vim.uri_from_bufnr(bufnr) }
+  local all = { textDocument = doc, includeClosed = true, includeDeleted = true }
+  request(bufnr, "annox/annotations", all, function(result)
+    request(bufnr, "annox/annotations", { textDocument = doc })
+    local deleted = {}
+    for _, a in ipairs(result.annotations) do
+      if a.deleted then
+        table.insert(deleted, a)
+      else
+        -- A deleted root brings its replies back with it, so only the replies
+        -- of roots that are shown are listed on their own.
+        for _, r in ipairs(a.replies or {}) do
+          if r.deleted then
+            table.insert(deleted, r)
+          end
+        end
+      end
+    end
+    if #deleted == 0 then
+      return vim.notify("annox: nothing deleted in this buffer", vim.log.levels.INFO)
+    end
+    table.sort(deleted, function(a, b)
+      return a.id > b.id
+    end)
+    vim.ui.select(deleted, { prompt = "Restore", format_item = describe }, function(a)
+      if a then
+        restore(a.id)
+      end
+    end)
+  end)
+end
+
 local function status_action(status, keep)
   return function(opts)
     opts = opts or {}

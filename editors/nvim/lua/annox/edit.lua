@@ -114,32 +114,40 @@ local function open_edit_windows(edit_buf, title, old)
   return layout
 end
 
---- Edits the replacement of the suggestion under the cursor, the text of the
---- comment, or the text of one of their replies (asking which), in a floating
---- window. Esc saves and closes, `:q!` discards.
---- opts: { annotation? }
+--- Edits, in a floating window, the text of the comment under the cursor, or
+--- the suggested text or explanation of the suggestion, or the text of one of
+--- their replies, asking which. `opts.field` ("replacement" or "body") picks
+--- between a suggestion's text and its explanation. Esc saves and closes,
+--- `:q!` discards.
+--- opts: { annotation?, field? }
 function M.edit(opts)
   opts = opts or {}
   local bufnr = vim.api.nvim_get_current_buf()
   local editable = function(a)
     return a.status == "open"
   end
-  -- Each open thread offers its root, then its replies.
+  -- Each open thread offers its root, a suggestion's explanation after its
+  -- text, then its replies.
   local candidates = {}
   local roots = opts.annotation and buffer_annotations(bufnr, editable) or vim.tbl_filter(editable, under_cursor(bufnr))
-  for _, a in ipairs(roots) do
-    table.insert(candidates, a)
-    for _, r in ipairs(a.replies or {}) do
-      if not r.deleted then
-        table.insert(candidates, r)
-      end
+  for _, a in ipairs(util.with_replies(roots)) do
+    if a.kind == "suggestion" then
+      table.insert(candidates, vim.tbl_extend("force", a, { field = "replacement" }))
+      table.insert(candidates, vim.tbl_extend("force", a, { field = "body" }))
+    else
+      table.insert(candidates, vim.tbl_extend("force", a, { field = "body" }))
     end
   end
+  if opts.field then
+    candidates = vim.tbl_filter(function(a)
+      return a.field == opts.field
+    end, candidates)
+  end
   pick(opts, candidates, "Edit", function(a)
-    if a.kind == "suggestion" and not a.applicable then
+    local field = a.field
+    if field == "replacement" and not a.applicable then
       return vim.notify("annox: this suggestion is stale; use :Annox retarget", vim.log.levels.WARN)
     end
-    local field = a.kind == "suggestion" and "replacement" or "body"
     local text = field == "replacement" and a.edit.replacement or a.body
     local lines = vim.split(type(text) == "string" and text or "", "\n")
     local edit_buf = vim.api.nvim_create_buf(false, true)
@@ -152,6 +160,7 @@ function M.edit(opts)
     local layout = open_edit_windows(
       edit_buf,
       field == "replacement" and " Suggested text (Esc saves and closes) "
+        or a.kind == "suggestion" and " Explanation (Esc saves and closes) "
         or a.kind == "reply" and " Reply (Esc saves and closes) "
         or " Comment (Esc saves and closes) ",
       field == "replacement" and resolved_text(a, bufnr) or ""

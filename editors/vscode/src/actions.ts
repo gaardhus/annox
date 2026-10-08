@@ -27,6 +27,7 @@ import type { Suggesting } from "./suggesting.ts";
 import type {
   AcceptResult,
   AnnotationView,
+  AnnotationsResult,
   CommitResult,
   ConflictEntry,
   HistoryEvent,
@@ -100,6 +101,9 @@ export class Actions {
       "annox.reply": (arg) => this.reply(arg),
       "annox.editAnnotation": (arg) => this.edit(arg),
       "annox.editComment": (arg) => this.threads.startEditing(arg as AnnoxComment),
+      "annox.editExplanation": (arg) => this.threads.startEditing(arg as AnnoxComment),
+      "annox.deleteComment": (arg) => this.deleteComment(arg as AnnoxComment),
+      "annox.restore": (arg) => this.restore(options(arg)),
       "annox.saveComment": (arg) => this.saveComment(arg as AnnoxComment),
       "annox.cancelEditComment": (arg) => this.threads.stopEditing(arg as AnnoxComment),
       "annox.toggleSuggesting": () => this.toggleSuggesting(),
@@ -551,6 +555,51 @@ export class Actions {
 
   /** Undoes an accepted suggestion with a new suggestion that restores the
    * original text (§4.3.4), applied now or left open for review. */
+  /** Deletes a comment of a thread: a reply, or with the root the whole
+   * thread. Deleting hides it, and the notification offers to undo that. */
+  private async deleteComment(comment: AnnoxComment): Promise<void> {
+    const what = comment.root ? `the ${comment.view.kind}` : "the reply";
+    const deleted = await this.annox.request("annox/delete", { annotation: comment.view.id });
+    if (deleted === undefined) return;
+    // Not awaited: the notification stays until it's dismissed.
+    void vscode.window.showInformationMessage(`annox: deleted ${what}`, "Undo").then((undo) => {
+      if (undo) void this.annox.request("annox/restore", { annotation: comment.view.id });
+    });
+  }
+
+  /** Restores a deleted comment, suggestion or reply of the active document,
+   * asking which, most recently created first. */
+  private async restore(opts: Options): Promise<void> {
+    if (opts.annotation) {
+      await this.annox.request("annox/restore", { annotation: opts.annotation });
+      return;
+    }
+    const editor = await this.editor();
+    if (!editor) return;
+    const all = await this.annox.request<AnnotationsResult>("annox/annotations", {
+      textDocument: this.textDocument(editor.document.uri),
+      includeClosed: true,
+      includeDeleted: true,
+    });
+    // Later pushes follow the last request: go back to the usual one.
+    await this.annox.fetch(editor.document.uri);
+    if (!all) return;
+    // A deleted root brings its replies back with it, so only the replies of
+    // roots that are shown are listed on their own.
+    const deleted = all.annotations
+      .flatMap((a) => (a.deleted ? [a] : (a.replies ?? []).filter((r) => r.deleted)))
+      .sort((a, b) => b.id.localeCompare(a.id));
+    if (deleted.length === 0) {
+      info("nothing deleted in this file");
+      return;
+    }
+    const choice = await vscode.window.showQuickPick(
+      deleted.map((a) => ({ label: describe(a), description: authorName(a), a })),
+      { placeHolder: "Restore which?" },
+    );
+    if (choice) await this.annox.request("annox/restore", { annotation: choice.a.id });
+  }
+
   private async revert(arg: Arg): Promise<void> {
     const t = await this.target(
       arg,

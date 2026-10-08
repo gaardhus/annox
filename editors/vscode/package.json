@@ -224,6 +224,23 @@
         "icon": "$(edit)"
       },
       {
+        "command": "annox.editExplanation",
+        "title": "Edit Explanation",
+        "category": "annox",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "annox.deleteComment",
+        "title": "Delete",
+        "category": "annox",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "annox.restore",
+        "title": "Restore Deleted Annotation",
+        "category": "annox"
+      },
+      {
         "command": "annox.saveComment",
         "title": "Save",
         "category": "annox"
@@ -301,6 +318,18 @@
         {
           "command": "annox.editComment",
           "when": "false"
+        },
+        {
+          "command": "annox.editExplanation",
+          "when": "false"
+        },
+        {
+          "command": "annox.deleteComment",
+          "when": "false"
+        },
+        {
+          "command": "annox.restore",
+          "when": "annox.inWorkspace"
         },
         {
           "command": "annox.saveComment",
@@ -505,8 +534,18 @@
       "comments/comment/title": [
         {
           "command": "annox.editComment",
-          "group": "inline",
-          "when": "commentController == annox && comment =~ /\\beditable\\b/"
+          "group": "inline@1",
+          "when": "commentController == annox && comment =~ /^annox (root|reply) editable\\b/"
+        },
+        {
+          "command": "annox.editExplanation",
+          "group": "inline@1",
+          "when": "commentController == annox && comment =~ /^annox root suggestion editable\\b/"
+        },
+        {
+          "command": "annox.deleteComment",
+          "group": "inline@2",
+          "when": "commentController == annox && comment =~ /^annox /"
         }
       ],
       "comments/comment/context": [
