@@ -1,0 +1,600 @@
+<!doctype html>
+<!-- The animated introduction to annox. Open it in a browser, or render it to video
+     with `just intro-video`, which loads it with ?render and steps through annoxSeek(). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Annox in 40 Seconds</title>
+<link rel="stylesheet" href="../../site/fonts/fonts.css">
+<style>
+/* Layout: one 1280×720 stage scaled to fit, scenes stacked as layers on a single scrubbable timeline. Tokens follow the annox site. */
+:root {
+  --page: #eceef3;
+  --paper: #ffffff;
+  --ink: #1f2937;
+  --muted: #5b6474;
+  --line: #d4d8e1;
+  --inset: #f5f6f9;
+  --accent: #6366f1;
+  --on-accent: #ffffff;
+  --accent-soft: rgba(99, 102, 241, 0.1);
+  --accent-line: rgba(99, 102, 241, 0.4);
+  --highlight: #facc15;
+  --mark: rgba(250, 204, 21, 0.45);
+  --green: #16a34a;
+  --red: #dc2626;
+  --shadow: 0 1px 2px rgba(31, 41, 55, 0.06), 0 8px 24px rgba(31, 41, 55, 0.08);
+  --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #12151c; --paper: #1b1f27; --ink: #e8eaf0; --muted: #9aa3b5; --line: #2f3542; --inset: #151921;
+    --accent: #8b8ff7; --on-accent: #12151c; --accent-soft: rgba(139, 143, 247, 0.12); --accent-line: rgba(139, 143, 247, 0.45);
+    --mark: rgba(250, 204, 21, 0.3); --green: #4ade80; --red: #f87171;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #12151c; --paper: #1b1f27; --ink: #e8eaf0; --muted: #9aa3b5; --line: #2f3542; --inset: #151921;
+  --accent: #8b8ff7; --on-accent: #12151c; --accent-soft: rgba(139, 143, 247, 0.12); --accent-line: rgba(139, 143, 247, 0.45);
+  --mark: rgba(250, 204, 21, 0.3); --green: #4ade80; --red: #f87171;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+
+@property --strike { syntax: "<number>"; inherits: true; initial-value: 0; }
+* { box-sizing: border-box; }
+html { color-scheme: light; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 16px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  padding-inline: 16px;
+  padding-block: 24px 32px;
+}
+.wrap { max-width: 1120px; margin-inline: auto; display: grid; gap: 14px; }
+
+/* Stage */
+.frame {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--page);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.stage {
+  position: absolute;
+  left: 0; top: 0;
+  width: 1280px; height: 720px;
+  transform-origin: 0 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 1.5px) 0 0 / 28px 28px,
+    var(--page);
+}
+.layer { position: absolute; inset: 0; }
+
+/* Controls */
+.controls { display: flex; align-items: center; gap: 12px; }
+.btn {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 36px; min-width: 36px; padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font: 500 14px var(--sans);
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn:focus-visible, .scrub:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn svg { width: 14px; height: 14px; fill: currentColor; }
+.scrub { flex: 1; min-width: 0; accent-color: var(--accent); }
+.time { font: 13px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+.chapters { display: flex; flex-wrap: wrap; gap: 6px; }
+.chap {
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+  font: 500 13px var(--sans); padding: 4px 10px; border-radius: 999px; cursor: pointer;
+}
+.chap[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.chap:hover:not([aria-current="true"]) { color: var(--accent); border-color: var(--accent); }
+.chap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Captions */
+.cap { position: absolute; left: 72px; top: 52px; width: 760px; }
+.eyebrow {
+  display: flex; align-items: center; gap: 10px;
+  font: 600 13px var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent);
+}
+.eyebrow b {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent); font-size: 12px; letter-spacing: 0;
+}
+.cap h2 {
+  margin: 10px 0 0; font: 600 40px/1.1 var(--sans); letter-spacing: -0.025em; text-wrap: balance;
+}
+.cap p { margin: 10px 0 0; font: 400 19px/1.45 var(--sans); color: var(--muted); max-width: 640px; }
+
+/* Title + end cards */
+.title { display: grid; place-content: center; justify-items: center; text-align: center; gap: 26px; }
+.lockup { display: flex; align-items: center; gap: 22px; }
+.lockup svg { width: 132px; height: 132px; overflow: visible; }
+.word { font: 700 104px/1 var(--sans); letter-spacing: -0.045em; display: flex; }
+.word span { display: inline-block; }
+.tagline { font: 400 30px/1.3 var(--serif); max-width: 820px; text-wrap: balance; }
+.tagline mark { background: linear-gradient(var(--mark), var(--mark)) no-repeat 0 62% / 100% 46%; color: inherit; padding: 0 2px; }
+.sub { font: 500 15px var(--sans); color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+.logo-page { fill: var(--paper); stroke: var(--ink); }
+.logo-bubble { fill: var(--accent); }
+.logo-dot { fill: var(--on-accent); }
+.logo-text { stroke: var(--muted); }
+.logo-hl { fill: var(--highlight); }
+.logo-hl-text { stroke: #1f2937; }
+
+/* Editor */
+.editor {
+  position: absolute; left: 72px; top: 214px; width: 724px; height: 446px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.ed-bar {
+  height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px;
+  border-bottom: 1px solid var(--line); background: var(--inset);
+  font: 500 13px var(--mono); color: var(--muted);
+}
+.ed-bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); display: inline-block; }
+.ed-bar span { margin-left: 10px; }
+.ed-body { position: absolute; left: 0; right: 0; top: 40px; bottom: 0; }
+.ln {
+  position: absolute; left: 0; right: 0; height: 32px;
+  display: flex; align-items: center;
+  font: 400 15.5px var(--mono); white-space: pre;
+}
+.ln .no { width: 52px; text-align: right; padding-right: 18px; color: var(--muted); opacity: 0.6; font-size: 13px; flex: none; }
+.ln .tx { flex: 1; min-width: 0; }
+.ln .gut { position: absolute; left: 4px; width: 6px; height: 20px; border-radius: 3px; top: 6px; }
+.h { color: var(--accent); font-weight: 500; }
+.code { color: var(--muted); }
+.hl {
+  background-image: linear-gradient(var(--mark), var(--mark));
+  background-repeat: no-repeat; background-position: 0 0; background-size: 0% 100%;
+  border-bottom: 2px solid transparent;
+}
+.del { display: inline-block; vertical-align: top; overflow: hidden; max-width: 240px; position: relative; }
+.del::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: var(--red);
+  transform: scaleX(var(--strike, 0)); transform-origin: left;
+}
+.ins {
+  display: inline-block; vertical-align: top; overflow: hidden; max-width: 0;
+  color: var(--accent); background: var(--accent-soft); border-radius: 3px;
+}
+.caret { display: inline-block; width: 2px; height: 20px; background: var(--accent); vertical-align: -4px; }
+.typed { display: inline-block; vertical-align: top; overflow: hidden; max-width: 0; }
+
+/* Cursors */
+.cursor { position: absolute; width: 22px; height: 22px; pointer-events: none; }
+.cursor svg { width: 22px; height: 22px; display: block; }
+.cursor .tag {
+  position: absolute; left: 18px; top: 18px; white-space: nowrap;
+  font: 600 12px var(--sans); padding: 2px 8px; border-radius: 6px; color: #fff;
+}
+
+/* Thread cards */
+.card {
+  position: absolute; left: 828px; width: 392px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+  padding: 14px 16px; display: grid; gap: 8px;
+}
+.who { display: flex; align-items: center; gap: 10px; font: 600 15px var(--sans); }
+.av { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 700 13px var(--sans); color: #fff; flex: none; }
+.av.sam { background: #16a34a; }
+.av.claude { background: #d97757; }
+.kind { margin-left: auto; font: 600 11px var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.body { font: 400 16px/1.45 var(--sans); }
+.quote { font: 13px var(--mono); color: var(--muted); }
+.diff { font: 14px var(--mono); display: grid; gap: 2px; }
+.diff .m { color: var(--red); text-decoration: line-through; }
+.diff .p { color: var(--accent); }
+.acts { display: flex; gap: 8px; }
+.pill {
+  font: 600 13px var(--sans); padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--paper);
+}
+.pill.go { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.stamp {
+  position: absolute; right: 14px; top: -13px; background: var(--paper);
+  font: 700 12px var(--sans); letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 999px; border: 1.5px solid currentColor;
+}
+.stamp.ok { color: var(--green); }
+.reply { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 6px; overflow: hidden; }
+.tie { position: absolute; height: 0; border-top: 2px dashed var(--accent-line); }
+
+/* Events */
+.tree {
+  position: absolute; left: 828px; top: 214px; width: 392px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden;
+}
+.tree-h { padding: 10px 16px; font: 500 13px var(--mono); color: var(--muted); border-bottom: 1px solid var(--line); background: var(--inset); }
+.file { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font: 13px var(--mono); border-bottom: 1px solid var(--line); }
+.file:last-child { border-bottom: 0; }
+.file .k { margin-left: auto; font: 600 11px var(--sans); letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.file svg { width: 14px; height: 14px; flex: none; fill: var(--muted); }
+.json {
+  position: absolute; left: 828px; top: 404px; width: 392px;
+  background: var(--inset); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+  font: 13px/1.6 var(--mono); white-space: pre; color: var(--ink); overflow: hidden;
+}
+.json .k2 { color: var(--accent); }
+.json .s { color: var(--muted); }
+
+/* Share diagram */
+.node {
+  position: absolute; display: flex; align-items: center; gap: 10px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+  padding: 12px 16px; font: 600 17px var(--sans); white-space: nowrap;
+}
+.node.cl { width: 166px; }
+.node small { display: block; font: 400 13px var(--sans); color: var(--muted); }
+.node.store { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-family: var(--mono); }
+.node.store small { color: var(--on-accent); opacity: 0.8; }
+.wires { position: absolute; inset: 0; width: 1280px; height: 720px; }
+.wires path { fill: none; stroke: var(--line); stroke-width: 2.5; }
+.wires text { font: 500 13px var(--mono); fill: var(--muted); }
+.pkt { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.pkt.y { background: var(--highlight); box-shadow: 0 0 0 4px var(--mark); }
+
+/* End card */
+.install {
+  font: 15px var(--mono); background: var(--paper); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 18px; color: var(--ink);
+}
+.install b { color: var(--accent); font-weight: 500; }
+.links { display: flex; gap: 22px; font: 500 15px var(--sans); color: var(--muted); }
+
+/* ?render: the stage fills the window, for recording frames */
+.render body { padding: 0; }
+.render .wrap { max-width: none; display: block; }
+.render .frame { border: 0; border-radius: 0; box-shadow: none; }
+.render .controls, .render .chapters { display: none; }
+
+@media (max-width: 560px) {
+  .controls { flex-wrap: wrap; }
+  .scrub { flex-basis: 100%; order: 3; }
+}
+</style>
+<script>if (new URLSearchParams(location.search).has("render")) document.documentElement.classList.add("render");</script>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="frame" id="frame">
+    <div class="stage" id="stage" aria-label="Animated introduction to annox" role="img">
+
+      <!-- Scene 0: title -->
+      <div class="layer title" id="s-title">
+        <div class="lockup">
+          <svg viewBox="0 0 128 128" aria-hidden="true">
+            <g id="t-page">
+              <path class="logo-page" d="M27 12H66L88 34V101a15 15 0 0 1-15 15H27a15 15 0 0 1-15-15V27a15 15 0 0 1 15-15Z" stroke-width="6" stroke-linejoin="round"/>
+              <path d="M66 12V24a10 10 0 0 0 10 10H88" fill="none" stroke="currentColor" class="logo-page" style="fill:none" stroke-width="6" stroke-linejoin="round"/>
+              <g class="logo-text" stroke-width="7" stroke-linecap="round"><path d="M23 40H56"/><path d="M23 62H50"/></g>
+            </g>
+            <g id="t-hl"><rect class="logo-hl" x="18" y="75" width="59" height="18" rx="7"/>
+            <path class="logo-hl-text" d="M23 84H70" stroke-width="7" stroke-linecap="round"/></g>
+            <g id="t-bubble">
+              <path d="M81 36H107a13 13 0 0 1 13 13V59a13 13 0 0 1-13 13H92.2L74.5 83.5L78.1 72H81a13 13 0 0 1-13-13V49a13 13 0 0 1 13-13Z" class="logo-bubble" stroke-width="7" style="stroke:var(--page)" stroke-linejoin="round" paint-order="stroke"/>
+              <circle class="logo-dot" cx="82" cy="54" r="4.5"/><circle class="logo-dot" cx="94" cy="54" r="4.5"/><circle class="logo-dot" cx="106" cy="54" r="4.5"/>
+            </g>
+          </svg>
+          <div class="word" id="t-word"><span>a</span><span>n</span><span>n</span><span>o</span><span>x</span></div>
+        </div>
+        <div class="tagline" id="t-tag">Highlights, comments, and suggested edits for <mark>plain-text documents</mark>, in any editor.</div>
+        <div class="sub" id="t-sub">An open standard · stored next to your files</div>
+      </div>
+
+      <!-- Scenes 1–5: the review, in one editor -->
+      <div class="layer" id="s-review">
+        <div class="cap" id="c1"><div class="eyebrow"><b>1</b>Annotate</div><h2>Comment on any span of text.</h2><p>Sam reviews a proposal in their editor and asks for a date.</p></div>
+        <div class="cap" id="c2"><div class="eyebrow"><b>2</b>Suggest</div><h2>Agents suggest edits, like people do.</h2><p>Claude proposes a replacement. Nothing changes until someone accepts it.</p></div>
+        <div class="cap" id="c3"><div class="eyebrow"><b>3</b>Store</div><h2>Every action writes one event file.</h2><p>Plain JSON in <code style="font-family:var(--mono);font-size:.9em">.annox/</code>, next to the document. Nothing is written into the text itself.</p></div>
+        <div class="cap" id="c4"><div class="eyebrow"><b>4</b>Anchor</div><h2>Annotations follow the text as it changes.</h2><p>Each one remembers its quote and context, so edits elsewhere don't knock it loose.</p></div>
+        <div class="cap" id="c5"><div class="eyebrow"><b>5</b>Decide</div><h2>Accept, and the edit is applied.</h2><p>Then reply and resolve the thread. The history stays in the event log.</p></div>
+
+        <div class="editor" id="editor">
+          <div class="ed-bar"><i></i><i></i><i></i><span>proposal.md</span></div>
+          <div class="ed-body" id="ed-body">
+            <div class="ln" style="top:14px"><span class="no">27</span><span class="tx"><span class="h">## Plan</span></span></div>
+            <div class="ln" style="top:46px"><span class="no">28</span><span class="tx"></span></div>
+            <div class="ln" style="top:78px"><span class="no">29</span><span class="tx">We will export every page to Markdown using the</span></div>
+            <div class="ln" style="top:110px"><span class="no">30</span><span class="tx">wiki's built-in exporter, commit the result to a</span></div>
+            <div class="ln" style="top:142px"><span class="no">31</span><span class="tx">new <span class="code">`docs/`</span> directory, and fix broken links by hand.</span></div>
+            <div class="ln" id="ln-new" style="top:174px;opacity:0"><span class="no">32</span><span class="tx"><span class="typed" id="typed">The hosted wiki stays read-only for one month.</span><span class="caret" id="caret2"></span></span></div>
+            <div class="mv" id="mv">
+              <div class="ln" style="top:174px"><span class="no" data-n="32">32</span><span class="tx"></span></div>
+              <div class="ln" style="top:206px"><span class="no" data-n="33">33</span><span class="tx"><span class="h">## Decision</span></span></div>
+              <div class="ln" style="top:238px"><span class="no" data-n="34">34</span><span class="tx"></span></div>
+              <div class="ln" style="top:270px"><span class="no" data-n="35">35</span><span class="tx">We ask the team to approve the migration</span></div>
+              <div class="ln" style="top:302px"><span class="gut" id="gut" style="background:var(--highlight);opacity:0"></span><span class="gut" id="gut2" style="left:13px;background:var(--accent);opacity:0"></span><span class="no" data-n="36">36</span><span class="tx"><span class="hl" id="hl"><span class="del" id="del">by the end of the month</span><span class="ins" id="ins">by 30 October 2026</span></span>.</span></div>
+            </div>
+          </div>
+          <div class="cursor" id="cur-sam" style="left:0;top:0"><svg viewBox="0 0 22 22"><path d="M3 2l15 8-6.5 1.6L9 18z" fill="#16a34a" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg><span class="tag" style="background:#16a34a">Sam</span></div>
+        </div>
+
+        <div class="tie" id="tie1" style="left:796px;width:32px;top:572px"></div>
+
+        <!-- Sam's comment -->
+        <div class="card" id="card-sam" style="top:214px">
+          <div class="who"><span class="av sam">S</span>Sam Reviewer<span class="kind">Comment</span></div>
+          <div class="quote">“by the end of the month”</div>
+          <div class="body">Which month? Please give a date.</div>
+          <div class="reply" id="reply">
+            <div class="who"><span class="av claude">C</span>Claude<span class="kind">Reply</span></div>
+            <div class="body">Changed to a fixed date in the accepted text.</div>
+          </div>
+          <span class="stamp ok" id="st-res">Resolved</span>
+        </div>
+
+        <!-- Claude's suggestion -->
+        <div class="card" id="card-cl" style="top:440px">
+          <div class="who"><span class="av claude">C</span>Claude<span class="kind" id="cl-kind">Suggestion</span></div>
+          <div class="diff"><span class="m">by the end of the month</span><span class="p">by 30 October 2026</span></div>
+          <div class="body">A fixed date, as asked in the review.</div>
+          <div class="acts"><span class="pill go" id="btn-acc">Accept</span><span class="pill">Reject</span></div>
+          <span class="stamp ok" id="st-acc">Accepted</span>
+        </div>
+
+        <!-- Events panel -->
+        <div class="tree" id="tree">
+          <div class="tree-h">.annox/docs/proposal.md~01a116e1…/</div>
+          <div class="file" id="f1"><svg viewBox="0 0 16 16"><path d="M3 1h6l4 4v10H3z"/></svg>01a116e1-b897….json<span class="k">comment</span></div>
+          <div class="file" id="f2"><svg viewBox="0 0 16 16"><path d="M3 1h6l4 4v10H3z"/></svg>01a116e1-d211….json<span class="k">suggestion</span></div>
+        </div>
+        <div class="json" id="json">{
+  <span class="k2">"type"</span>: <span class="s">"create"</span>,
+  <span class="k2">"kind"</span>: <span class="s">"suggestion"</span>,
+  <span class="k2">"author"</span>: { <span class="k2">"name"</span>: <span class="s">"Claude"</span> },
+  <span class="k2">"body"</span>: <span class="s">"A fixed date, as asked…"</span>,
+  <span class="k2">"edit"</span>: { <span class="k2">"replacement"</span>: <span class="s">"by 30 October 2026"</span> },
+  <span class="k2">"target"</span>: { <span class="k2">"quote"</span>: { <span class="k2">"exact"</span>:
+      <span class="s">"by the end of the month"</span> } }
+}</div>
+      </div>
+
+      <!-- Scene 6: share -->
+      <div class="layer" id="s-share">
+        <div class="cap" id="c6"><div class="eyebrow"><b>6</b>Share</div><h2>One format for editors, agents, and git.</h2><p>Editors talk to one server. Scripts and agents write the files directly. Commit them, or sync live through a hub.</p></div>
+        <svg class="wires" viewBox="0 0 1280 720" aria-hidden="true">
+          <path d="M262 300 C 330 300, 330 420, 400 420"/>
+          <path d="M262 420 H 400"/>
+          <path d="M262 540 C 330 540, 330 420, 400 420"/>
+          <path d="M540 420 H 690"/>
+          <path d="M770 610 V 456"/>
+          <path d="M852 420 H 1000"/>
+          <path d="M470 456 V 590" stroke-dasharray="6 6"/>
+          <text x="560" y="408">events</text>
+          <text x="880" y="408">commit, pull</text>
+          <text x="484" y="530">live sync</text>
+        </svg>
+        <div class="node cl" id="n1" style="left:96px;top:274px">Neovim</div>
+        <div class="node cl" id="n2" style="left:96px;top:394px">VS Code</div>
+        <div class="node cl" id="n3" style="left:96px;top:514px">Any LSP editor</div>
+        <div class="node" id="n4" style="left:400px;top:388px"><span>annox lsp<small>one server</small></span></div>
+        <div class="node store" id="n5" style="left:690px;top:388px"><span>.annox/<small>event files</small></span></div>
+        <div class="node" id="n6" style="left:1000px;top:388px"><span>git remote<small>reviewed like code</small></span></div>
+        <div class="node" id="n7" style="left:654px;top:610px"><span class="av claude" style="width:24px;height:24px;font-size:12px">C</span><span>Agents &amp; CLI<small>annox mcp, annox …</small></span></div>
+        <div class="node" id="n8" style="left:396px;top:590px"><span>annox hub<small>collaborators</small></span></div>
+        <div class="pkt" id="p1"></div><div class="pkt" id="p2"></div><div class="pkt y" id="p3"></div>
+        <div class="pkt" id="p4"></div><div class="pkt" id="p5"></div><div class="pkt y" id="p6"></div>
+      </div>
+
+      <!-- Scene 7: end -->
+      <div class="layer title" id="s-end">
+        <div class="lockup" id="e-lock">
+          <svg viewBox="0 0 128 128" aria-hidden="true" style="width:96px;height:96px">
+            <path class="logo-page" d="M27 12H66L88 34V101a15 15 0 0 1-15 15H27a15 15 0 0 1-15-15V27a15 15 0 0 1 15-15Z" stroke-width="6" stroke-linejoin="round"/>
+            <path class="logo-page" style="fill:none" d="M66 12V24a10 10 0 0 0 10 10H88" stroke-width="6" stroke-linejoin="round"/>
+            <g class="logo-text" stroke-width="7" stroke-linecap="round"><path d="M23 40H56"/><path d="M23 62H50"/></g>
+            <rect class="logo-hl" x="18" y="75" width="59" height="18" rx="7"/>
+            <path class="logo-hl-text" d="M23 84H70" stroke-width="7" stroke-linecap="round"/>
+            <path d="M81 36H107a13 13 0 0 1 13 13V59a13 13 0 0 1-13 13H92.2L74.5 83.5L78.1 72H81a13 13 0 0 1-13-13V49a13 13 0 0 1 13-13Z" class="logo-bubble" stroke-width="7" style="stroke:var(--page)" stroke-linejoin="round" paint-order="stroke"/>
+            <circle class="logo-dot" cx="82" cy="54" r="4.5"/><circle class="logo-dot" cx="94" cy="54" r="4.5"/><circle class="logo-dot" cx="106" cy="54" r="4.5"/>
+          </svg>
+          <div class="word" style="font-size:80px">annox</div>
+        </div>
+        <div class="tagline" id="e-tag">Portable annotations for any document, in <mark>any editor</mark>.</div>
+        <div class="install" id="e-ins"><b>$</b> curl -fsSL https://gaardhus.github.io/annox/install.sh | sh</div>
+        <div class="links" id="e-links"><span>Spec v0.1</span><span>Neovim · VS Code · any LSP editor</span><span>github.com/gaardhus/annox</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="play" type="button" aria-label="Pause"><svg viewBox="0 0 14 14" id="ico"><rect x="2" y="1" width="3.5" height="12" rx="1"/><rect x="8.5" y="1" width="3.5" height="12" rx="1"/></svg></button>
+    <button class="btn" id="restart" type="button" aria-label="Restart"><svg viewBox="0 0 14 14"><path d="M7 2a5 5 0 1 1-4.6 3h1.7A3.5 3.5 0 1 0 7 3.5V6L3.5 2.75 7 -.5z"/></svg></button>
+    <input class="scrub" id="scrub" type="range" min="0" max="41" step="0.01" value="0" aria-label="Timeline">
+    <span class="time" id="time">0:00 / 0:41</span>
+  </div>
+  <div class="chapters" id="chapters"></div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const stage = $("stage"), frame = $("frame");
+  const fit = () => { stage.style.transform = `scale(${frame.clientWidth / 1280})`; };
+  new ResizeObserver(fit).observe(frame); fit();
+
+  const TOTAL = 41;
+  const anims = [], hooks = [];
+  const seen = new Map();
+  const ease = { out: "cubic-bezier(.2,.8,.2,1)", inOut: "cubic-bezier(.65,0,.35,1)", pop: "cubic-bezier(.3,1.5,.5,1)", lin: "linear" };
+
+  // Absolute-time tween. An element's first animation of its properties fills backwards, so
+  // its starting value holds until it begins. Any animation that touches a property already
+  // animated holds only forwards, and its new properties start from their CSS values.
+  function tw(el, frames, start, dur, e = "out") {
+    if (typeof el === "string") el = $(el);
+    const props = Object.keys(Array.isArray(frames) ? frames[0] : frames).filter((k) => k !== "offset");
+    const s = seen.get(el) || new Set(); seen.set(el, s);
+    const first = props.every((p) => !s.has(p)); props.forEach((p) => s.add(p));
+    const a = el.animate(frames, { delay: start * 1000, duration: dur * 1000, easing: ease[e] || e, fill: first ? "both" : "forwards" });
+    a.pause(); anims.push(a); return a;
+  }
+  const show = (el, t, d = 0.5, dy = 14) => tw(el, [{ opacity: 0, transform: `translateY(${dy}px)` }, { opacity: 1, transform: "none" }], t, d);
+  const hide = (el, t, d = 0.4) => tw(el, [{ opacity: 1 }, { opacity: 0 }], t, d, "inOut");
+  const layer = (el, a, b) => { tw(el, [{ opacity: 0 }, { opacity: 1 }], a, 0.5, "inOut"); tw(el, [{ opacity: 1 }, { opacity: 0 }], b, 0.5, "inOut"); };
+
+  // Scene 0 — title (0 – 4.5). Visible from the first frame.
+  tw("t-hl", [{ transform: "scaleX(0)", transformOrigin: "18px 84px" }, { transform: "scaleX(1)", transformOrigin: "18px 84px" }], 0.3, 0.6);
+  tw("t-bubble", [{ transform: "scale(.3)", transformOrigin: "80px 80px", opacity: 0 }, { transform: "scale(1)", transformOrigin: "80px 80px", opacity: 1 }], 0.7, 0.5, "pop");
+  [...$("t-word").children].forEach((s, i) => tw(s, [{ transform: "translateY(18px)", opacity: 0.15 }, { transform: "none", opacity: 1 }], 0.2 + i * 0.07, 0.5));
+  tw("t-tag", [{ opacity: 0.2 }, { opacity: 1 }], 1.0, 0.7);
+  tw("t-sub", [{ opacity: 0 }, { opacity: 1 }], 1.6, 0.6);
+  tw("s-title", [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.97)" }], 4.0, 0.5, "inOut");
+
+  // Review layer (4.5 – 30)
+  layer("s-review", 4.4, 29.6);
+  const caps = [["c1", 4.6, 9.4], ["c2", 9.6, 14.4], ["c3", 14.6, 19.4], ["c4", 19.6, 24.4], ["c5", 24.6, 29.6]];
+  caps.forEach(([id, a, b], i) => { show(id, a, 0.6); if (i < caps.length - 1) hide(id, b); });
+  show("editor", 4.5, 0.7, 24);
+
+  // 1 · Sam comments (4.5 – 9.5)
+  const cur = $("cur-sam");
+  tw(cur, [{ opacity: 0, transform: "translate(560px, 380px)" }, { opacity: 1, transform: "translate(420px, 330px)" }], 5.0, 0.7);
+  tw(cur, [{ transform: "translate(420px, 330px)" }, { transform: "translate(60px, 355px)" }], 5.8, 0.7, "inOut");
+  tw(cur, [{ transform: "translate(60px, 355px)" }, { transform: "translate(282px, 355px)" }], 6.6, 0.8, "inOut");
+  tw("hl", [{ backgroundSize: "0% 100%" }, { backgroundSize: "100% 100%" }], 6.6, 0.8, "inOut");
+  tw("gut", [{ opacity: 0 }, { opacity: 1 }], 7.3, 0.3);
+  tw(cur, [{ opacity: 1 }, { opacity: 0 }], 8.0, 0.4);
+  show("card-sam", 7.5, 0.6, 18);
+  tw("tie1", [{ opacity: 0 }, { opacity: 1 }], 10.6, 0.4);
+
+  // 2 · Claude suggests (9.5 – 14.5)
+  show("card-cl", 10.4, 0.6, 18);
+  tw("del", [{ "--strike": 0 }, { "--strike": 1 }], 10.0, 0.5);
+  tw("ins", [{ maxWidth: "0px", marginLeft: "0px" }, { maxWidth: "200px", marginLeft: "8px" }], 10.6, 1.2, "steps(18, end)");
+  tw("gut2", [{ opacity: 0 }, { opacity: 1 }], 10.2, 0.3);
+
+  // 3 · Event files (14.5 – 19.5): cards step aside, the store appears
+  hide("card-sam", 14.5); hide("card-cl", 14.5); hide("tie1", 14.5);
+  show("tree", 14.9, 0.5);
+  show("f1", 15.3, 0.35, 8); show("f2", 15.7, 0.35, 8);
+  show("json", 16.3, 0.6);
+  hide("tree", 19.1); hide("json", 19.1);
+
+  // 4 · Anchors follow (19.5 – 24.5): a line is typed above; the annotated lines move down with their cards
+  show("card-sam", 19.5, 0.4, 0); show("card-cl", 19.5, 0.4, 0); show("tie1", 19.5, 0.4, 0);
+  tw("ln-new", [{ opacity: 0 }, { opacity: 1 }], 20.4, 0.2);
+  tw("mv", [{ transform: "none" }, { transform: "translateY(32px)" }], 20.3, 0.5, "inOut");
+  tw("tie1", [{ transform: "none" }, { transform: "translateY(32px)" }], 20.3, 0.5, "inOut");
+  tw("card-sam", [{ top: "214px" }, { top: "246px" }], 20.3, 0.5, "inOut");
+  tw("card-cl", [{ top: "440px" }, { top: "472px" }], 20.3, 0.5, "inOut");
+  tw("typed", [{ maxWidth: "0px" }, { maxWidth: "470px" }], 20.7, 2.2, "steps(46, end)");
+  tw("caret2", [{ opacity: 1 }, { opacity: 0 }], 23.2, 0.2);
+  document.querySelectorAll("#mv .no").forEach((n) => {
+    const v = +n.dataset.n; // renumber once the line is inserted
+    hooks.push((t) => { n.textContent = t >= 20.55 ? v + 1 : v; });
+  });
+  tw("hl", [{ boxShadow: "0 0 0 0 rgba(250,204,21,0)" }, { boxShadow: "0 0 0 6px rgba(250,204,21,.35)", offset: 0.5 }, { boxShadow: "0 0 0 0 rgba(250,204,21,0)" }], 21.0, 1.0);
+
+  // 5 · Decide (24.5 – 30)
+  tw("btn-acc", [{ transform: "none" }, { transform: "scale(.9)", offset: 0.4 }, { transform: "none" }], 25.4, 0.4);
+  tw("del", [{ maxWidth: "240px" }, { maxWidth: "0px" }], 25.9, 0.5, "inOut");
+  tw("ins", [{ color: "var(--accent)", backgroundColor: "var(--accent-soft)", marginLeft: "8px" }, { color: "var(--ink)", backgroundColor: "rgba(0,0,0,0)", marginLeft: "0px" }], 26.3, 0.5);
+  tw("gut2", [{ opacity: 1 }, { opacity: 0 }], 26.3, 0.4);
+  tw("st-acc", [{ opacity: 0, transform: "scale(1.6) rotate(-8deg)" }, { opacity: 1, transform: "rotate(-4deg)" }], 26.0, 0.35, "pop");
+  tw("reply", [{ maxHeight: "0px", opacity: 0, paddingTop: "0px", borderTopWidth: "0px" }, { maxHeight: "120px", opacity: 1, paddingTop: "10px", borderTopWidth: "1px" }], 27.0, 0.6);
+  tw("st-res", [{ opacity: 0, transform: "scale(1.6) rotate(-8deg)" }, { opacity: 1, transform: "rotate(-4deg)" }], 28.2, 0.35, "pop");
+  tw("hl", [{ backgroundSize: "100% 100%" }, { backgroundSize: "100% 0%" }], 28.4, 0.6);
+  tw("gut", [{ opacity: 1 }, { opacity: 0 }], 28.4, 0.4);
+  hide("tie1", 28.4);
+
+  // 6 · Share (30 – 35.5)
+  layer("s-share", 29.9, 35.4);
+  show("c6", 30.0, 0.6);
+  ["n1", "n2", "n3"].forEach((id, i) => show(id, 30.3 + i * 0.12, 0.5));
+  show("n4", 30.8, 0.5); show("n5", 31.1, 0.5); show("n6", 31.4, 0.5); show("n7", 31.6, 0.5); show("n8", 31.8, 0.5);
+  const run = (id, pts, t, d) => {
+    const fr = pts.map(([x, y]) => ({ transform: `translate(${x}px, ${y}px)` }));
+    fr[0].opacity = 0; fr[1].opacity = 1; fr[fr.length - 1].opacity = 0;
+    if (fr.length > 2) fr[fr.length - 2].opacity = 1;
+    tw(id, fr, t, d, "lin");
+  };
+  run("p1", [[262, 300], [330, 360], [400, 420], [690, 420]], 32.2, 1.4);
+  run("p2", [[262, 420], [400, 420], [690, 420], [700, 420]], 32.6, 1.3);
+  run("p3", [[770, 610], [770, 520], [770, 456], [770, 450]], 32.9, 0.9);
+  run("p4", [[852, 420], [920, 420], [1000, 420], [1004, 420]], 33.6, 0.9);
+  run("p5", [[470, 456], [470, 520], [470, 590], [470, 594]], 33.4, 0.9);
+  run("p6", [[262, 540], [330, 480], [400, 420], [540, 420]], 33.9, 1.0);
+
+  // 7 · End (35.5 – 41)
+  layer("s-end", 35.5, 40.6);
+  show("e-lock", 35.6, 0.7, 20); show("e-tag", 36.1, 0.7); show("e-ins", 36.7, 0.6); show("e-links", 37.1, 0.6);
+
+  // Playback
+  // [name, from, at]: the pill lights up at `from`, halfway through the crossfade into the
+  // scene, and clicking it jumps to `at`, once the scene's caption has faded in.
+  const chapters = [
+    ["Intro", 0, 0], ["Annotate", 4.3, 5.0], ["Suggest", 9.7, 9.9], ["Store", 14.7, 14.95],
+    ["Anchor", 19.7, 20.0], ["Decide", 24.8, 25.1], ["Share", 30.0, 30.4], ["Install", 35.65, 36.0],
+  ];
+  const chapEl = $("chapters");
+  const chapBtns = chapters.map(([n, , t]) => {
+    const b = document.createElement("button"); b.className = "chap"; b.type = "button"; b.textContent = n;
+    b.addEventListener("click", () => { seek(t); }); chapEl.appendChild(b); return b;
+  });
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  const scrub = $("scrub"), timeEl = $("time"), playBtn = $("play"), ico = $("ico");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let t = 0, playing = !reduce, last = performance.now();
+
+  function render() {
+    for (const a of anims) a.currentTime = t * 1000;
+    for (const h of hooks) h(t);
+    scrub.value = t; timeEl.textContent = `${fmt(t)} / ${fmt(TOTAL)}`;
+    let cur = 0; chapters.forEach(([, s], i) => { if (t >= s) cur = i; });
+    chapBtns.forEach((b, i) => b.setAttribute("aria-current", i === cur ? "true" : "false"));
+  }
+  function setPlaying(p) {
+    playing = p; last = performance.now();
+    playBtn.setAttribute("aria-label", p ? "Pause" : "Play");
+    ico.innerHTML = p ? '<rect x="2" y="1" width="3.5" height="12" rx="1"/><rect x="8.5" y="1" width="3.5" height="12" rx="1"/>' : '<path d="M3 1.5v11l9.5-5.5z"/>';
+  }
+  function seek(v) { t = Math.max(0, Math.min(TOTAL, v)); render(); }
+  function tick(now) {
+    if (playing) { t += (now - last) / 1000; if (t >= TOTAL) t = 0; render(); }
+    last = now; requestAnimationFrame(tick);
+  }
+  playBtn.addEventListener("click", () => setPlaying(!playing));
+  $("restart").addEventListener("click", () => { seek(0); setPlaying(true); });
+  scrub.addEventListener("input", () => { seek(+scrub.value); });
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest && e.target.closest("input,button")) return;
+    if (e.key === " ") { e.preventDefault(); setPlaying(!playing); }
+    if (e.key === "ArrowRight") seek(t + 2);
+    if (e.key === "ArrowLeft") seek(t - 2);
+  });
+
+  // Hooks for assets/intro/render.py.
+  window.annoxDuration = TOTAL;
+  window.annoxSeek = (v) => { setPlaying(false); seek(v); };
+
+  if (document.documentElement.classList.contains("render")) playing = false;
+  else if (reduce) t = 24.0; // a still frame with the whole review visible
+  setPlaying(playing); render(); requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
