@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0](https://github.com/gaardhus/annox/compare/v0.13.0...v0.14.0) - 2026-10-09
+
+### Added
+
+- *(nvim)* Act on the orphan under the cursor
+
+### Documentation
+
+- *(examples)* Add orphaned comments, one with a suggested location
+- *(intro)* Add an animated introduction to annox
+
 ## [0.13.0](https://github.com/gaardhus/annox/compare/v0.12.0...v0.13.0) - 2026-10-08
 
 ### Added
