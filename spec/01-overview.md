@@ -75,6 +75,7 @@ annox is an open standard for annotating plain-text documents with highlights, c
 | **Orphaned** | An annotation whose anchor can't be located. It is kept and shown, never deleted automatically. |
 | **Applicable / stale** | Whether a suggestion can currently be applied (§4.2). |
 | **Local-only annotation** | An annotation stored in `.annox/local/`, never shared (§5.11). |
+| **Unread** | Changed by someone else since a reader last marked it read. Tracked locally, per reader (§5.13). |
 | **Replica, hub** | The two roles in sync (§7.1). |
 | **Viewer, Client, Server, Hub** | Conformance classes (§1.5). |
 

@@ -6,7 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use annox_core::anchor::{self, Anchor, State};
+use annox_core::event::Event;
 use annox_core::ops::{self, NewAnnotation};
+use annox_core::read;
 use annox_core::storage::{Area, Index, Workspace};
 use annox_core::suggestion;
 use annox_core::text::Text;
@@ -35,6 +37,10 @@ pub enum Command {
         /// Also list resolved, accepted, rejected and withdrawn annotations, but not deleted ones
         #[arg(long, conflicts_with = "all")]
         closed: bool,
+        /// Whose read state `unread` uses, and who `--mine` and `--others` mean [default: the identity write
+        /// commands use]
+        #[arg(long = "as", value_name = "ID")]
+        reader: Option<String>,
         #[command(flatten)]
         filter: Filter,
     },
@@ -195,6 +201,17 @@ pub enum Command {
         #[command(flatten)]
         author: Author,
     },
+    /// Mark threads read, so `annox list --unread` stops listing them until someone changes them again
+    Read {
+        /// Annotation ids, as printed by `annox list`; a reply's marks its thread
+        #[arg(required_unless_present = "all")]
+        ids: Vec<String>,
+        /// Mark every thread read
+        #[arg(long, conflicts_with = "ids")]
+        all: bool,
+        #[command(flatten)]
+        author: Author,
+    },
     /// Commit the uncommitted annotation events to git, and nothing else
     Commit {
         /// The commit message [default: a summary of what's being committed]
@@ -257,6 +274,9 @@ pub struct Filter {
     /// Only open annotations that need fixing: orphaned, or suggestions that can't be applied
     #[arg(long)]
     broken: bool,
+    /// Only threads others changed since you last read them (see `annox read`), closed ones included
+    #[arg(long)]
+    unread: bool,
     /// Only annotations on this text in FILE, closed ones included. An accepted suggestion is on the text it put in
     #[arg(long, value_name = "TEXT", allow_hyphen_values = true, requires = "file")]
     quote: Option<String>,
@@ -316,7 +336,7 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
             }
             Ok(json!({ "root": ws.root }))
         }
-        Command::List { file, all, closed, filter } => list(file.as_deref(), all, closed, filter, &cwd),
+        Command::List { file, all, closed, reader, filter } => list(file.as_deref(), all, closed, reader, filter, &cwd),
         Command::Report { file, .. } => report(file.as_deref(), &cwd),
         Command::Show { id } => show(&id, &cwd),
         Command::History { id, json: _ } => history(&id, &cwd),
@@ -388,8 +408,34 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
         Command::Reattach { id, at, author } => move_target(&id, &at, None, &author, &cwd),
         Command::Delete { id, author } => set_deleted(&id, true, &author, &cwd),
         Command::Restore { id, author } => set_deleted(&id, false, &author, &cwd),
+        Command::Read { ids, all, author: who } => mark_read(&ids, all, &who, &cwd),
         Command::Commit { message, dry_run } => commit(message.as_deref(), dry_run, &cwd),
     }
+}
+
+/// Marks the threads of `ids`, or every thread, read for the author (§5.13).
+fn mark_read(ids: &[String], all: bool, who: &Author, cwd: &Path) -> anyhow::Result<Value> {
+    let (ws, index) = open_workspace(cwd)?;
+    let reader = reader(&author(who, &ws)?)?;
+    let events: Vec<Event> = index.events.values().map(|(e, _)| e.clone()).collect();
+    let mut threads = BTreeSet::new();
+    for id in ids {
+        if !index.events.get(id).is_some_and(|(e, _)| e.kind == "create") {
+            bail!("unknown annotation {id}");
+        }
+        threads.extend(read::thread_ids(&events, id));
+    }
+    if all {
+        threads.extend(events.iter().filter_map(|e| e.annotation.clone()));
+    }
+    read::ensure_reader(&ws, &index, &reader)?;
+    read::mark(&ws, &reader, read::heads(&events, &threads))?;
+    Ok(json!({ "annotations": threads }))
+}
+
+/// The id of `author`, whose read state is used (§5.13).
+fn reader(author: &Value) -> anyhow::Result<String> {
+    author["id"].as_str().map(str::to_owned).ok_or_else(|| anyhow!("no identity: set ANNOX_AUTHOR or pass --author ID"))
 }
 
 fn commit(message: Option<&str>, dry_run: bool, cwd: &Path) -> anyhow::Result<Value> {
@@ -596,7 +642,14 @@ fn create(
     Ok(json!({ "id": event.id, "path": rel, "line": line_of(&text, start) }))
 }
 
-fn list(file: Option<&str>, all: bool, closed: bool, mut filter: Filter, cwd: &Path) -> anyhow::Result<Value> {
+fn list(
+    file: Option<&str>,
+    all: bool,
+    closed: bool,
+    reader_id: Option<String>,
+    mut filter: Filter,
+    cwd: &Path,
+) -> anyhow::Result<Value> {
     let (ws, paths) = match file {
         Some(file) => {
             let (ws, rel, _) = open_file(cwd, file)?;
@@ -610,12 +663,13 @@ fn list(file: Option<&str>, all: bool, closed: bool, mut filter: Filter, cwd: &P
             (ws, paths)
         }
     };
+    let me = reader(&author(&Author { author: reader_id, name: None }, &ws)?)?;
     if filter.mine || filter.others {
-        let me = author(&Author { author: None, name: None }, &ws)?;
-        let me = me["id"].as_str().ok_or_else(|| anyhow!("no identity: set ANNOX_AUTHOR or pass --author ID"))?;
-        if filter.mine { &mut filter.author } else { &mut filter.not_author }.push(me.to_owned());
+        if filter.mine { &mut filter.author } else { &mut filter.not_author }.push(me.clone());
     }
     let index = Index::read(&ws);
+    let events: Vec<Event> = index.events.values().map(|(e, _)| e.clone()).collect();
+    let unread = read::ensure_reader(&ws, &index, &me)?.unread(&me, &events);
     let mut out = Vec::new();
     for path in paths {
         let text = std::fs::read_to_string(ws.root.join(&path)).ok().map(|raw| Text::from_raw(&raw));
@@ -635,7 +689,7 @@ fn list(file: Option<&str>, all: bool, closed: bool, mut filter: Filter, cwd: &P
             let is_closed = state["status"] != "open";
             let deleted = state["deleted"] != json!(false);
             let status_ok = if filter.status.is_empty() {
-                all || closed || quoted.is_some() || !is_closed
+                all || closed || quoted.is_some() || filter.unread || !is_closed
             } else {
                 filter.status.iter().any(|s| state["status"] == json!(s))
             };
@@ -643,6 +697,9 @@ fn list(file: Option<&str>, all: bool, closed: bool, mut filter: Filter, cwd: &P
                 continue;
             }
             let mut view = item(id, state, &path, text.as_ref(), &states, &index, all);
+            if !mark_unread(&mut view, &unread) && filter.unread {
+                continue;
+            }
             if let Some((text, around)) = quoted {
                 let target = serde_json::from_value(state["target"].clone()).ok();
                 match target.and_then(|target| suggestion::current_range(text, &target, state)) {
@@ -672,6 +729,20 @@ impl Filter {
     }
 }
 
+/// Sets `unread` on a listed thread and its replies, and returns whether any
+/// of them is unread.
+fn mark_unread(view: &mut Value, unread: &BTreeSet<String>) -> bool {
+    let is = |v: &Value| v["id"].as_str().is_some_and(|id| unread.contains(id));
+    let mut any = is(view);
+    view["unread"] = json!(any);
+    for reply in view["replies"].as_array_mut().into_iter().flatten() {
+        let r = is(reply);
+        reply["unread"] = json!(r);
+        any |= r;
+    }
+    any
+}
+
 /// Whether a listed annotation needs `retarget` or `reattach`.
 fn is_broken(view: &Value) -> bool {
     view["status"] == "open" && (view["resolution"] == "orphaned" || view["applicable"] == json!(false))
@@ -684,7 +755,7 @@ fn report(file: Option<&str>, cwd: &Path) -> anyhow::Result<Value> {
     let (ws, index) = open_workspace(cwd)?;
     let files = uncommitted(&ws.root).ok();
     let uncommitted = files.as_ref().map(|files| summarize(&index, files));
-    let views = list(file, true, false, Filter::default(), cwd)?;
+    let views = list(file, true, false, None, Filter::default(), cwd)?;
     let mut documents: Vec<Value> = Vec::new();
     for view in views.as_array().into_iter().flatten().filter(|v| v["deleted"] != json!(true)) {
         let path = view["path"].as_str().unwrap_or_default();

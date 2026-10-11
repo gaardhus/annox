@@ -13,6 +13,7 @@ const INSTRUCTIONS: &str = "Annotations (comments and suggested edits) on files 
 Target text by quoting it exactly; if a quote occurs more than once, quote more of it or pass `occurrence`. \
 To propose changes to someone's prose, prefer `suggest` over editing the file, so they can review each change. \
 Read review comments with `list_annotations`, and answer with `reply`, `suggest`, and `set_status`. \
+To pick up what others changed since your last session, list with `unread`, and `mark_read` each thread you dealt with. \
 Bodies are Markdown: write ≈ or \"about\" rather than `~`, since two single tildes strike through the text between them.";
 
 pub struct Config {
@@ -77,6 +78,7 @@ const TOOLS: &[Tool] = &[
             ("mine", "boolean", false, "Only your own annotations."),
             ("others", "boolean", false, "Skip your own annotations."),
             ("broken", "boolean", false, "Only open annotations that are orphaned or can't be applied, to fix with retarget or reattach. An orphaned one may have a `suggested` location: where its text probably went, with the share of its words found there."),
+            ("unread", "boolean", false, "Only threads others changed since you last marked them read with mark_read: new annotations, replies, edits and status changes, closed threads included. Each annotation and reply has `unread`."),
             ("quote", "string", false, "Only annotations on this text, exactly as it appears in `file` (required), including resolved, accepted, rejected and withdrawn ones unless `status` is given: everything said about a passage. An accepted suggestion is on the text it put in."),
             OCCURRENCE,
         ],
@@ -202,6 +204,17 @@ const TOOLS: &[Tool] = &[
         read_only: false,
     },
     Tool {
+        name: "mark_read",
+        command: "read",
+        description: "Mark a thread read, or every thread, so list_annotations with `unread` stops listing it until someone changes it again. Mark only threads you have dealt with. Writing to a thread marks it read too.",
+        positional: &["id"],
+        params: &[
+            ("id", "string", false, "Annotation id, from list_annotations. A reply's marks its thread."),
+            ("all", "boolean", false, "Mark every thread read."),
+        ],
+        read_only: false,
+    },
+    Tool {
         name: "delete",
         command: "delete",
         description: "Hide an annotation or reply. Its history is kept, and `restore` undoes it.",
@@ -283,6 +296,10 @@ fn command_line(tool: &Tool, arguments: &Value, config: &Config) -> Result<Vec<S
         arguments.as_object().into_iter().flatten().map(|(k, _)| k).find(|k| !tool.params.iter().any(|p| p.0 == *k))
     {
         return Err(format!("unknown argument {unknown}"));
+    }
+    // Whose read state `unread` uses.
+    if let (Some(author), "list") = (&config.author, tool.command) {
+        args.extend(["--as".into(), author.clone()]);
     }
     if !tool.read_only {
         if let Some(author) = &config.author {

@@ -28,6 +28,9 @@ M.config = {
   word_diff = true,
   --- Strike through the deleted text of inline suggestions.
   strikethrough = true,
+  --- Mark a thread read when you open it with `:Annox thread`. Otherwise only
+  --- `:Annox read` and writing to a thread do.
+  mark_read_on_open = true,
 }
 
 --- Others' presence, as last pushed by the server.

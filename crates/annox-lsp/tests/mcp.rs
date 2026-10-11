@@ -127,3 +127,24 @@ fn list_filters_and_show() {
     assert_eq!(ids(&responses[3]), Vec::<Value>::new());
     assert_eq!(output(&responses[4])["body"], "Which?");
 }
+
+#[test]
+fn unread_uses_the_servers_identity() {
+    let (dir, config) = setup();
+    let unread = |config: &Config| {
+        let r = exchange(config, &[call(1, "list_annotations", json!({ "unread": true }))]);
+        output(&r[0])
+    };
+    assert_eq!(unread(&config), json!([]));
+    // Someone else comments.
+    let ada = Config { author: Some("mailto:ada@example.org".into()), name: None, ..config };
+    exchange(&ada, &[call(1, "comment", json!({ "file": "paper.md", "quote": "teh", "body": "Typo?" }))]);
+    let config = Config { author: Some("urn:test:agent".into()), name: None, root: dir.path().to_owned() };
+    let listed = unread(&config);
+    assert_eq!(listed[0]["body"], "Typo?");
+    assert_eq!(unread(&ada), json!([]));
+
+    let id = listed[0]["id"].as_str().unwrap();
+    output(&exchange(&config, &[call(2, "mark_read", json!({ "id": id }))])[0]);
+    assert_eq!(unread(&config), json!([]));
+}

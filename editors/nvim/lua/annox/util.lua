@@ -119,6 +119,20 @@ local function with_replies(roots)
   return out
 end
 
+--- Whether thread `a` has changes by others you haven't read (§5.13): in
+--- its root or in a reply.
+local function is_unread(a)
+  if a.unread == true then
+    return true
+  end
+  for _, r in ipairs(a.replies or {}) do
+    if r.unread == true then
+      return true
+    end
+  end
+  return false
+end
+
 local function describe(a)
   if a.kind == "reply" then
     local author = a.author or {}
@@ -246,6 +260,7 @@ return {
   buffer_annotations = buffer_annotations,
   with_replies = with_replies,
   describe = describe,
+  is_unread = is_unread,
   with_annotation = with_annotation,
   with_input = with_input,
   target_range = target_range,

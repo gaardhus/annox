@@ -102,7 +102,7 @@ The `annox` binary also reads and writes annotations directly, printing JSON (`a
 
 ```sh
 annox init [--local]
-annox list [FILE] [--all | --closed] [--kind K] [--status S] [--mine | --others] [--broken]
+annox list [FILE] [--all | --closed] [--kind K] [--status S] [--mine | --others] [--broken] [--unread]
 annox list paper.md --quote "the bound is tight"   # everything on that text, closed annotations too
 annox show ID
 annox history ID [--json]
@@ -114,8 +114,11 @@ annox reply ID --body "Fixed."
 annox status ID resolved
 annox accept ID
 annox revert ID [--accept] [--body TEXT]
+annox read ID... | --all
 annox commit [-m TEXT] [--dry-run]
 ```
+
+`annox list --unread` lists the threads others changed since you last read them, and every entry says whether it's `unread`. `annox read` marks threads read, and writing to a thread does too. What each author id has read is kept in the git-ignored `.annox/local/read.json`, so an agent with its own id (below) has its own unread list, and its reading doesn't mark anything read for you. `list --as ID` reads as another id.
 
 Write commands use `--author`/`--name`, or `ANNOX_AUTHOR`/`ANNOX_AUTHOR_NAME`, and otherwise your [configured identity](#configuration). Give an agent its own id, for example `ANNOX_AUTHOR=urn:agent:claude`, so its annotations are distinguishable from yours. A running `annox lsp` picks up the changes, so they appear in the editor. Run `annox help` for every command.
 

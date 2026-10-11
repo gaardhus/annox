@@ -12,6 +12,7 @@ local under_cursor = util.under_cursor
 local with_annotation = util.with_annotation
 local find_annotation = util.find_annotation
 local resolved_text = util.resolved_text
+local is_unread = util.is_unread
 local target_range = util.target_range
 local word_changes = worddiff.word_changes
 local mark_words = worddiff.mark_words
@@ -102,6 +103,9 @@ local function thread_lines(a, bufnr)
     local by = type(x.editedBy) == "table" and x.editedBy.author
     if type(by) == "table" then
       line = line .. (by.id == author.id and " · _edited_" or string.format(" · _edited by %s_", by.name or by.id))
+    end
+    if x.unread == true then
+      line = line .. " · **new**"
     end
     return line
   end
@@ -253,6 +257,10 @@ function M.thread(opts)
     end
     local source = vim.api.nvim_get_current_win()
     local fbuf, win, messages = open_thread(a, bufnr, { focus_id = "annox" })
+    -- Shown as new this once; the server pushes the thread back as read.
+    if store.config.mark_read_on_open and is_unread(a) then
+      request(bufnr, "annox/markRead", { annotations = { a.id } })
+    end
     -- Running it again focuses the float instead, which then needs no setup.
     if vim.b[fbuf].annox_thread_keys then
       return

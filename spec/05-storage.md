@@ -31,6 +31,7 @@ Document paths (§3.1) are relative to the workspace root.
           0192f2c3-….json
     local/                              local-only annotations, never shared (§5.11)
       docs/…                            same layout as docs/ above
+      read.json                         what each reader has read (§5.13)
     synced/                             events received from a sync hub, never committed (§5.12)
       docs/…                            same layout as docs/ above
     cache/                              optional, never shared (§5.9)
@@ -185,6 +186,22 @@ The mirror exists because of how version control treats untracked files. Suppose
 - A tool MAY offer to copy an event from the mirror into `docs/`, for a user who wants to commit an event that its author never committed. The copy has the same id, so readers see one event (§5.4).
 
 An event is in version control only once someone commits it. An event that its author never commits stays on the hub and in the mirrors of those who received it. The hub also doesn't know about branches: an event written on one branch reaches synced replicas whatever branch they have checked out.
+
+## 5.13 Read state
+
+Clients MAY track which changes a person hasn't seen yet, so they can point out new comments, replies, and changes, for example after a pull or while syncing. Read state is not an event. It is kept per copy of the workspace in `.annox/local/read.json`, and like the rest of `local/`, it MUST NOT be committed or synced (§5.9, §7.1). The file MAY be absent, and tools MAY delete it.
+
+```json
+{ "version": 1, "readers": { "mailto:ada@example.org": { "seen": { "<annotation id>": ["<event id>", "…"] } } } }
+```
+
+State is kept per **reader**, an author id (§2.7): the identity the tool writes events under. One copy of a workspace can have several readers, such as a person and the agents working for them, and each reader's state is separate.
+
+- An event of an annotation is **unread** by reader *r* if it is valid and not dangling (§2.5.1), its author isn't *r*, it isn't a `reanchor`, and it is neither in *r*'s seen set for the annotation nor an ancestor of an event in that set or of an event by *r*. Ancestry follows `after` links, not ids or times, so events that arrive late, for example from an old branch, are unread whatever their ids.
+- An annotation is unread if it has an unread event. A thread is unread if its root or any of its replies is.
+- **Marking a thread read** adds the current heads of its root and of each reply to the reader's seen sets. Writing an event to a thread, other than a `reanchor`, marks the thread read for its author.
+- **Baseline.** A reader with no entry in the file starts by marking every annotation read, so that existing annotations aren't all unread at once. An entry for a reader with nothing seen is `{ "seen": {} }`.
+- Seen sets only grow, so writers merge by union: they re-read the file, add their marks, and replace the file atomically (§5.4).
 
 Test vectors are in [`tests/storage.json`](tests/storage.json).
 

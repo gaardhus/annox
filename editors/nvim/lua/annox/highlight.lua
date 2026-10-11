@@ -40,6 +40,7 @@ local function set_highlights()
     AnnoxConflict = "DiagnosticUnderlineError",
     AnnoxVirtualText = "Comment",
     AnnoxSign = "DiagnosticSignInfo",
+    AnnoxUnread = "DiagnosticWarn",
     AnnoxPresence = "DiagnosticVirtualTextHint",
     AnnoxPresenceRange = "Visual",
     AnnoxInsertion = "Added",

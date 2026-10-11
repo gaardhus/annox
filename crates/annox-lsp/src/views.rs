@@ -42,13 +42,14 @@ fn expand_conflicts(a: &Analysis, conflicts: &Value) -> Value {
 }
 
 /// A derived state turned into a view: no `target`, expanded conflicts, and
-/// the `local` flag.
+/// the `local` and `unread` flags.
 fn base_view(a: &Analysis, state: &Value) -> Map<String, Value> {
     let mut view = state.as_object().cloned().unwrap_or_default();
     view.remove("target");
     let id = state["id"].as_str().unwrap_or_default();
     view.insert("conflicts".into(), expand_conflicts(a, &state["conflicts"]));
     view.insert("local".into(), json!(a.area(id) == Area::Local));
+    view.insert("unread".into(), json!(a.unread.contains(id)));
     view
 }
 

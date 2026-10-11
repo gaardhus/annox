@@ -7,6 +7,7 @@
 //! - [`event`] and [`replay`]: the event model and deriving state (§2)
 //! - [`storage`]: reading and writing `.annox/` (§5)
 //! - [`ops`]: higher-level operations that write events
+//! - [`read`]: per-reader read state, kept locally (§5.13)
 //! - [`config`]: per-user configuration, outside any workspace
 
 pub mod anchor;
@@ -15,6 +16,8 @@ pub mod config;
 pub mod event;
 #[cfg(feature = "fs")]
 pub mod ops;
+#[cfg(feature = "fs")]
+pub mod read;
 pub mod replay;
 #[cfg(feature = "fs")]
 pub mod storage;

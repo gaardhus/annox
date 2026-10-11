@@ -9,13 +9,14 @@ pub mod position;
 mod views;
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use annox_core::anchor::{self, Anchor, Resolution, State, Suggested};
 use annox_core::ops;
+use annox_core::read::{self, ReadState};
 use annox_core::storage::{Area, Index, Loaded, Workspace};
 use annox_core::suggestion;
 use annox_core::text::Text;
@@ -262,6 +263,8 @@ pub(crate) struct Cache {
     indexes: HashMap<PathBuf, Rc<Index>>,
     /// Per document: the generation and text version it was built from.
     analyses: HashMap<Url, (u64, String, Rc<Analysis>)>,
+    /// Read state per workspace root (§5.13).
+    read_states: HashMap<PathBuf, Rc<ReadState>>,
     /// Per document: loaded events and derived states, which depend only on
     /// storage, so text edits don't re-derive them.
     derived: HashMap<Url, Derived>,
@@ -272,8 +275,9 @@ pub(crate) struct Cache {
     suggested: HashMap<String, (String, Anchor, Option<Suggested>)>,
 }
 
-/// Loaded events and derived annotation states of one document.
-type Derived = Rc<(Loaded, BTreeMap<String, Value>)>;
+/// Loaded events, derived annotation states, and the annotations unread by
+/// this session's author (§5.13) of one document.
+type Derived = Rc<(Loaded, BTreeMap<String, Value>, BTreeSet<String>)>;
 
 /// How long typing must pause before annotations are re-resolved (§6.4).
 const DEBOUNCE: Duration = Duration::from_millis(150);
@@ -324,6 +328,9 @@ pub(crate) struct Analysis {
     items: Vec<Item>,
     /// Reply states by parent id, in display order (§2.5.5).
     replies: BTreeMap<String, Vec<Value>>,
+    /// Roots and replies with events this session's author hasn't read
+    /// (§5.13).
+    unread: BTreeSet<String>,
 }
 
 impl Analysis {
@@ -425,6 +432,7 @@ impl Server<'_> {
         let mut cache = self.cache.borrow_mut();
         cache.generation += 1;
         cache.indexes.clear();
+        cache.read_states.clear();
         cache.analyses.clear();
         cache.derived.clear();
     }
@@ -468,6 +476,11 @@ impl Server<'_> {
                     let uri = p.text_document.uri;
                     self.set_text(uri.clone(), &p.text_document.text);
                     self.ensure_replica(&uri);
+                    // A new reader's baseline is written now, not by a later
+                    // poll, so polls don't count it as an outside change.
+                    if let Some(ws) = uri.to_file_path().ok().and_then(|p| Workspace::find(&p)) {
+                        self.read_state(&ws, &self.index(&ws));
+                    }
                     // Polls compare against storage as it was read here.
                     if self.scan_storage() {
                         self.invalidate();
@@ -622,21 +635,18 @@ impl Server<'_> {
                 return Some(a.clone());
             }
         }
-        let cached = self.cache.borrow().indexes.get(&ws.root).cloned();
-        let index = cached.unwrap_or_else(|| {
-            let index = Rc::new(Index::read(&ws));
-            self.cache.borrow_mut().indexes.insert(ws.root.clone(), index.clone());
-            index
-        });
+        let index = self.index(&ws);
         let cached = self.cache.borrow().derived.get(uri).cloned();
         let derived = cached.unwrap_or_else(|| {
             let loaded = index.load(&rel);
             let states = loaded.derive();
-            let derived = Rc::new((loaded, states));
+            let unread = self.read_state(&ws, &index).unread(&self.reader(&ws), &loaded.events);
+            let derived = Rc::new((loaded, states, unread));
             self.cache.borrow_mut().derived.insert(uri.clone(), derived.clone());
             derived
         });
-        let (loaded, states) = &*derived;
+        let (loaded, states, unread) = &*derived;
+        let unread = unread.clone();
         let loaded = loaded.clone();
         let mut items = Vec::new();
         let mut replies: BTreeMap<String, Vec<Value>> = BTreeMap::new();
@@ -658,9 +668,39 @@ impl Server<'_> {
             items.push(Item { id, state, target, resolution, suggested });
         }
         let version = text.version.clone();
-        let analysis = Rc::new(Analysis { ws, rel, index, loaded, text, items, replies });
+        let analysis = Rc::new(Analysis { ws, rel, index, loaded, text, items, replies, unread });
         self.cache.borrow_mut().analyses.insert(uri.clone(), (generation, version, analysis.clone()));
         Some(analysis)
+    }
+
+    /// The index of `ws`, cached until storage changes.
+    pub(crate) fn index(&self, ws: &Workspace) -> Rc<Index> {
+        let cached = self.cache.borrow().indexes.get(&ws.root).cloned();
+        cached.unwrap_or_else(|| {
+            let index = Rc::new(Index::read(ws));
+            self.cache.borrow_mut().indexes.insert(ws.root.clone(), index.clone());
+            index
+        })
+    }
+
+    /// The read state of `ws` (§5.13), with a baseline for this session's
+    /// author if they had none. Cached until storage changes.
+    pub(crate) fn read_state(&self, ws: &Workspace, index: &Index) -> Rc<ReadState> {
+        let cached = self.cache.borrow().read_states.get(&ws.root).cloned();
+        cached.unwrap_or_else(|| {
+            let state = read::ensure_reader(ws, index, &self.reader(ws)).unwrap_or_else(|e| {
+                self.warn(format!("annox: could not save read state: {e}"));
+                ReadState::load(ws)
+            });
+            let state = Rc::new(state);
+            self.cache.borrow_mut().read_states.insert(ws.root.clone(), state.clone());
+            state
+        })
+    }
+
+    /// Whose read state this session uses: its author's (§5.13).
+    pub(crate) fn reader(&self, ws: &Workspace) -> String {
+        self.author(ws)["id"].as_str().unwrap_or_default().to_owned()
     }
 
     /// Finds the open document that holds annotation `id` (a root or reply).
@@ -1062,9 +1102,14 @@ impl Server<'_> {
     }
 }
 
-/// Names, sizes, and modification times of the event files under `root`.
+/// Names, sizes, and modification times of the event files under `root`, and
+/// of its read state (§5.13).
 fn fingerprint(root: &Path) -> Vec<(String, u64, std::time::SystemTime)> {
     let mut out = Vec::new();
+    let read_file = root.join(read::READ_FILE);
+    if let Ok(meta) = std::fs::metadata(&read_file) {
+        out.push((read_file.display().to_string(), meta.len(), meta.modified().unwrap_or(std::time::UNIX_EPOCH)));
+    }
     let mut stack = vec![root.join(".annox/docs"), root.join(".annox/local/docs"), root.join(".annox/synced/docs")];
     while let Some(dir) = stack.pop() {
         let Ok(entries) = std::fs::read_dir(&dir) else { continue };

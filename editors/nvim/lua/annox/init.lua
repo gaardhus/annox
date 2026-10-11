@@ -47,6 +47,7 @@ setmetatable(M, {
 })
 
 M.orphan_count = render.orphan_count
+M.unread_count = render.unread_count
 M.render = render.render
 M.render_presence = render.render_presence
 M.on_presence = render.on_presence
@@ -67,6 +68,8 @@ M.reopen = actions.reopen
 M.reject = actions.reject
 M.resolve = actions.resolve
 M.list = qflist.list
+M.unread = qflist.unread
+M.read = actions.read
 M.orphans = orphans.orphans
 M.edit = edit.edit
 M.retarget = edit.retarget
@@ -275,6 +278,12 @@ local subcommands = {
   list = function()
     M.list()
   end,
+  unread = function()
+    M.unread()
+  end,
+  read = function(o)
+    M.read({ all = o.bang or o.fargs[2] == "all" })
+  end,
   commit = function()
     M.commit()
   end,
@@ -347,7 +356,7 @@ function M.setup(opts)
       local args = vim.split(line, "%s+", { trimempty = true })
       local words = vim.tbl_keys(subcommands)
       if #args > 2 or (#args == 2 and line:match("%s$")) then
-        words = args[2] == "overlay" and { "on", "off" } or {}
+        words = args[2] == "overlay" and { "on", "off" } or args[2] == "read" and { "all" } or {}
       end
       return vim.tbl_filter(function(w)
         return vim.startswith(w, lead)

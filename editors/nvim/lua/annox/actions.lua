@@ -1,5 +1,5 @@
 --- Commands that create annotations or change their status: comment,
---- suggest, reply, accept, reject, resolve, revert, publish and commit.
+--- suggest, reply, accept, reject, resolve, revert, publish, read and commit.
 
 local util = require("annox.util")
 local open_thread = require("annox.thread").open_thread
@@ -15,6 +15,7 @@ local with_annotation = util.with_annotation
 local with_input = util.with_input
 local target_range = util.target_range
 local find_annotation = util.find_annotation
+local is_unread = util.is_unread
 
 local M = {}
 
@@ -429,6 +430,22 @@ function M.publish(opts)
   end
   with_annotation(opts, is_local, function(id)
     request(bufnr, "annox/publish", { annotations = { id } })
+  end)
+end
+
+--- Marks the unread thread under the cursor read, or with `opts.all` every
+--- thread in the workspace (§5.13).
+--- opts: { all?, annotation? }
+function M.read(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  if opts.all then
+    return request(bufnr, "annox/markRead", { all = true }, function()
+      vim.notify("annox: marked everything read", vim.log.levels.INFO)
+    end)
+  end
+  with_annotation(opts, is_unread, function(id)
+    request(bufnr, "annox/markRead", { annotations = { id } })
   end)
 end
 

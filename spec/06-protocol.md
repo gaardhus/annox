@@ -116,6 +116,7 @@ LSP has no standard way to ask the user for free text, so writing comments, repl
   },
   "applicable": true,
   "local": false,
+  "unread": false,
   "conflicts": {},
   "replies": []
 }
@@ -126,6 +127,7 @@ LSP has no standard way to ask the user for free text, so writing comments, repl
 - `resolution.suggested` is optional and present only for an open orphaned annotation for which the server has a suggested location (§3.7.4): `{ "range": <Range>, "score": <number> }`. `score`, between 0 and 1, says how much of the quote was found there; how it's computed is up to the server. Clients MUST NOT treat it as resolved. They MAY offer it, and on confirmation re-attach (`annox/reattach`) or re-target (`annox/retarget`) the annotation there.
 - `applicable` is present only for open suggestions (§4.2).
 - `local` is true for local-only annotations (§5.11).
+- `unread` is true if the annotation has events the session's author hasn't read (§5.13). It covers only the annotation itself: a thread is unread if its root or any reply is.
 - `replies` holds the thread's reply AnnotationViews, in the order of §2.5.5. Replies have no `resolution`.
 - `conflicts` maps each conflicted field to a list of **ConflictEntry** objects (the competing events, with their values), instead of the bare event ids used in §2.5.6, so the client can show them:
 
@@ -163,7 +165,11 @@ Every request that changes something writes the corresponding events (§2.4), th
 | `annox/moveDocument` | `{ from: DocumentUri, to: DocumentUri }` | Re-attaches a missing document (§5.7.3): `move` events for the documents at `from`. |
 | `annox/history` | `{ annotation }` | Returns the events of the annotation's thread (its root's and every reply's, also when `annotation` is a reply) in the order of §2.5.5, for history views. Changes nothing. |
 | `annox/commit` | `{ textDocument, message?: string, dryRun?: boolean }` | Optional: a Server that doesn't implement it fails with MethodNotFound. Commits the files under `.annox/` that version control doesn't ignore (§5.10) in the workspace of `textDocument`, and nothing else, with `message` or a summary the server writes. Returns `{ commit: string \| null, files: number, documents: { [path]: { comments, suggestions, replies, updates } }, message: string \| null }`: the new commit, or null if there was nothing to commit or `dryRun` is true; how many files it committed or would commit; how many of their events create each kind of annotation or update one, by document path; and the message. It writes no events. |
+| `annox/markRead` | `{ annotations?: Id[], all?: boolean }` | Marks the threads of `annotations` (a reply's marks its thread), or with `all` every thread in the server's workspaces, read for the session's author (§5.13). Returns `{ annotations: Id[] }`, the annotations marked. It writes no events. |
+| `annox/unread` | `{}` | Returns `{ documents: { textDocument: { uri }, annotations: AnnotationView[] }[] }`: the unread threads (§5.13) of every document in the server's workspaces, open or not, including closed threads but not deleted ones. Changes nothing. |
 | `annox/setPresence` | `{ textDocument?, selection?: Range }` (notification) | The user's current document and cursor, forwarded to the sync hub as presence (§7.8). Clients send it as the focus or cursor changes, and not at all if the user turned presence off. LSP has no cursor notifications, so plain LSP clients share no presence. |
+
+The session's author is also the reader whose read state `unread`, `annox/markRead`, and `annox/unread` use (§5.13).
 
 `DocumentInfo` is `{ documents: Id[], conflicts: { path?: ConflictEntry[] }, duplicates: boolean }`, covering the document records at the path (§5.7.1). The `value` of a path ConflictEntry is the competing path.
 

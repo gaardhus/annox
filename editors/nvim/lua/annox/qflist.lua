@@ -80,6 +80,48 @@ function M.list()
   vim.cmd.copen()
 end
 
+--- Puts every thread with changes you haven't read (§5.13) in the quickfix
+--- list, across the workspace, whether its file is open or not.
+function M.unread()
+  local bufnr = vim.api.nvim_get_current_buf()
+  require("annox.util").request(bufnr, "annox/unread", {}, function(result)
+    local client = client_for(bufnr)
+    local items = {}
+    for _, doc in ipairs(result.documents or {}) do
+      local file = vim.uri_to_fname(doc.textDocument.uri)
+      local b = vim.fn.bufnr(file)
+      for _, a in ipairs(doc.annotations) do
+        local r = a.resolution and (a.resolution.range or (a.resolution.suggested and a.resolution.suggested.range))
+        local new = {}
+        if a.unread == true then
+          table.insert(new, a.status ~= "open" and a.status or "new")
+        end
+        local replies = #vim.tbl_filter(function(x)
+          return x.unread == true
+        end, a.replies or {})
+        if replies > 0 then
+          table.insert(new, string.format("%d new repl%s", replies, replies == 1 and "y" or "ies"))
+        end
+        table.insert(items, {
+          filename = file,
+          lnum = r and r.start.line + 1 or 1,
+          -- Exact for loaded buffers; elsewhere the LSP column, which is right for ASCII.
+          col = r
+              and (b > 0 and vim.api.nvim_buf_is_loaded(b) and client and byte_col(b, r.start, client.offset_encoding) or r.start.character) + 1
+            or 1,
+          text = describe(a) .. " [" .. table.concat(new, ", ") .. "]",
+          user_data = a.id,
+        })
+      end
+    end
+    if #items == 0 then
+      return vim.notify("annox: nothing unread", vim.log.levels.INFO)
+    end
+    vim.fn.setqflist({}, " ", { title = "annox: unread", items = items })
+    vim.cmd.copen()
+  end)
+end
+
 M.refresh_list = refresh_list
 
 return M

@@ -1,7 +1,9 @@
 //! The `annox/*` extension methods (§6.6.2).
 
 use annox_core::anchor::{self, Anchor};
+use annox_core::event::Event;
 use annox_core::ops::{self, NewAnnotation};
+use annox_core::read;
 use annox_core::replay;
 use annox_core::storage::{Area, Index, Workspace};
 use annox_core::suggestion;
@@ -54,10 +56,14 @@ impl Server<'_> {
             "annox/moveDocument" => self.m_move_document(&params),
             "annox/history" => self.m_history(&params),
             "annox/commit" => self.m_commit(&params),
+            "annox/markRead" => self.m_mark_read(&params),
+            "annox/unread" => self.m_unread(),
             _ => fail(-32601, format!("unknown method {method}")),
         };
-        let changed =
-            !matches!(method.as_str(), "annox/annotations" | "annox/annotationsAt" | "annox/history" | "annox/commit");
+        let changed = !matches!(
+            method.as_str(),
+            "annox/annotations" | "annox/annotationsAt" | "annox/history" | "annox/commit" | "annox/unread"
+        );
         self.reply(id, result);
         if changed {
             self.refresh_all();
@@ -330,6 +336,96 @@ impl Server<'_> {
         let a = self.analyze_uri(&uri)?;
         crate::cli::commit_workspace(&a.ws, &a.index, message, dry_run)
             .map_err(|e| (INVALID_OPERATION, format!("{e:#}")))
+    }
+
+    /// The annox workspaces of the open documents and the workspace folders.
+    fn workspaces(&self) -> Vec<Workspace> {
+        let mut roots: Vec<Workspace> = self
+            .open
+            .keys()
+            .filter_map(|uri| uri.to_file_path().ok())
+            .chain(self.roots.iter().cloned())
+            .filter_map(|p| Workspace::find(&p))
+            .collect();
+        roots.sort_by(|a, b| a.root.cmp(&b.root));
+        roots.dedup_by(|a, b| a.root == b.root);
+        roots
+    }
+
+    /// Marks threads read for this session's author (§5.13): those of
+    /// `annotations`, or every one if `all` is true.
+    fn m_mark_read(&self, params: &Value) -> Result<Value, Failure> {
+        let all = params["all"].as_bool().unwrap_or(false);
+        let ids: Vec<String> = match params.get("annotations") {
+            Some(v) if !v.is_null() => {
+                serde_json::from_value(v.clone()).map_err(|e| (INVALID_PARAMS, format!("annotations: {e}")))?
+            }
+            _ if all => vec![],
+            _ => return fail(INVALID_PARAMS, "give annotations, or all: true"),
+        };
+        self.invalidate();
+        let mut marked = std::collections::BTreeSet::new();
+        let mut found = std::collections::BTreeSet::new();
+        for ws in self.workspaces() {
+            let index = self.index(&ws);
+            let events: Vec<Event> = index.events.values().map(|(e, _)| e.clone()).collect();
+            let mut threads = std::collections::BTreeSet::new();
+            for id in &ids {
+                if index.events.get(id).is_some_and(|(e, _)| e.kind == "create") {
+                    found.insert(id.clone());
+                    threads.extend(read::thread_ids(&events, id));
+                }
+            }
+            if all {
+                threads.extend(events.iter().filter_map(|e| e.annotation.clone()));
+            }
+            if threads.is_empty() {
+                continue;
+            }
+            read::ensure_reader(&ws, &index, &self.reader(&ws)).map_err(io_failure)?;
+            read::mark(&ws, &self.reader(&ws), read::heads(&events, &threads)).map_err(io_failure)?;
+            marked.extend(threads);
+        }
+        if let Some(missing) = ids.iter().find(|id| !found.contains(*id)) {
+            return fail(UNKNOWN_ANNOTATION, format!("unknown annotation {missing}"));
+        }
+        self.invalidate();
+        Ok(json!({ "annotations": marked }))
+    }
+
+    /// The threads with events this session's author hasn't read (§5.13),
+    /// across every workspace, grouped by document.
+    fn m_unread(&self) -> Result<Value, Failure> {
+        self.invalidate();
+        let mut documents = Vec::new();
+        for ws in self.workspaces() {
+            let index = self.index(&ws);
+            let events: Vec<Event> = index.events.values().map(|(e, _)| e.clone()).collect();
+            let unread = self.read_state(&ws, &index).unread(&self.reader(&ws), &events);
+            // Roots of the unread annotations, by document path.
+            let mut by_path: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+                Default::default();
+            for id in &unread {
+                let Some((e, loc)) = index.events.get(id) else { continue };
+                let root = e.field("parent").and_then(Value::as_str).unwrap_or(id);
+                let doc = index.canonical(&loc.document);
+                let Some(path) = index.documents.get(doc).and_then(|d| d.path.clone()) else { continue };
+                by_path.entry(path).or_default().insert(root.to_owned());
+            }
+            for (path, roots) in by_path {
+                let Ok(uri) = Url::from_file_path(ws.root.join(&path)) else { continue };
+                let Some(a) = self.analyze(&uri) else { continue };
+                let views: Vec<Value> = roots
+                    .iter()
+                    .filter_map(|id| views::view_by_id(&a, id, self.encoding))
+                    .filter(|v| v["deleted"] == json!(false))
+                    .collect();
+                if !views.is_empty() {
+                    documents.push(json!({ "textDocument": { "uri": uri }, "annotations": views }));
+                }
+            }
+        }
+        Ok(json!({ "documents": documents }))
     }
 
     fn m_accept(&mut self, command: RequestId, params: &Value) {

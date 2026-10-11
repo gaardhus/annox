@@ -8,6 +8,7 @@ local highlight_group = require("annox.highlight").highlight_group
 local client_for = util.client_for
 local byte_col = util.byte_col
 local first_line = util.first_line
+local is_unread = util.is_unread
 local word_changes = worddiff.word_changes
 local inserted_chunks = worddiff.inserted_chunks
 
@@ -33,6 +34,19 @@ function M.orphan_count(bufnr)
   local n = 0
   for _, a in ipairs(state and state.annotations or {}) do
     if a.resolution and a.resolution.state == "orphaned" then
+      n = n + 1
+    end
+  end
+  return n
+end
+
+--- The number of threads in `bufnr` with changes by others you haven't read,
+--- e.g. for a statusline.
+function M.unread_count(bufnr)
+  local state = store.state[bufnr or vim.api.nvim_get_current_buf()]
+  local n = 0
+  for _, a in ipairs(state and state.annotations or {}) do
+    if is_unread(a) then
       n = n + 1
     end
   end
@@ -106,9 +120,10 @@ function M.render(bufnr)
       local group = highlight_group(a)
       local sl, el = r.start.line, math.min(r["end"].line, line_count - 1)
       local sc, ec = byte_col(bufnr, r.start, enc), byte_col(bufnr, r["end"], enc)
+      local unread = is_unread(a)
       local mark = {
         sign_text = a["local"] and "✎" or a.kind == "suggestion" and "±" or "»",
-        sign_hl_group = "AnnoxSign",
+        sign_hl_group = unread and "AnnoxUnread" or "AnnoxSign",
         priority = 150,
       }
       local label = a.kind == "suggestion" and ("→ " .. (a.edit and a.edit.replacement or ""))
@@ -153,8 +168,13 @@ function M.render(bufnr)
         if a["local"] then
           text = "[draft] " .. text
         end
+        local chunks = { { "  " .. text, "AnnoxVirtualText" } }
+        if unread then
+          table.insert(chunks, 1, { "  ●", "AnnoxUnread" })
+          chunks[2][1] = " " .. text
+        end
         pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, sl, 0, {
-          virt_text = { { "  " .. text, "AnnoxVirtualText" } },
+          virt_text = chunks,
           virt_text_pos = "eol",
         })
       end

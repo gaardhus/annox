@@ -29,6 +29,7 @@ annox list --closed         # also resolved, accepted, rejected, withdrawn, but 
 annox show ID               # one annotation and its thread
 annox history ID --json     # who did what to a thread (replies included), and when
 annox report --json         # counts per document: open, closed, orphaned, stale
+annox list --unread         # threads others changed since you marked them read, closed ones too
 ```
 
 Filter instead of reading everything. Filters combine:
@@ -42,7 +43,7 @@ annox list --author ID / --not-author ID
 annox list paper.md --quote TEXT     # everything on this text, closed too: check before commenting
 ```
 
-`--mine` and `--others` use your identity (see above).
+`--mine`, `--others` and `--unread` use your identity (see above). Every entry and reply has `unread`: whether it has changes by others you haven't marked read. Your read state is your own: the user's isn't affected by what you read.
 
 Each entry has `id`, `path`, `kind` (`comment` or `suggestion`), `status`, `author`, `body` (null for a highlight), `quote` (the text it's attached to, as it reads now), `line`, `resolution`, `editedBy` (who last changed the body and when, or null), and `replies`. Suggestions also have `replacement` and `applicable`, and `reverts` if they undo an accepted suggestion.
 
@@ -79,6 +80,7 @@ annox delete ID / annox restore ID
 - **Quote as little as possible.** Quote only the words that change, plus a word or two on either side if that's needed to make the quote unique. annox records the surrounding text itself, so you don't need extra context to keep the suggestion anchored. Start short: if the quote isn't unique, the command fails and lists the matching lines, and only then do you lengthen it. The user sees unchanged text in the quote as deleted and re-added, which hides the actual change. To fix one word, quote a few words, not the sentence. To change one sentence, quote that sentence, not the paragraph.
 - **Say why** in `--body` whenever the reason isn't obvious from the change.
 - **Use comments for questions and for problems you can't fix yourself.** Use suggestions for concrete replacement text.
+- **Pick up where you left off.** When you come back to a document you've worked on, run `annox list --unread` to find replies to your comments and other changes since. After handling a thread, mark it read with `annox read ID` (replying or changing its status already does). Don't `annox read --all` threads you haven't handled; they'd drop off your list.
 - **Answer review comments in their thread.** When the user asks you to address comments, run `annox list --kind comment --others`, then handle each one. Either make the change (as a suggestion, or as a direct edit if asked) and `reply` saying what you did, or `reply` explaining why not. Resolve a comment (`annox status ID resolved`) only when you've fully addressed it and it's addressed to you.
 - **Don't accept suggestions unless the user asks you to.** `annox accept ID` writes the change into the file and closes the suggestion for good. If it says the suggestion was relocated, check the text at the reported line before passing `--confirmed`. To undo an accepted suggestion, `annox revert ID` suggests restoring the original text; add `--accept` only if the user asks you to undo it outright.
 - **Don't commit unless the user asks.** `annox commit` commits the annotation files under `.annox/` and nothing else.

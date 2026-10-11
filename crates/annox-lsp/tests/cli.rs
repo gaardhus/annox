@@ -517,3 +517,42 @@ fn commit_takes_only_annotation_events() {
     assert_eq!(committed["message"], "Resolve review");
     assert_eq!(committed["files"], 1);
 }
+
+#[test]
+fn unread_is_kept_per_reader() {
+    let dir = setup(DOC);
+    let me = "mailto:ada@example.org";
+    let unread = |reader: &str| annox(dir.path(), &["list", "--unread", "--as", reader]);
+    let as_ada = |args: &[&str]| {
+        let args: Vec<String> = args.iter().chain(&["--author", me]).map(|s| s.to_string()).collect();
+        cli::run(&args, dir.path()).unwrap()
+    };
+    // Both readers start from a baseline: nothing is unread.
+    assert_eq!(unread(me), serde_json::json!([]));
+    assert_eq!(unread("urn:test:agent"), serde_json::json!([]));
+
+    // The agent comments: new to Ada, not to the agent.
+    let comment = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "teh", "--body", "Typo?"]));
+    assert_eq!(unread(me)[0]["id"], comment.as_str());
+    assert_eq!(unread(me)[0]["unread"], true);
+    assert_eq!(unread("urn:test:agent"), serde_json::json!([]));
+
+    // The agent marking everything read leaves Ada's state alone.
+    annox(dir.path(), &["read", "--all"]);
+    assert_eq!(unread(me).as_array().unwrap().len(), 1);
+
+    // Ada replies, which marks the thread read for her and is new to the agent.
+    let reply = as_ada(&["reply", &comment, "--body", "Yes"]);
+    assert_eq!(unread(me), serde_json::json!([]));
+    let agent = unread("urn:test:agent");
+    assert_eq!(agent[0]["unread"], false);
+    assert_eq!(agent[0]["replies"][0]["id"], reply["id"]);
+    assert_eq!(agent[0]["replies"][0]["unread"], true);
+
+    // Resolved threads with news are still listed.
+    as_ada(&["status", &comment, "resolved"]);
+    assert_eq!(unread("urn:test:agent")[0]["status"], "resolved");
+    annox(dir.path(), &["read", &comment]);
+    assert_eq!(unread("urn:test:agent"), serde_json::json!([]));
+    assert!(error(dir.path(), &["read", "nope"]).contains("unknown annotation"));
+}

@@ -149,6 +149,7 @@ pub fn create_reply(
         ]),
     };
     ws.write_event(&folder_for(index, doc, area, &parent_loc.folder), &event)?;
+    mark_read(ws, index, parent, author);
     Ok(event)
 }
 
@@ -292,7 +293,19 @@ pub fn append_event(
     };
     let doc = index.canonical(&create_loc.document);
     ws.write_event(&folder_for(index, doc, create_loc.area, &create_loc.folder), &event)?;
+    // A reanchor is a side effect of resolution, not something the author read.
+    if kind != "reanchor" {
+        mark_read(ws, index, annotation, author);
+    }
     Ok(event)
+}
+
+/// Marks the thread of `annotation` read for `author`, who just wrote to it
+/// (§5.13). Read state is a convenience, so failing to save it isn't an error.
+fn mark_read(ws: &Workspace, index: &Index, annotation: &str, author: &Value) {
+    if let Some(reader) = author.get("id").and_then(Value::as_str) {
+        let _ = crate::read::mark_thread(ws, index, annotation, reader);
+    }
 }
 
 #[cfg(test)]

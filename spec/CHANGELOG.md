@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Storage (§5.13), protocol (§6.6).** Optional read state: `.annox/local/read.json` records, per reader, the heads of each annotation they've seen, so tools can show what others changed since. It is local, never an event, and kept per author id so a person and their agents don't share it. AnnotationViews gain `unread`, and `annox/markRead` and `annox/unread` mark threads read and list unread threads across the workspace (D50).
 - **Data model (§2.4, §2.5.6), conformance (§1.5).** The derived state of every annotation has `editedBy`, `{ author, time }` from the `edit` that wrote its current body, or `null`. Viewers and Clients must mark edited annotations, and name the editor when it isn't the author. Anyone may still edit any annotation (D49).
 - **Protocol (§6.6.2), suggestions (§4.4.1).** `annox/annotationsAt` returns every annotation on a range, closed ones included, with the text each was made on and where its text is now. An accepted suggestion is found by its replacement.
 - **Anchoring (§3.7.2), suggestions (§4.2, §4.3.5).** A new step 6 finds a quote whose text was edited between its unchanged prefix and suffix, and orphaned is now step 7. Suggestions found by step 6 are stale. Accepting a suggestion re-anchors the open comments whose text it changed (D47).
