@@ -39,18 +39,25 @@ fn bob_comments(ws: &Workspace, path: &str, body: &str) -> String {
 /// A workspace where Bob commented on `notes.txt` before Ada started, and Ada
 /// has `notes.txt` open.
 fn setup() -> Fixture {
+    setup_with(json!({}))
+}
+
+/// `setup`, with extra `initializationOptions.annox`.
+fn setup_with(options: Value) -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let ws = Workspace::init(dir.path()).unwrap();
     let file = dir.path().join("notes.txt");
     std::fs::write(&file, DOC).unwrap();
     std::fs::write(dir.path().join("other.txt"), DOC).unwrap();
     bob_comments(&ws, "notes.txt", "before Ada");
+    let mut annox = json!({
+        "author": { "id": "mailto:ada@example.org", "name": "Ada" },
+        "diagnostics": false,
+    });
+    annox.as_object_mut().unwrap().extend(options.as_object().unwrap().clone());
     let (client, _) = Client::start(json!({
         "capabilities": { "experimental": { "annox": { "version": "0.1" } } },
-        "initializationOptions": { "annox": {
-            "author": { "id": "mailto:ada@example.org", "name": "Ada" },
-            "diagnostics": false,
-        } },
+        "initializationOptions": { "annox": annox },
     }));
     let uri = lsp_types::Url::from_file_path(&file).unwrap().to_string();
     client.notify(
@@ -139,5 +146,28 @@ fn unread_lists_threads_in_closed_documents() {
     ops::create_reply(&f.ws, &Index::read(&f.ws), &id, "ping", false, &json!({ "id": BOB })).unwrap();
     let unread = f.client.call("annox/unread", json!({}));
     assert_eq!(unread["documents"][0]["annotations"][0]["id"], id);
+    f.client.shutdown();
+}
+
+#[test]
+fn with_unread_off_nothing_is_unread_and_the_readers_state_is_dropped() {
+    let mut f = setup_with(json!({ "unread": false }));
+    let knows = |ws: &Workspace| annox_core::read::ReadState::load(ws).knows("mailto:ada@example.org");
+    assert!(!knows(&f.ws));
+    let id = bob_comments(&f.ws, "notes.txt", "while off");
+    assert!(!f.unread("while off"));
+    assert_eq!(f.client.call("annox/unread", json!({})), json!({ "documents": [] }));
+    assert_eq!(f.client.call("annox/markRead", json!({ "annotations": [id] })), json!({ "annotations": [] }));
+
+    // Writing still records it, as the CLI would; opening a document drops it.
+    f.client.call("annox/reply", json!({ "parent": id, "body": "Thanks" }));
+    assert!(knows(&f.ws));
+    let other = lsp_types::Url::from_file_path(f.ws.root.join("other.txt")).unwrap().to_string();
+    f.client.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": other, "languageId": "text", "version": 1, "text": DOC } }),
+    );
+    f.client.call("annox/unread", json!({}));
+    assert!(!knows(&f.ws));
     f.client.shutdown();
 }

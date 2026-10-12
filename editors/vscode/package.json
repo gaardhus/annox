@@ -442,15 +442,15 @@
         },
         {
           "command": "annox.unread",
-          "when": "annox.inWorkspace"
+          "when": "annox.inWorkspace && config.annox.unread"
         },
         {
           "command": "annox.markRead",
-          "when": "annox.inWorkspace"
+          "when": "annox.inWorkspace && config.annox.unread"
         },
         {
           "command": "annox.markAllRead",
-          "when": "annox.inWorkspace"
+          "when": "annox.inWorkspace && config.annox.unread"
         },
         {
           "command": "annox.orphans",
@@ -645,7 +645,8 @@
         },
         {
           "command": "annox.unread",
-          "group": "3_more@4"
+          "group": "3_more@4",
+          "when": "config.annox.unread"
         },
         {
           "command": "annox.history",
@@ -722,6 +723,11 @@
           "type": "boolean",
           "default": false,
           "description": "Always draw suggestions inline, as struck-through and inserted text, not only in suggestion mode."
+        },
+        "annox.unread": {
+          "type": "boolean",
+          "default": true,
+          "description": "Track which threads others changed since you last read them, and mark them new. Turning it off forgets what you've read, so turning it back on starts with nothing unread. Takes effect when the annox server restarts."
         },
         "annox.markReadOnOpen": {
           "type": "boolean",

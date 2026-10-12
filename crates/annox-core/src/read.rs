@@ -187,6 +187,16 @@ pub fn mark_thread(ws: &Workspace, index: &Index, id: &str, reader: &str) -> io:
     Ok(())
 }
 
+/// Drops `reader`'s read state, so that if they turn unread tracking back on
+/// they start with a new baseline (§5.13).
+pub fn forget(ws: &Workspace, reader: &str) -> io::Result<()> {
+    let mut state = ReadState::load(ws);
+    if state.readers.remove(reader).is_some() {
+        save(ws, &state)?;
+    }
+    Ok(())
+}
+
 /// Writes `state` atomically (§5.4).
 fn save(ws: &Workspace, state: &ReadState) -> io::Result<()> {
     let path = ws.root.join(READ_FILE);
@@ -291,6 +301,8 @@ mod tests {
         let state = ensure_reader(&ws, &index, ADA).unwrap();
         assert!(state.unread(ADA, &events).is_empty());
         assert_eq!(ReadState::load(&ws), state);
+        forget(&ws, ADA).unwrap();
+        assert!(!ReadState::load(&ws).knows(ADA));
         let _ = fs::remove_dir_all(&root);
     }
 }

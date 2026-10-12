@@ -60,7 +60,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Api> {
     ...unreadStatus(annox, store),
     ...workspaceContext(store),
     vscode.workspace.onDidChangeConfiguration(async (e) => {
-      if (!e.affectsConfiguration("annox.path") && !e.affectsConfiguration("annox.author")) return;
+      if (!["annox.path", "annox.author", "annox.unread"].some((s) => e.affectsConfiguration(s))) return;
       const choice = await vscode.window.showInformationMessage(
         "annox: restart the annox server to use the new settings?",
         "Restart",
@@ -107,6 +107,7 @@ function unreadStatus(annox: Annox, store: Store): vscode.Disposable[] {
   const update = () => {
     clearTimeout(timer);
     timer = setTimeout(async () => {
+      if (!vscode.workspace.getConfiguration("annox").get<boolean>("unread", true)) return item.hide();
       const result = annox.client ? await annox.request<UnreadResult>("annox/unread", {}, true) : undefined;
       const n = result?.documents.reduce((sum, d) => sum + d.annotations.length, 0) ?? 0;
       if (n === 0) return item.hide();

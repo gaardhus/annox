@@ -23,6 +23,7 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim), pointing at this directory
       -- suggest_tint = false,  -- don't tint line numbers and cursor line in suggestion mode
       -- word_diff = false,  -- don't mark the words that changed within a suggestion
       -- strikethrough = false,  -- show deleted text of inline suggestions in red, not struck through
+      -- unread = false,  -- don't track which threads others changed since you read them
     })
   end,
 }
@@ -174,7 +175,7 @@ set statusline+=%{get(b:,'annox_suggesting',0)?'SUGGESTING\ ':''}
 
 `require("annox").overlay_shown` and `g:annox_overlay` tell whether the overlay is on, and `:Annox overlay` fires `User AnnoxOverlay` with `data = { enabled }`.
 
-Threads with changes by others that you haven't read get their sign and a `●` before their virtual text in `AnnoxUnread`, and the thread window marks each new message **new**. `require("annox").unread_count()` counts them in the buffer, e.g. for a statusline. What you've read is kept per author id in the git-ignored `.annox/local/read.json`, so agents working in the same copy have their own.
+Threads with changes by others that you haven't read get their sign and a `●` before their virtual text in `AnnoxUnread`, and the thread window marks each new message **new**. `require("annox").unread_count()` counts them in the buffer, e.g. for a statusline. What you've read is kept per author id in the git-ignored `.annox/local/read.json`, so agents working in the same copy have their own. Set `unread = false` to turn this off; the server then forgets what you've read, so turning it back on starts with nothing unread.
 
 `require("annox").orphan_count()` tells how many annotations could not be located. They are reported as diagnostics (source `annox`), so they show in `vim.diagnostic.open_float()`, `]d`, and diagnostic lists: a warning on the first line, and a hint where each one probably went, when its text was reworded rather than removed. That passage also gets a dashed underline, hovering it (`K`) shows the thread, and `:Annox orphans` offers to move the annotation there.
 

@@ -83,7 +83,13 @@ export class Annox implements vscode.Disposable {
     const clientOptions: LanguageClientOptions = {
       documentSelector: [{ scheme: "file" }],
       outputChannel: this.output,
-      initializationOptions: { annox: { diagnostics: false, author: author() } },
+      initializationOptions: {
+        annox: {
+          diagnostics: false,
+          author: author(),
+          unread: vscode.workspace.getConfiguration("annox").get<boolean>("unread", true),
+        },
+      },
       middleware: {
         didOpen: async (doc, next) => {
           await next(doc);

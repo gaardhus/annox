@@ -28,6 +28,9 @@ M.config = {
   word_diff = true,
   --- Strike through the deleted text of inline suggestions.
   strikethrough = true,
+  --- Track which threads others changed since you last read them. Off, the
+  --- server forgets what you've read, so turning it back on starts fresh.
+  unread = true,
   --- Mark a thread read when you open it with `:Annox thread`. Otherwise only
   --- `:Annox read` and writing to a thread do.
   mark_read_on_open = true,

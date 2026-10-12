@@ -33,6 +33,7 @@ The server answers under `capabilities.experimental.annox` in its `InitializeRes
 |---|---|---|
 | `author` | Author (§2.1) | The identity for events written in this session. If absent, the server uses its configured identity or the git default (§2.7). |
 | `diagnostics` | boolean | Whether to publish annotations as diagnostics (§6.5). The default is `true`. Annox-aware clients that render annotations themselves SHOULD set it to `false`. |
+| `unread` | boolean | Whether to track what the session's author has read (§5.13). The default is `true`. If `false`, the server writes no read state and removes the author's entry when a document is opened, every view's `unread` is `false`, `annox/unread` returns no documents, and `annox/markRead` marks nothing. |
 
 **Workspaces.** For each workspace folder, and for each opened document outside one, the server finds the annox workspace (§5.1). Documents outside any annox workspace have no annotations. The server creates a workspace (§5.3) only when asked to write the first annotation, and it SHOULD confirm this with the user through `window/showMessageRequest`.
 

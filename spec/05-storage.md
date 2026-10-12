@@ -202,6 +202,7 @@ State is kept per **reader**, an author id (§2.7): the identity the tool writes
 - **Marking a thread read** adds the current heads of its root and of each reply to the reader's seen sets. Writing an event to a thread, other than a `reanchor`, marks the thread read for its author.
 - **Baseline.** A reader with no entry in the file starts by marking every annotation read, so that existing annotations aren't all unread at once. An entry for a reader with nothing seen is `{ "seen": {} }`.
 - Seen sets only grow, so writers merge by union: they re-read the file, add their marks, and replace the file atomically (§5.4).
+- **Turning it off.** Read state is personal, so turning it off is a setting of each person's tools, not of the workspace (§6.2). A tool with it off SHOULD remove its reader's entry, so that turning it back on starts from a new baseline and not with everything since unread.
 
 Test vectors are in [`tests/storage.json`](tests/storage.json).
 

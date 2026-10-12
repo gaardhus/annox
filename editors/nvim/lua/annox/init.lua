@@ -303,7 +303,9 @@ function M.setup(opts)
       end
     end,
     capabilities = { experimental = { annox = { version = "0.1" } } },
-    init_options = { annox = { diagnostics = false, author = store.config.author } },
+    init_options = {
+      annox = { diagnostics = false, author = store.config.author, unread = store.config.unread },
+    },
     handlers = {
       ["annox/didChangeAnnotations"] = on_annotations,
       ["annox/didChangePresence"] = M.on_presence,

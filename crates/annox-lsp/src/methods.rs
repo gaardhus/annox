@@ -363,6 +363,9 @@ impl Server<'_> {
             _ if all => vec![],
             _ => return fail(INVALID_PARAMS, "give annotations, or all: true"),
         };
+        if !self.unread {
+            return Ok(json!({ "annotations": [] }));
+        }
         self.invalidate();
         let mut marked = std::collections::BTreeSet::new();
         let mut found = std::collections::BTreeSet::new();
@@ -401,7 +404,7 @@ impl Server<'_> {
         for ws in self.workspaces() {
             let index = self.index(&ws);
             let events: Vec<Event> = index.events.values().map(|(e, _)| e.clone()).collect();
-            let unread = self.read_state(&ws, &index).unread(&self.reader(&ws), &events);
+            let unread = self.unread_in(&ws, &index, &events);
             // Roots of the unread annotations, by document path.
             let mut by_path: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
                 Default::default();

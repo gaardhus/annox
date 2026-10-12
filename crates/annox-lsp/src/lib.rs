@@ -15,6 +15,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use annox_core::anchor::{self, Anchor, Resolution, State, Suggested};
+use annox_core::event::Event;
 use annox_core::ops;
 use annox_core::read::{self, ReadState};
 use annox_core::storage::{Area, Index, Loaded, Workspace};
@@ -162,6 +163,7 @@ pub fn run(connection: &Connection) -> anyhow::Result<()> {
         annox_client,
         author: options.get("author").cloned(),
         diagnostics: options.get("diagnostics").and_then(Value::as_bool).unwrap_or(true),
+        unread: options.get("unread").and_then(Value::as_bool).unwrap_or(true),
         open: HashMap::new(),
         next_id: 0,
         pending: HashMap::new(),
@@ -238,6 +240,8 @@ pub(crate) struct Server<'a> {
     annox_client: bool,
     author: Option<Value>,
     diagnostics: bool,
+    /// Whether to track what this session's author has read (§5.13).
+    pub(crate) unread: bool,
     open: HashMap<Url, OpenDoc>,
     next_id: i32,
     pending: HashMap<RequestId, Pending>,
@@ -476,10 +480,15 @@ impl Server<'_> {
                     let uri = p.text_document.uri;
                     self.set_text(uri.clone(), &p.text_document.text);
                     self.ensure_replica(&uri);
-                    // A new reader's baseline is written now, not by a later
-                    // poll, so polls don't count it as an outside change.
+                    // A new reader's baseline is written, or with unread
+                    // tracking off their read state dropped, now and not by a
+                    // later poll, so polls don't count it as an outside change.
                     if let Some(ws) = uri.to_file_path().ok().and_then(|p| Workspace::find(&p)) {
-                        self.read_state(&ws, &self.index(&ws));
+                        if self.unread {
+                            self.read_state(&ws, &self.index(&ws));
+                        } else if let Err(e) = read::forget(&ws, &self.reader(&ws)) {
+                            self.warn(format!("annox: could not save read state: {e}"));
+                        }
                     }
                     // Polls compare against storage as it was read here.
                     if self.scan_storage() {
@@ -640,7 +649,7 @@ impl Server<'_> {
         let derived = cached.unwrap_or_else(|| {
             let loaded = index.load(&rel);
             let states = loaded.derive();
-            let unread = self.read_state(&ws, &index).unread(&self.reader(&ws), &loaded.events);
+            let unread = self.unread_in(&ws, &index, &loaded.events);
             let derived = Rc::new((loaded, states, unread));
             self.cache.borrow_mut().derived.insert(uri.clone(), derived.clone());
             derived
@@ -696,6 +705,15 @@ impl Server<'_> {
             self.cache.borrow_mut().read_states.insert(ws.root.clone(), state.clone());
             state
         })
+    }
+
+    /// The annotations among `events` this session's author hasn't read, or
+    /// none if unread tracking is off.
+    pub(crate) fn unread_in(&self, ws: &Workspace, index: &Index, events: &[Event]) -> BTreeSet<String> {
+        if !self.unread {
+            return BTreeSet::new();
+        }
+        self.read_state(ws, index).unread(&self.reader(ws), events)
     }
 
     /// Whose read state this session uses: its author's (§5.13).
