@@ -106,6 +106,16 @@ chmod 755 "$bin_dir/annox.tmp"
 mv -f "$bin_dir/annox.tmp" "$bin_dir/annox"
 say "installed $bin_dir/annox ($version)"
 
+# The man pages go in ../share/man next to the binary, where `man` looks for the pages of
+# programs on the PATH. Releases before `annox man` existed have none.
+man_dir="$(dirname "$bin_dir")/share/man/man1"
+if "$bin_dir/annox" man "$tmp/man" 2> /dev/null; then
+  mkdir -p "$man_dir"
+  rm -f "$man_dir/annox.1" "$man_dir"/annox-*.1
+  cp "$tmp/man/"*.1 "$man_dir/"
+  say "installed the man pages in $man_dir"
+fi
+
 install_skill() {
   mkdir -p "$1"
   rm -rf "${1:?}/annox"

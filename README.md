@@ -71,7 +71,7 @@ Crates:
 - **`annox-sync`** has the sync hub and replica (§7).
 - **`annox-lsp`** builds the `annox` binary. `annox lsp` runs the language server (§6) over stdio, and `annox hub` runs a sync hub.
 
-Install the latest `annox` binary on Linux or macOS (Apple silicon) into `~/.local/bin`. Add `--skill` to also install the [agent skill](#agents) for Claude Code and other agents, and see `--help` for the version and directories. It verifies the download against the release's `SHA256SUMS`.
+Install the latest `annox` binary on Linux or macOS (Apple silicon) into `~/.local/bin`. Add `--skill` to also install the [agent skill](#agents) for Claude Code and other agents, and see `--help` for the version and directories. It verifies the download against the release's `SHA256SUMS`, and puts the man pages in `~/.local/share/man`, for `man annox` and `man annox-<command>`.
 
 ```sh
 curl -fsSL https://gaardhus.github.io/annox/install.sh | sh

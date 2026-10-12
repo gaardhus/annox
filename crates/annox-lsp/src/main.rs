@@ -72,6 +72,15 @@ enum Command {
         #[arg(long, value_name = "vX.Y.Z")]
         version: Option<String>,
     },
+    /// Write the man pages, annox.1 and one per subcommand, into DIR, or print annox.1
+    ///
+    /// The installer writes them next to the binary, in ../share/man/man1, where `man` looks for the
+    /// pages of programs on the PATH.
+    #[command(hide = true)]
+    Man {
+        /// The directory to write the pages into, such as ~/.local/share/man/man1
+        dir: Option<PathBuf>,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -162,6 +171,18 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::Update { version } => update(version),
+        Command::Man { dir } => {
+            use clap::CommandFactory;
+            let cmd = Cli::command();
+            match dir {
+                Some(dir) => {
+                    std::fs::create_dir_all(&dir)?;
+                    clap_mangen::generate_to(cmd, &dir)?;
+                }
+                None => clap_mangen::Man::new(cmd).render(&mut std::io::stdout())?,
+            }
+            Ok(())
+        }
     }
 }
 

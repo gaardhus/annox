@@ -21,7 +21,8 @@ build ref="":
 hub:
     @annox hub --data /tmp/annox-hub/ --listen 127.0.0.1:7878
 
-# Put annox on the PATH. `just link v0.14.0` links the binary from `just build v0.14.0`.
+# Put annox on the PATH, and its man pages where `man` finds them. `just link v0.14.0`
+# links the binary from `just build v0.14.0`.
 link ref="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -30,6 +31,10 @@ link ref="":
     if [ -n "$ref" ]; then bin="$PWD/target/tags/$ref/annox"; fi
     [ -x "$bin" ] || { echo "no binary at $bin; run just build $ref first" >&2; exit 1; }
     ln -sf "$bin" ~/.local/bin/annox
+    man=~/.local/share/man/man1
+    mkdir -p "$man"
+    rm -f "$man/annox.1" "$man"/annox-*.1
+    "$bin" man "$man" || echo "this annox has no man pages" >&2
 
 # Install the git hooks (formatting, linting, commit messages).
 hooks:
