@@ -21,6 +21,17 @@ use serde_json::{json, Map, Value};
 /// The annotation commands. `annox` flattens these into its own subcommands.
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// Print what everyone did to the annotations of FILE, or of every document, oldest first
+    Log {
+        /// A document in the workspace
+        file: Option<String>,
+        /// Print the events as JSON instead of text; with --follow, one line each
+        #[arg(long)]
+        json: bool,
+        /// Keep running, and print new events as they're written, instead of the ones so far
+        #[arg(short, long)]
+        follow: bool,
+    },
     /// Create a workspace in DIR (default: the current directory)
     Init {
         /// The project root
@@ -358,6 +369,11 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
         }
         Command::List { file, all, closed, reader, filter } => list(file.as_deref(), all, closed, reader, filter, &cwd),
         Command::Report { file, .. } => report(file.as_deref(), &cwd),
+        Command::Log { follow: true, .. } => bail!("`annox log --follow` streams; run it with `follow_log`"),
+        Command::Log { file, .. } => {
+            let (ws, only) = log_scope(file.as_deref(), &cwd)?;
+            Ok(Value::Array(log_events(&Index::read(&ws), only.as_deref(), &BTreeSet::new())))
+        }
         Command::Show { id } => show(&id, &cwd),
         Command::History { id, json: _ } => history(&id, &cwd),
         Command::Comment { file, at, body, meta, author } => {
@@ -1061,6 +1077,92 @@ pub fn render_history(events: &Value) -> String {
             } else {
                 ""
             },
+        ));
+    }
+    out
+}
+
+/// The workspace a log covers, and the one document it's limited to, if any.
+fn log_scope(file: Option<&str>, cwd: &Path) -> anyhow::Result<(Workspace, Option<String>)> {
+    match file {
+        Some(file) => open_file(cwd, file).map(|(ws, rel, _)| (ws, Some(rel))),
+        None => Ok((Workspace::find(cwd).ok_or_else(|| no_workspace(cwd))?, None)),
+    }
+}
+
+/// The annotation events in `index`, oldest first, except those in `skip`,
+/// and only those on the document at `only` if given. Each has `path`, its
+/// document's current path, and `thread`, the id of its root annotation.
+fn log_events(index: &Index, only: Option<&str>, skip: &BTreeSet<String>) -> Vec<Value> {
+    let path = |loc: &annox_core::storage::Location| {
+        index.documents.get(index.canonical(&loc.document)).and_then(|d| d.path.clone())
+    };
+    // Events are UUIDv7s, so their ids sort by time.
+    index
+        .events
+        .iter()
+        .filter(|(id, _)| !skip.contains(*id))
+        .filter_map(|(_, (event, loc))| {
+            let path = path(loc);
+            if only.is_some() && path.as_deref() != only {
+                return None;
+            }
+            let annotation = event.annotation.as_deref().unwrap_or_default();
+            let parent = index.events.get(annotation).and_then(|(e, _)| e.field("parent")?.as_str());
+            let mut out = serde_json::to_value(event).ok()?;
+            out["path"] = json!(path);
+            out["thread"] = json!(parent.unwrap_or(annotation));
+            Some(out)
+        })
+        .collect()
+}
+
+/// Runs until `stop` is set, passing each annotation event written after it
+/// started to `emit`, as `annox log --json` prints them, oldest first. Errors
+/// while reading are printed and retried; an error from `emit` ends it.
+pub fn follow_log(
+    file: Option<&str>,
+    cwd: &Path,
+    stop: &AtomicBool,
+    mut emit: impl FnMut(Value) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let (ws, only) = log_scope(file, &cwd.canonicalize()?)?;
+    let mut seen: BTreeSet<String> = Index::read(&ws).events.into_keys().collect();
+    let mut last = crate::fingerprint(&ws.root);
+    while !stop.load(Ordering::Relaxed) {
+        std::thread::sleep(WATCH_INTERVAL);
+        let print = crate::fingerprint(&ws.root);
+        if print == last {
+            continue;
+        }
+        last = print;
+        let index = Index::read(&ws);
+        let new = log_events(&index, only.as_deref(), &seen);
+        seen.extend(index.events.into_keys());
+        new.into_iter().try_for_each(&mut emit)?;
+    }
+    Ok(())
+}
+
+/// The text form of `annox log`: one line per event, with its document.
+pub fn render_log(events: &Value) -> String {
+    let events = events.as_array().map_or(&[][..], Vec::as_slice);
+    let name = |e: &Value| e["author"]["name"].as_str().or(e["author"]["id"].as_str()).unwrap_or("unknown").to_owned();
+    let path = |e: &Value| e["path"].as_str().unwrap_or("(no path)").to_owned();
+    let width = events.iter().map(|e| name(e).chars().count()).max().unwrap_or(0);
+    let path_width = events.iter().map(|e| path(e).chars().count()).max().unwrap_or(0);
+    let mut out = String::new();
+    for e in events {
+        let detail = e["body"].as_str().or(e["edit"]["replacement"].as_str()).and_then(|d| d.lines().next());
+        let detail = detail.map_or(String::new(), |d| format!(": {d}"));
+        let reply = e["type"] != "create" && e["annotation"] != e["thread"];
+        out.push_str(&format!(
+            "{}  {:path_width$}  {:width$}  {}{}{detail}\n",
+            e["time"].as_str().unwrap_or_default(),
+            path(e),
+            name(e),
+            action(e),
+            if reply { " reply" } else { "" },
         ));
     }
     out

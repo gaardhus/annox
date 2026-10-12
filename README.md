@@ -106,6 +106,7 @@ annox list [FILE] [--all | --closed] [--kind K] [--status S] [--mine | --others]
 annox list paper.md --quote "the bound is tight"   # everything on that text, closed annotations too
 annox show ID
 annox history ID [--json]
+annox log [FILE] [--json] [--follow]                # every event, by anyone; -f prints new ones as they're written
 annox report [FILE] [--json | --verbose]
 annox comment paper.md --quote "the bound is tight" --body "Cite Lemma 4?"
 annox highlight paper.md --quote "the bound is tight"
@@ -149,7 +150,9 @@ It works on the directory it's started in, or the one given with `--root`.
 ANNOX_AUTHOR=urn:agent:claude annox watch --mention @claude
 ```
 
-Anything that can read lines can drive an agent with it. In Claude Code, ask the agent to run that command with its Monitor tool and handle each thread as it arrives.
+For a feed of everything that happens, by anyone, your own changes included, use `annox log --follow` (add `--json` for one JSON line per event). It doesn't use read state, so don't point an agent at it: it would see, and answer, its own replies.
+
+Anything that can read lines can drive an agent with `annox watch`. In Claude Code, ask the agent to run that command with its Monitor tool and handle each thread as it arrives.
 
 `annox mcp --channel` does the same through a [Claude Code channel](https://code.claude.com/docs/en/channels-reference): it pushes the threads into the running session, which handles them without being prompted. Channels are a research preview, so a custom one has to be loaded explicitly:
 

@@ -118,6 +118,24 @@ fn main() -> anyhow::Result<()> {
             }
             Ok(())
         }
+        Command::Annotations(annox_lsp::cli::Command::Log { file, json, follow: true }) => {
+            let stop = std::sync::atomic::AtomicBool::new(false);
+            let print = |event: serde_json::Value| {
+                use std::io::Write;
+                let mut out = std::io::stdout().lock();
+                if json {
+                    writeln!(out, "{event}")?;
+                } else {
+                    write!(out, "{}", annox_lsp::cli::render_log(&serde_json::json!([event])))?;
+                }
+                Ok(out.flush()?)
+            };
+            if let Err(e) = annox_lsp::cli::follow_log(file.as_deref(), &std::env::current_dir()?, &stop, print) {
+                eprintln!("annox: {e:#}");
+                std::process::exit(1);
+            }
+            Ok(())
+        }
         Command::Annotations(command) => {
             let render: Option<fn(&serde_json::Value) -> String> = match command {
                 annox_lsp::cli::Command::Report { json: false, verbose: false, .. } => {
@@ -125,6 +143,7 @@ fn main() -> anyhow::Result<()> {
                 }
                 annox_lsp::cli::Command::Report { verbose: true, .. } => Some(annox_lsp::cli::render_report_verbose),
                 annox_lsp::cli::Command::History { json: false, .. } => Some(annox_lsp::cli::render_history),
+                annox_lsp::cli::Command::Log { json: false, .. } => Some(annox_lsp::cli::render_log),
                 _ => None,
             };
             match (annox_lsp::cli::execute(command, &std::env::current_dir()?), render) {

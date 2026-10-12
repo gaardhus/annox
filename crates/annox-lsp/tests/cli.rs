@@ -16,7 +16,7 @@ fn setup(doc: &str) -> tempfile::TempDir {
 
 fn try_annox(cwd: &Path, args: &[&str]) -> anyhow::Result<Value> {
     let mut args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    if !matches!(args[0].as_str(), "init" | "list" | "show" | "history" | "report" | "commit") {
+    if !matches!(args[0].as_str(), "init" | "list" | "show" | "history" | "log" | "report" | "commit") {
         args.extend(["--author".into(), "urn:test:agent".into(), "--name".into(), "Agent".into()]);
     }
     cli::run(&args, cwd)
@@ -599,4 +599,57 @@ fn watch_reports_threads_addressed_to_the_reader() {
 
     annox(dir.path(), &["read", &asked]);
     assert_eq!(ids(watcher.poll(much_later).unwrap()), Vec::<String>::new());
+}
+
+#[test]
+fn log_lists_and_follows_every_event() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Mutex;
+    let dir = setup(DOC);
+    std::fs::write(dir.path().join("other.md"), "Another document.\n").unwrap();
+    let c = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "Section 3", "--body", "Which one?"]));
+    let r = id(&annox(dir.path(), &["reply", &c, "--body", "The third."]));
+    annox(dir.path(), &["edit", &r, "--body", "The third one."]);
+    annox(dir.path(), &["comment", "other.md", "--quote", "Another", "--body", "Elsewhere."]);
+
+    let log = annox(dir.path(), &["log", "paper.md"]);
+    let types: Vec<_> = log.as_array().unwrap().iter().map(|e| (e["type"].clone(), e["thread"].clone())).collect();
+    assert_eq!(
+        types,
+        vec![
+            ("create".into(), c.clone().into()),
+            ("create".into(), c.clone().into()),
+            ("edit".into(), c.clone().into())
+        ]
+    );
+    assert_eq!(log[0]["path"], "paper.md");
+    assert_eq!(annox(dir.path(), &["log"]).as_array().unwrap().len(), 4);
+    let text = cli::render_log(&log);
+    assert!(text.lines().nth(2).unwrap().ends_with("edited reply: The third one."), "{text}");
+
+    // Following prints only what's written after it starts, by anyone.
+    let stop = AtomicBool::new(false);
+    let seen = Mutex::new(Vec::new());
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            cli::follow_log(None, dir.path(), &stop, |e| {
+                seen.lock().unwrap().push(e);
+                Ok(())
+            })
+            .unwrap()
+        });
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        annox(dir.path(), &["status", &c, "resolved"]);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while seen.lock().unwrap().is_empty() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        stop.store(true, Ordering::Relaxed);
+    });
+    let seen = seen.into_inner().unwrap();
+    assert_eq!(seen.len(), 1, "{seen:?}");
+    assert_eq!(
+        (&seen[0]["type"], &seen[0]["status"], &seen[0]["author"]["id"]),
+        (&"status".into(), &"resolved".into(), &"urn:test:agent".into())
+    );
 }
