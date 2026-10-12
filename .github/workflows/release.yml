@@ -2,10 +2,18 @@ name: Release
 
 # Every push to main updates a release PR that bumps the version and the
 # changelog (git-cliff, cliff.toml). Merging it tags `vX.Y.Z`, creates the
-# GitHub release, and attaches binaries, once CI passes.
+# GitHub release, and attaches binaries, once CI passes. Run it by hand to
+# override the bump for the release PR; the next push to main resets it to auto.
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump for the release PR
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
 
 permissions:
   contents: read
@@ -66,10 +74,12 @@ jobs:
         with:
           tool: git-cliff@2.14.2
       - id: next
+        env:
+          BUMP: ${{ inputs.bump || 'auto' }}
         run: |
           current="v$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
           # The latest tag if nothing since it bumps the version (e.g. only `ci:` commits).
-          next=$(git cliff --bumped-version)
+          next=$(git cliff --bumped-version --bump "$BUMP")
           if [ "$next" = "$current" ]; then
             echo "Nothing to release since $current"
             exit 0
