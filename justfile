@@ -94,11 +94,13 @@ vscode-icon:
 code-install:
     code --install-extension "editors/vscode/annox-$(node -p "require('./editors/vscode/package.json').version").vsix"
 
-# Build the website in site/: annox-core as WebAssembly, the logos, and the install scripts.
+# Build the website in site/: annox-core as WebAssembly, the logos, the install scripts,
+# and the animated intro, with its font path pointed at site/fonts.
 site:
     wasm-pack build crates/annox-wasm --target web --no-typescript --no-pack --out-dir ../../site/annox-demo/pkg
     mkdir -p site/assets && cp assets/*.svg assets/*.gif assets/*.png site/assets/
     cp install.sh install.ps1 site/
+    sed 's|"../../site/fonts/|"fonts/|' assets/intro/annox-intro.html > site/annox-intro.html
 
 # Render the site's PNG images from their SVG sources: the social card (og:image),
 # the iOS home screen icon, and a PNG favicon for browsers without SVG favicons.
