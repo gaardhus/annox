@@ -450,16 +450,76 @@ fn report_counts_each_document() {
     let text = plain(cli::render_report(&report));
     assert_eq!(
         text,
-        "notes.md  file missing · 1 open comment · 1 orphaned\npaper.md  1 open comment · 1 open suggestion · 1 closed\n"
+        "notes.md  file missing · 1 open comment · 1 orphaned\n\
+         paper.md  1 open suggestion · 1 open comment · 1 closed\n"
     );
     assert_eq!(plain(cli::render_report(&serde_json::json!({ "documents": [] }))), "no annotations\n");
 
     assert_eq!(
         plain(cli::render_report_verbose(&report)),
         "notes.md  (file missing)\n  comments     1 open\n  needs work   1 orphaned\n\
-         paper.md\n  comments     1 open · 1 resolved\n  suggestions  1 open\n"
+         paper.md\n  suggestions  1 open\n  comments     1 open · 1 resolved\n"
     );
     assert_eq!(plain(cli::render_report_verbose(&serde_json::json!({ "documents": [] }))), "no annotations\n");
+}
+
+#[test]
+fn report_groups_by_author() {
+    let dir = setup(DOC);
+    let ada = |name: &str, args: &[&str]| {
+        let mut args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+        args.extend(["--author", "mailto:ada@example.org", "--name", name].map(String::from));
+        cli::run(&args, dir.path()).unwrap()
+    };
+    let c = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "Section 3", "--body", "Which?"]));
+    ada("Ada", &["reply", &c, "--body", "The third."]);
+    ada("Ada Lovelace", &["reply", &c, "--body", "Or the fourth."]);
+    let s = id(&ada("Ada Lovelace", &["suggest", "paper.md", "--quote", "teh", "--replace", "the"]));
+    annox(dir.path(), &["reply", &s, "--body", "Yes."]);
+    let done = id(&annox(dir.path(), &["comment", "paper.md", "--quote", "prove", "--body", "x"]));
+    annox(dir.path(), &["status", &done, "resolved"]);
+
+    let report = annox(dir.path(), &["report"]);
+    assert_eq!(report["documents"][0]["replies"], 3, "replies count on documents too");
+
+    let report = annox(dir.path(), &["report", "--by", "author"]);
+    let authors = report["authors"].as_array().unwrap();
+    assert_eq!(authors.len(), 2);
+    let (ada_entry, agent) = (&authors[0], &authors[1]);
+    assert_eq!(ada_entry["author"], serde_json::json!({ "id": "mailto:ada@example.org", "name": "Ada Lovelace" }));
+    assert_eq!((&ada_entry["suggestions"]["open"], &ada_entry["comments"]["open"]), (&1.into(), &0.into()));
+    assert_eq!(ada_entry["replies"], 2);
+    assert_eq!((&agent["comments"]["open"], &agent["comments"]["resolved"]), (&1.into(), &1.into()));
+    assert_eq!(agent["replies"], 1);
+    assert_eq!(
+        plain(cli::render_report(&report)),
+        "Ada Lovelace <mailto:ada@example.org>  1 open suggestion · 2 replies\n\
+         Agent <urn:test:agent>                 1 open comment · 1 reply · 1 closed\n"
+    );
+
+    let nested = annox(dir.path(), &["report", "--by", "author,document"]);
+    assert_eq!(nested["authors"][0]["documents"][0]["path"], "paper.md");
+    assert_eq!(nested["authors"][0]["documents"][0]["replies"], 2);
+    assert_eq!(
+        plain(cli::render_report(&nested)),
+        "Ada Lovelace <mailto:ada@example.org>  1 open suggestion · 2 replies\n\
+         \x20 paper.md                             1 open suggestion · 2 replies\n\
+         Agent <urn:test:agent>                 1 open comment · 1 reply · 1 closed\n\
+         \x20 paper.md                             1 open comment · 1 reply · 1 closed\n"
+    );
+    let nested = annox(dir.path(), &["report", "--by", "document,author"]);
+    assert_eq!(nested["documents"][0]["authors"].as_array().unwrap().len(), 2);
+
+    // Filters pick the threads; grouping then counts everyone in them.
+    let mine = annox(dir.path(), &["report", "--by", "author", "--mine", "--as", "urn:test:agent"]);
+    assert_eq!(mine["authors"][0]["author"]["id"], "urn:test:agent");
+    assert_eq!(mine["authors"][0]["suggestions"]["open"], 0, "Ada's suggestion is filtered out");
+    assert_eq!(
+        (&mine["authors"][1]["author"]["id"], &mine["authors"][1]["replies"]),
+        (&"mailto:ada@example.org".into(), &2.into())
+    );
+
+    assert!(error(dir.path(), &["report", "--by", "author,author"]).contains("--by author is given twice"));
 }
 
 fn git(dir: &Path, args: &[&str]) -> String {

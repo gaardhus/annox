@@ -29,6 +29,7 @@ annox list --closed         # also resolved, accepted, rejected, withdrawn, but 
 annox show ID               # one annotation and its thread
 annox history ID --json     # who did what to a thread (replies included), and when
 annox report --json         # counts per document: open, closed, orphaned, stale
+annox report --by author    # who wrote what: suggestions, comments and replies per author
 annox list --unread         # threads others changed since you marked them read, closed ones too
 ```
 

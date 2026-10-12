@@ -101,9 +101,19 @@ const TOOLS: &[Tool] = &[
     Tool {
         name: "report",
         command: "report",
-        description: "Count each document's annotations: open comments and suggestions by status, and how many are orphaned, stale (can't be applied) or conflicted. A cheap overview before listing. Without `file`, covers every document in the workspace.",
+        description: "Count each document's annotations: suggestions and comments by status, replies, and how many are orphaned, stale (can't be applied) or conflicted. A cheap overview before listing. Without `file`, covers every document in the workspace. Group `by` author to see who wrote what: an author counts the suggestions, comments and replies they wrote. Takes list_annotations' filters, but counts closed annotations too unless `status` is given.",
         positional: &["file"],
-        params: &[("file", "string", false, "Only this file.")],
+        params: &[
+            ("file", "string", false, "Only this file."),
+            ("by", "string", false, "Group by `document` (the default) or `author`; comma-separated to nest, e.g. `author,document`."),
+            ("kind", "string", false, "Only `comment` or only `suggestion`."),
+            ("status", "string", false, "Only these statuses, comma-separated: open, resolved, accepted, rejected, withdrawn."),
+            ("author", "string", false, "Only threads started by this author id."),
+            ("not_author", "string", false, "Skip threads started by this author id."),
+            ("mine", "boolean", false, "Only threads you started."),
+            ("others", "boolean", false, "Skip threads you started."),
+            ("unread", "boolean", false, "Only threads others changed since you last marked them read with mark_read."),
+        ],
         read_only: true,
     },
     Tool {
@@ -312,7 +322,7 @@ fn command_line(tool: &Tool, arguments: &Value, config: &Config) -> Result<Vec<S
         return Err(format!("unknown argument {unknown}"));
     }
     // Whose read state `unread` uses.
-    if let (Some(author), "list") = (&config.author, tool.command) {
+    if let (Some(author), "list" | "report") = (&config.author, tool.command) {
         args.extend(["--as".into(), author.clone()]);
     }
     if !tool.read_only {

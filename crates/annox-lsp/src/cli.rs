@@ -59,16 +59,26 @@ pub enum Command {
         #[command(flatten)]
         filter: Filter,
     },
-    /// Summarize the annotations of FILE, or of every document, one line per document
+    /// Summarize the annotations of FILE, or of every document, one line per document or author
     Report {
         /// A document in the workspace
         file: Option<String>,
         /// Print JSON instead of text
         #[arg(long)]
         json: bool,
-        /// Break each document's counts down by status, one line per kind
+        /// Break each line's counts down by status, one line per kind
         #[arg(short, long, conflicts_with = "json")]
         verbose: bool,
+        /// Group by document or by author; comma-separated to nest, as in `author,document`. An author counts
+        /// the suggestions, comments and replies they wrote [default: document]
+        #[arg(long, value_name = "GROUP", value_delimiter = ',', value_parser = ["document", "author"])]
+        by: Vec<String>,
+        /// Whose read state `unread` uses, and who `--mine` and `--others` mean [default: the identity write
+        /// commands use]
+        #[arg(long = "as", value_name = "ID")]
+        reader: Option<String>,
+        #[command(flatten)]
+        filter: Filter,
     },
     /// Print one annotation and its thread as JSON
     Show {
@@ -281,14 +291,15 @@ pub struct MoveTo {
     suggested: bool,
 }
 
-/// Which annotations `list` prints. Filters combine with AND.
+/// Which annotations `list` prints and `report` counts. Filters combine with AND.
 #[derive(clap::Args, Debug, Default)]
 #[command(next_help_heading = "Filters")]
 pub struct Filter {
     /// Only comments or only suggestions
     #[arg(long, value_name = "KIND", value_parser = ["comment", "suggestion"])]
     kind: Option<String>,
-    /// Only these statuses (repeatable or comma-separated) [default: open, or any with --all, --closed or --quote]
+    /// Only these statuses (repeatable or comma-separated) [default: open, or any with --all, --closed or --quote;
+    /// any in `report`]
     #[arg(long, value_name = "S", value_delimiter = ',',
           value_parser = ["open", "resolved", "accepted", "rejected", "withdrawn"])]
     status: Vec<String>,
@@ -370,7 +381,7 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
             Ok(json!({ "root": ws.root }))
         }
         Command::List { file, all, closed, reader, filter } => list(file.as_deref(), all, closed, reader, filter, &cwd),
-        Command::Report { file, .. } => report(file.as_deref(), &cwd),
+        Command::Report { file, by, reader, filter, .. } => report(file.as_deref(), &by, reader, filter, &cwd),
         Command::Log { follow: true, .. } => bail!("`annox log --follow` streams; run it with `follow_log`"),
         Command::Log { file, .. } => {
             let (ws, only) = log_scope(file.as_deref(), &cwd)?;
@@ -910,53 +921,173 @@ fn is_broken(view: &Value) -> bool {
     view["status"] == "open" && (view["resolution"] == "orphaned" || view["applicable"] == json!(false))
 }
 
-/// Counts of each document's annotations, without deleted ones. A missing
-/// document's open annotations count as orphaned (§5.10). In a git
-/// repository, also the events `annox commit` would commit.
-fn report(file: Option<&str>, cwd: &Path) -> anyhow::Result<Value> {
+/// Counts of the annotations that `filter` lists, without deleted ones,
+/// grouped by each of `by` in turn (default: by document). An author's group
+/// counts the suggestions, comments and replies they wrote, so the groups add
+/// up. A missing document's open annotations count as orphaned (§5.10). In a
+/// git repository, also the events `annox commit` would commit.
+fn report(
+    file: Option<&str>,
+    by: &[String],
+    reader: Option<String>,
+    filter: Filter,
+    cwd: &Path,
+) -> anyhow::Result<Value> {
+    let by: Vec<&str> = if by.is_empty() { vec!["document"] } else { by.iter().map(String::as_str).collect() };
+    if let Some(twice) = by.iter().enumerate().find_map(|(i, b)| by[..i].contains(b).then_some(b)) {
+        bail!("--by {twice} is given twice");
+    }
     let (ws, index) = open_workspace(cwd)?;
     let files = uncommitted(&ws.root).ok();
     let uncommitted = files.as_ref().map(|files| summarize(&index, files));
-    let views = list(file, true, false, None, Filter::default(), cwd)?;
-    let mut documents: Vec<Value> = Vec::new();
-    for view in views.as_array().into_iter().flatten().filter(|v| v["deleted"] != json!(true)) {
-        let path = view["path"].as_str().unwrap_or_default();
-        if documents.last().is_none_or(|d| d["path"] != path) {
-            documents.push(json!({
-                "path": path,
-                "missing": !ws.root.join(path).is_file(),
-                "comments": { "open": 0, "resolved": 0 },
-                "suggestions": { "open": 0, "accepted": 0, "rejected": 0, "withdrawn": 0 },
-                "orphaned": 0,
-                "stale": 0,
-                "conflicted": 0,
-            }));
-            if let Some(counts) = &uncommitted {
-                let n: usize = counts.get(path).map_or(0, |c| c.iter().sum());
-                documents.last_mut().expect("pushed above")["uncommitted"] = json!(n);
-            }
-        }
-        let doc = documents.last_mut().expect("pushed above");
-        let missing = doc["missing"] == json!(true);
-        let bump = |count: &mut Value| *count = json!(count.as_u64().unwrap_or(0) + 1);
-        let (kind, status) = (view["kind"].as_str().unwrap_or_default(), view["status"].as_str().unwrap_or_default());
-        bump(&mut doc[format!("{kind}s")][status]);
-        if view["status"] == "open" {
-            if missing || view["resolution"] == "orphaned" {
-                bump(&mut doc["orphaned"]);
-            } else if view["applicable"] == json!(false) {
-                bump(&mut doc["stale"]);
-            }
-        }
-        if view.get("conflicts").is_some() {
-            bump(&mut doc["conflicted"]);
-        }
-    }
-    let mut report = json!({ "documents": documents });
+    let views = list(file, false, true, reader, filter, cwd)?;
+    let shares: Vec<Share> = views
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|thread| Share {
+            thread,
+            missing: !ws.root.join(thread["path"].as_str().unwrap_or_default()).is_file(),
+            root: true,
+            replies: thread["replies"].as_array().into_iter().flatten().collect(),
+        })
+        .collect();
+    let mut report = json!({ group_key(by[0]): group(&shares, &by, uncommitted.as_ref()) });
     if let Some(files) = files {
         report["uncommitted"] = json!(files.len());
     }
     Ok(report)
+}
+
+/// A listed thread, or the part of it one author wrote, as `report` counts it.
+#[derive(Clone)]
+struct Share<'a> {
+    thread: &'a Value,
+    /// Whether the thread's document is missing.
+    missing: bool,
+    /// Whether the comment or suggestion that starts the thread is part of it.
+    root: bool,
+    replies: Vec<&'a Value>,
+}
+
+/// The key of a `report` grouping's entries.
+fn group_key(by: &str) -> &'static str {
+    if by == "author" {
+        "authors"
+    } else {
+        "documents"
+    }
+}
+
+/// `report`'s entries for `shares` grouped by `by[0]`, each with its counts
+/// and, nested, its entries grouped by the rest of `by`.
+fn group(shares: &[Share], by: &[&str], uncommitted: Option<&BTreeMap<&str, [usize; 4]>>) -> Vec<Value> {
+    let Some((first, rest)) = by.split_first() else { return vec![] };
+    let mut groups: Vec<(Value, Vec<Share>)> = Vec::new();
+    if *first == "author" {
+        // Per author id, the part of each thread it wrote.
+        let mut authors: BTreeMap<&str, Vec<Share>> = BTreeMap::new();
+        for share in shares {
+            let thread = share.thread;
+            let entries = share.root.then_some(thread).into_iter().chain(share.replies.iter().copied());
+            for entry in entries {
+                let id = entry["author"]["id"].as_str().unwrap_or("unknown");
+                let mine = authors.entry(id).or_default();
+                if mine.last().is_none_or(|s| !std::ptr::eq(s.thread, thread)) {
+                    let by_id = |e: &&Value| e["author"]["id"].as_str().unwrap_or("unknown") == id;
+                    mine.push(Share {
+                        root: share.root && by_id(&thread),
+                        replies: share.replies.iter().copied().filter(by_id).collect(),
+                        ..share.clone()
+                    });
+                }
+            }
+        }
+        for (id, mine) in authors {
+            let mut author = json!({ "id": id });
+            if let Some(name) = authored_name(&mine) {
+                author["name"] = json!(name);
+            }
+            groups.push((json!({ "author": author }), mine));
+        }
+    } else {
+        for share in shares {
+            let path = share.thread["path"].as_str().unwrap_or_default();
+            if groups.last().is_none_or(|(g, _)| g["path"] != path) {
+                let mut header = json!({ "path": path, "missing": share.missing });
+                if let Some(counts) = uncommitted {
+                    header["uncommitted"] = json!(counts.get(path).map_or(0, |c| c.iter().sum::<usize>()));
+                }
+                groups.push((header, Vec::new()));
+            }
+            groups.last_mut().expect("pushed above").1.push(share.clone());
+        }
+    }
+    let mut entries: Vec<Value> = groups
+        .into_iter()
+        .map(|(mut entry, shares)| {
+            let counts = count_shares(&shares);
+            entry.as_object_mut().expect("an object").extend(counts.as_object().expect("an object").clone());
+            if let Some(next) = rest.first() {
+                entry[group_key(next)] = json!(group(&shares, rest, uncommitted));
+            }
+            entry
+        })
+        .collect();
+    if *first == "author" {
+        // Most open annotations first, then most replies.
+        let count = |v: &Value| v.as_u64().unwrap_or(0);
+        entries.sort_by_key(|e| {
+            std::cmp::Reverse((count(&e["suggestions"]["open"]) + count(&e["comments"]["open"]), count(&e["replies"])))
+        });
+    }
+    entries
+}
+
+/// The name an author's latest entry among `shares` gives, if any: names
+/// can change while ids stay.
+fn authored_name(shares: &[Share]) -> Option<String> {
+    shares
+        .iter()
+        .flat_map(|s| s.root.then_some(s.thread).into_iter().chain(s.replies.iter().copied()))
+        .filter_map(|e| Some((e["created"].as_str().unwrap_or_default(), e["author"]["name"].as_str()?)))
+        .max()
+        .map(|(_, name)| name.to_owned())
+}
+
+/// The counts of a `report` entry: suggestions and comments by status,
+/// replies, and the open annotations that need work.
+fn count_shares(shares: &[Share]) -> Value {
+    let mut counts = json!({
+        "suggestions": { "open": 0, "accepted": 0, "rejected": 0, "withdrawn": 0 },
+        "comments": { "open": 0, "resolved": 0 },
+        "replies": 0,
+        "orphaned": 0,
+        "stale": 0,
+        "conflicted": 0,
+    });
+    let add = |count: &mut Value, n: usize| *count = json!(count.as_u64().unwrap_or(0) + n as u64);
+    for share in shares {
+        add(&mut counts["replies"], share.replies.len());
+        if !share.root {
+            continue;
+        }
+        let thread = share.thread;
+        let (kind, status) =
+            (thread["kind"].as_str().unwrap_or_default(), thread["status"].as_str().unwrap_or_default());
+        add(&mut counts[format!("{kind}s")][status], 1);
+        if status == "open" {
+            if share.missing || thread["resolution"] == "orphaned" {
+                add(&mut counts["orphaned"], 1);
+            } else if thread["applicable"] == json!(false) {
+                add(&mut counts["stale"], 1);
+            }
+        }
+        if thread.get("conflicts").is_some() {
+            add(&mut counts["conflicted"], 1);
+        }
+    }
+    counts
 }
 
 /// The event id of an event file's path.
@@ -964,54 +1095,114 @@ fn event_id(file: &str) -> Option<&str> {
     file.rsplit('/').next()?.strip_suffix(".json")
 }
 
-/// `report`'s output as text, one line per document, styled (see [`style`]).
-pub fn render_report(report: &Value) -> String {
-    let documents = report["documents"].as_array().map_or(&[][..], Vec::as_slice);
-    let count = |v: &Value| v.as_u64().unwrap_or(0);
-    let plural = |n: u64, what: &str| format!("{n} {what}{}", if n == 1 { "" } else { "s" });
-    let uncommitted = match count(&report["uncommitted"]) {
+/// `report`'s entries in display order, each with how deeply it's nested.
+fn report_entries(report: &Value) -> Vec<(usize, &Value)> {
+    fn walk<'a>(entries: &'a Value, depth: usize, out: &mut Vec<(usize, &'a Value)>) {
+        for entry in entries.as_array().into_iter().flatten() {
+            out.push((depth, entry));
+            for key in ["documents", "authors"] {
+                if let Some(nested) = entry.get(key) {
+                    walk(nested, depth + 1, out);
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for key in ["documents", "authors"] {
+        if let Some(entries) = report.get(key) {
+            walk(entries, 0, &mut out);
+        }
+    }
+    out
+}
+
+/// A `report` entry's label, plain and styled: a document's path, or an
+/// author's name and id.
+fn report_label(entry: &Value) -> (String, String) {
+    if let Some(path) = entry["path"].as_str() {
+        return (path.to_owned(), paint(style::PATH, path));
+    }
+    let id = entry["author"]["id"].as_str().unwrap_or("unknown");
+    match entry["author"]["name"].as_str() {
+        Some(name) => (
+            format!("{name} <{id}>"),
+            format!("{} {}", paint(style::AUTHOR, name), paint(style::MUTED, format!("<{id}>"))),
+        ),
+        None => (id.to_owned(), paint(style::AUTHOR, id)),
+    }
+}
+
+/// `n` and `what`, made plural unless `n` is 1.
+fn plural(n: u64, what: &str) -> String {
+    match (n, what.strip_suffix('y')) {
+        (1, _) => format!("1 {what}"),
+        (_, Some(stem)) => format!("{n} {stem}ies"),
+        _ => format!("{n} {what}s"),
+    }
+}
+
+/// The summary line a report ends with, if any: the files `annox commit`
+/// would commit.
+fn report_footer(report: &Value) -> String {
+    match report["uncommitted"].as_u64().unwrap_or(0) {
         0 => String::new(),
         n => format!(
             "{}; see `{}`\n",
             paint(style::PENDING, format!("{} to commit", plural(n, "file"))),
             paint(style::PATH, "annox commit --dry-run")
         ),
-    };
-    if documents.is_empty() {
-        return format!("{}\n{uncommitted}", paint(style::MUTED, "no annotations"));
     }
-    let width = documents.iter().map(|d| d["path"].as_str().unwrap_or_default().chars().count()).max().unwrap_or(0);
+}
+
+/// `report`'s output as text, one line per entry, nested ones indented,
+/// styled (see [`style`]).
+pub fn render_report(report: &Value) -> String {
+    let entries = report_entries(report);
+    if entries.is_empty() {
+        return format!("{}\n{}", paint(style::MUTED, "no annotations"), report_footer(report));
+    }
+    let count = |v: &Value| v.as_u64().unwrap_or(0);
+    let labels: Vec<(String, String)> = entries.iter().map(|(_, e)| report_label(e)).collect();
+    let width = entries
+        .iter()
+        .zip(&labels)
+        .map(|((depth, _), (plain, _))| 2 * depth + plain.chars().count())
+        .max()
+        .unwrap_or(0);
     let mut out = String::new();
-    for doc in documents {
-        let comments = &doc["comments"];
-        let suggestions = &doc["suggestions"];
-        let closed = count(&comments["resolved"])
-            + ["accepted", "rejected", "withdrawn"].iter().map(|s| count(&suggestions[s])).sum::<u64>();
+    for ((depth, entry), (plain, label)) in entries.iter().zip(labels) {
         let mut parts = Vec::new();
-        if doc["missing"] == json!(true) {
+        if entry["missing"] == json!(true) {
             parts.push(paint(style::PROBLEM, "file missing"));
         }
-        for (n, what) in [(count(&comments["open"]), "open comment"), (count(&suggestions["open"]), "open suggestion")]
-        {
+        for (n, what) in [
+            (count(&entry["suggestions"]["open"]), "open suggestion"),
+            (count(&entry["comments"]["open"]), "open comment"),
+        ] {
             if n > 0 {
                 parts.push(paint(style::OPEN, plural(n, what)));
             }
         }
+        if count(&entry["replies"]) > 0 {
+            parts.push(plural(count(&entry["replies"]), "reply"));
+        }
         for what in ["orphaned", "stale", "conflicted"] {
-            if count(&doc[what]) > 0 {
-                parts.push(paint(style::PROBLEM, format!("{} {what}", count(&doc[what]))));
+            if count(&entry[what]) > 0 {
+                parts.push(paint(style::PROBLEM, format!("{} {what}", count(&entry[what]))));
             }
         }
+        let closed = count(&entry["comments"]["resolved"])
+            + ["accepted", "rejected", "withdrawn"].iter().map(|s| count(&entry["suggestions"][s])).sum::<u64>();
         if closed > 0 {
             parts.push(paint(style::MUTED, format!("{closed} closed")));
         }
-        if count(&doc["uncommitted"]) > 0 {
-            parts.push(paint(style::PENDING, plural(count(&doc["uncommitted"]), "uncommitted change")));
+        if count(&entry["uncommitted"]) > 0 {
+            parts.push(paint(style::PENDING, plural(count(&entry["uncommitted"]), "uncommitted change")));
         }
-        let path = paint(style::PATH, format!("{:width$}", doc["path"].as_str().unwrap_or_default()));
-        out.push_str(&format!("{path}  {}\n", parts.join(&separator())));
+        let pad = " ".repeat(width - 2 * depth - plain.chars().count());
+        out.push_str(&format!("{}{label}{pad}  {}\n", "  ".repeat(*depth), parts.join(&separator())));
     }
-    out + &uncommitted
+    out + &report_footer(report)
 }
 
 /// What goes between the counts of a report line.
@@ -1019,10 +1210,13 @@ fn separator() -> String {
     paint(style::MUTED, " · ")
 }
 
-/// `report --verbose`'s output as text: each document's counts broken down
-/// by status, one indented line per kind, leaving out zeros.
+/// `report --verbose`'s output as text: each entry's counts broken down by
+/// status, one indented line per kind, leaving out zeros.
 pub fn render_report_verbose(report: &Value) -> String {
-    let documents = report["documents"].as_array().map_or(&[][..], Vec::as_slice);
+    let entries = report_entries(report);
+    if entries.is_empty() {
+        return render_report(report);
+    }
     let count = |v: &Value| v.as_u64().unwrap_or(0);
     let counts = |of: &Value, names: &[&str]| -> Vec<String> {
         names
@@ -1032,34 +1226,34 @@ pub fn render_report_verbose(report: &Value) -> String {
             .collect()
     };
     let mut out = String::new();
-    for doc in documents {
-        out.push_str(&paint(style::PATH, doc["path"].as_str().unwrap_or_default()));
-        if doc["missing"] == json!(true) {
+    for (depth, entry) in entries {
+        let indent = "  ".repeat(depth);
+        out.push_str(&format!("{indent}{}", report_label(entry).1));
+        if entry["missing"] == json!(true) {
             out.push_str(&format!("  {}", paint(style::PROBLEM, "(file missing)")));
         }
         out.push('\n');
-        let uncommitted = match count(&doc["uncommitted"]) {
+        let uncommitted = match count(&entry["uncommitted"]) {
             0 => vec![],
             1 => vec![paint(style::PENDING, "1 change")],
             n => vec![paint(style::PENDING, format!("{n} changes"))],
         };
         let rows = [
-            ("comments", counts(&doc["comments"], &["open", "resolved"])),
-            ("suggestions", counts(&doc["suggestions"], &["open", "accepted", "rejected", "withdrawn"])),
-            ("needs work", counts(doc, &["orphaned", "stale", "conflicted"])),
+            ("suggestions", counts(&entry["suggestions"], &["open", "accepted", "rejected", "withdrawn"])),
+            ("comments", counts(&entry["comments"], &["open", "resolved"])),
+            ("replies", [count(&entry["replies"])].into_iter().filter(|n| *n > 0).map(|n| n.to_string()).collect()),
+            ("needs work", counts(entry, &["orphaned", "stale", "conflicted"])),
             ("uncommitted", uncommitted),
         ];
         for (label, parts) in rows.iter().filter(|(_, parts)| !parts.is_empty()) {
-            out.push_str(&format!("  {}  {}\n", paint(style::MUTED, format!("{label:11}")), parts.join(&separator())));
+            out.push_str(&format!(
+                "{indent}  {}  {}\n",
+                paint(style::MUTED, format!("{label:11}")),
+                parts.join(&separator())
+            ));
         }
     }
-    // The empty report and the workspace-wide line read the same either way.
-    let summary = render_report(&json!({ "documents": [], "uncommitted": report["uncommitted"] }));
-    if documents.is_empty() {
-        return summary;
-    }
-    let none = format!("{}\n", paint(style::MUTED, "no annotations"));
-    out + summary.strip_prefix(&none).unwrap_or(&summary)
+    out + &report_footer(report)
 }
 
 /// The events of an annotation's thread in display order (§2.5.5).
