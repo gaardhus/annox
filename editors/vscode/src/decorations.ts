@@ -3,7 +3,7 @@
 // annotations that could not be located.
 
 import * as vscode from "vscode";
-import { type Store, firstLine, isConflicted, isOrphaned, key, rangeOf, toRange } from "./store.ts";
+import { type Store, firstLine, isConflicted, isOrphaned, isUnread, key, rangeOf, toRange } from "./store.ts";
 import type { AnnotationView } from "./types.ts";
 
 const color = (id: string) => new vscode.ThemeColor(id);
@@ -192,6 +192,7 @@ export class Decorations implements vscode.Disposable {
         const replies = a.replies?.length ?? 0;
         let text = replies > 0 ? `${label} (+${replies})` : label;
         if (a.local) text = `[draft] ${text}`;
+        if (isUnread(a)) text = `● ${text}`;
         const line = range.start.line;
         labelled.set(line, [...(labelled.get(line) ?? []), text]);
       }

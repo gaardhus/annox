@@ -6,7 +6,18 @@ import * as crypto from "node:crypto";
 import * as path from "node:path";
 import { diffWordsWithSpace } from "diff";
 import * as vscode from "vscode";
-import { type Store, authorName, editedNote, isConflicted, isOrphaned, key, oneLine, rangeOf, toRange } from "../store.ts";
+import {
+  type Store,
+  authorName,
+  editedNote,
+  isConflicted,
+  isOrphaned,
+  isUnread,
+  key,
+  oneLine,
+  rangeOf,
+  toRange,
+} from "../store.ts";
 import type { AnnotationView } from "../types.ts";
 import type { Action, Card, Command, Group, HostMessage, State, ViewMessage } from "./protocol.ts";
 import { ago } from "./render.ts";
@@ -158,6 +169,7 @@ export class Sidebar implements vscode.WebviewViewProvider, vscode.Disposable {
       kind: a.kind === "suggestion" ? "suggestion" : a.body ? "comment" : "highlight",
       status: a.status,
       draft: !!a.local,
+      unread: isUnread(a),
       author: authorName(a),
       when: ago(a.created),
       edited: editedNote(a),
@@ -166,7 +178,13 @@ export class Sidebar implements vscode.WebviewViewProvider, vscode.Disposable {
       notes: notes(a, this.store),
       replies: (a.replies ?? [])
         .filter((x) => !x.deleted)
-        .map((x) => ({ author: authorName(x), when: ago(x.created), edited: editedNote(x), body: x.body ?? "" })),
+        .map((x) => ({
+          unread: !!x.unread,
+          author: authorName(x),
+          when: ago(x.created),
+          edited: editedNote(x),
+          body: x.body ?? "",
+        })),
       actions: actions(a, this.store),
     };
     const replacement = a.edit?.replacement ?? "";

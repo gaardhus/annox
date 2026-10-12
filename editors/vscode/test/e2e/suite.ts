@@ -515,6 +515,52 @@ export async function run(): Promise<void> {
     await exec("annox.resolveThread", { annotation: c.id });
   });
 
+  step("others' changes are unread until opened or marked read", async () => {
+    await focus();
+    const bin = vscode.workspace.getConfiguration("annox").get<string>("path") as string;
+    // Bob comments from a shell, as if pulled from git.
+    const bob = (file: string, quote: string, body: string) =>
+      JSON.parse(
+        execFileSync(bin, ["comment", file, "--quote", quote, "--body", body, "--author", "mailto:bob@example.org"], {
+          cwd: root,
+          encoding: "utf8",
+        }),
+      ).id as string;
+    const id = bob("paper.tex", "open problems", "Which ones?");
+    await wait("pushed as unread", () => get(id)?.unread, 15000);
+    const thread = await wait("thread", () => api.threads.threadOf(id));
+    await wait("thread marked new", () => thread.label?.startsWith("● New"));
+    assert.match(thread.contextValue ?? "", /\bunread\b/);
+    assert.equal(thread.comments[0].label, "new");
+    assert.equal(api.sidebar.state().cards.find((c) => c.id === id)?.unread, true);
+
+    // Unread threads in files that aren't open are listed too.
+    fs.writeFileSync(path.join(root, "notes.md"), "Some notes.\n");
+    const other = bob("notes.md", "notes", "Whose?");
+    const pick = vscode.window.showQuickPick;
+    let offered: string[] = [];
+    // biome-ignore lint/suspicious/noExplicitAny: stubbing the picker
+    (vscode.window as any).showQuickPick = async (items: (vscode.QuickPickItem & { a: AnnotationView })[]) => {
+      offered = items.map((i) => i.a.id);
+      return undefined;
+    };
+    try {
+      await exec("annox.unread");
+    } finally {
+      // biome-ignore lint/suspicious/noExplicitAny: restoring the picker
+      (vscode.window as any).showQuickPick = pick;
+    }
+    assert.deepEqual(offered.sort(), [id, other].sort());
+
+    // Opening it marks it read.
+    await exec("annox.open", { annotation: id });
+    await wait("read once opened", () => get(id)?.unread === false);
+    await focus();
+    await exec("annox.markAllRead");
+    const left = await api.annox.request<{ documents: unknown[] }>("annox/unread", {});
+    assert.deepEqual(left?.documents, []);
+  });
+
   step("initializing a workspace", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "annox-init-"));
     await exec("annox.init", { root: dir, confirm: false });

@@ -25,6 +25,8 @@ export interface Segment {
 }
 
 export interface Reply {
+  /** Changed by others since the user last read it (§5.13). */
+  unread?: boolean;
   author: string;
   when: string;
   /** "edited", or "edited by" someone other than the author. */
@@ -38,6 +40,8 @@ export interface Card {
   kind: "comment" | "highlight" | "suggestion";
   status: string;
   draft: boolean;
+  /** The thread has changes by others the user hasn't read (§5.13). */
+  unread?: boolean;
   author: string;
   when: string;
   edited?: string;

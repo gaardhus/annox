@@ -137,6 +137,10 @@ button.primary:hover {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
 }
+.badge.new {
+  background: var(--vscode-activityBarBadge-background);
+  color: var(--vscode-activityBarBadge-foreground);
+}
 
 .quote {
   margin: 4px 0;

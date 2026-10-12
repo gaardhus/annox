@@ -102,3 +102,16 @@ test("an edited card or reply says so, and by whom", () => {
   assert.match(html, /<span class="edited">edited by Bob<\/span>/);
   assert.match(html, /<span class="edited">edited<\/span><\/div>/);
 });
+
+test("an unread card or reply is marked new", () => {
+  const html = render(
+    state([
+      card({ id: "n", unread: true, replies: [{ author: "Bob", when: "1d", body: "Hm.", unread: true }] }),
+      card({ id: "r", replies: [{ author: "Bob", when: "1d", body: "Old." }] }),
+    ]),
+    ui(),
+  );
+  assert.match(html, /class="card comment open unread" data-card="n"/);
+  assert.equal(html.match(/<span class="badge new">new<\/span>/g)?.length, 2);
+  assert.doesNotMatch(html, /class="[^"]*unread[^"]*" data-card="r"/);
+});

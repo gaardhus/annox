@@ -4,7 +4,7 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { changeMarkdown, escapeTildes } from "./comments.ts";
-import { type Store, authorName, describe, isConflicted, isOrphaned, rangeOf, summary } from "./store.ts";
+import { type Store, authorName, describe, isConflicted, isOrphaned, isUnread, rangeOf, summary } from "./store.ts";
 import type { AnnotationView } from "./types.ts";
 
 type Node = { uri: string } | { uri: string; a: AnnotationView };
@@ -14,6 +14,7 @@ function icon(a: AnnotationView): vscode.ThemeIcon {
   if (a.status === "open" && isOrphaned(a)) {
     return new vscode.ThemeIcon("warning", new vscode.ThemeColor("editorWarning.foreground"));
   }
+  if (isUnread(a)) return new vscode.ThemeIcon("circle-filled", new vscode.ThemeColor("annox.unreadForeground"));
   if (a.status === "accepted") return new vscode.ThemeIcon("check");
   if (a.status === "rejected" || a.status === "withdrawn") return new vscode.ThemeIcon("close");
   if (a.status === "resolved") return new vscode.ThemeIcon("pass");
@@ -40,7 +41,7 @@ export function threadMarkdown(
   heading = describe(a),
   doc?: vscode.TextDocument,
 ): string {
-  const person = (x: AnnotationView) => `**${authorName(x)}** · ${x.created ?? ""}`;
+  const person = (x: AnnotationView) => `**${authorName(x)}** · ${x.created ?? ""}${x.unread ? " · **new**" : ""}`;
   const lines = [`# ${heading}`, ""];
   lines.push(`${person(a)} · *${a.status}*`, "");
   // A closed suggestion's text is gone or changed; `quote` is what it replaced.
@@ -83,15 +84,21 @@ export class AnnotationsView implements vscode.TreeDataProvider<Node>, vscode.Di
     if (!("a" in node)) {
       const uri = vscode.Uri.parse(node.uri);
       const item = new vscode.TreeItem(uri, vscode.TreeItemCollapsibleState.Expanded);
-      const n = this.store.annotations(node.uri).filter((a) => a.status === "open").length;
-      item.description = `${vscode.workspace.asRelativePath(path.dirname(uri.fsPath))} · ${n} open`;
+      const annotations = this.store.annotations(node.uri).filter((a) => !a.deleted);
+      const n = annotations.filter((a) => a.status === "open").length;
+      const unread = annotations.filter(isUnread).length;
+      item.description = [vscode.workspace.asRelativePath(path.dirname(uri.fsPath)), `${n} open`, unread ? `${unread} new` : ""]
+        .filter(Boolean)
+        .join(" · ");
       return item;
     }
     const { a } = node;
     const item = new vscode.TreeItem(summary(a), vscode.TreeItemCollapsibleState.None);
     const r = rangeOf(a);
     const where = r ? `line ${r.start.line + 1}` : "text gone";
-    item.description = [authorName(a), a.status === "open" ? "" : a.status, where].filter(Boolean).join(" · ");
+    item.description = [isUnread(a) ? "new" : "", authorName(a), a.status === "open" ? "" : a.status, where]
+      .filter(Boolean)
+      .join(" · ");
     item.iconPath = icon(a);
     item.tooltip = new vscode.MarkdownString(threadMarkdown(a, this.store));
     // Accepted suggestions are reverted rather than reopened, once (§4.3.4).

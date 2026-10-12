@@ -30,6 +30,12 @@ export function isOrphaned(a: AnnotationView): boolean {
   return a.resolution?.state === "orphaned" || !a.resolution?.range;
 }
 
+/** Whether thread `a` has changes by others the user hasn't read (§5.13), in
+ * its root or a reply. */
+export function isUnread(a: AnnotationView): boolean {
+  return !!a.unread || (a.replies ?? []).some((r) => r.unread && !r.deleted);
+}
+
 export function isConflicted(a: AnnotationView): boolean {
   return Object.keys(a.conflicts ?? {}).length > 0;
 }

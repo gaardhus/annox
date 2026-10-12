@@ -152,6 +152,23 @@
         "icon": "$(list-flat)"
       },
       {
+        "command": "annox.unread",
+        "title": "Show Unread Threads",
+        "category": "annox",
+        "icon": "$(comment-unresolved)"
+      },
+      {
+        "command": "annox.markRead",
+        "title": "Mark as Read",
+        "category": "annox",
+        "icon": "$(check)"
+      },
+      {
+        "command": "annox.markAllRead",
+        "title": "Mark All Threads as Read",
+        "category": "annox"
+      },
+      {
         "command": "annox.orphans",
         "title": "Fix Annotations That Could Not Be Located",
         "category": "annox"
@@ -424,6 +441,18 @@
           "when": "annox.inWorkspace"
         },
         {
+          "command": "annox.unread",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.markRead",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.markAllRead",
+          "when": "annox.inWorkspace"
+        },
+        {
           "command": "annox.orphans",
           "when": "annox.inWorkspace"
         },
@@ -507,6 +536,11 @@
           "command": "annox.history",
           "group": "inline@8",
           "when": "commentController == annox && commentThread =~ /^annox /"
+        },
+        {
+          "command": "annox.markRead",
+          "group": "inline@0",
+          "when": "commentController == annox && commentThread =~ /\\bunread\\b/"
         }
       ],
       "comments/commentThread/context": [
@@ -610,6 +644,10 @@
           "group": "3_more@1"
         },
         {
+          "command": "annox.unread",
+          "group": "3_more@4"
+        },
+        {
           "command": "annox.history",
           "group": "3_more@2"
         },
@@ -685,6 +723,11 @@
           "default": false,
           "description": "Always draw suggestions inline, as struck-through and inserted text, not only in suggestion mode."
         },
+        "annox.markReadOnOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mark a thread read when you open it from the annox view, the sidebar, a list, or Show Thread. Otherwise only Mark as Read and writing to a thread do."
+        },
         "annox.suggestionDelay": {
           "type": "number",
           "default": 750,
@@ -694,6 +737,16 @@
       }
     },
     "colors": [
+      {
+        "id": "annox.unreadForeground",
+        "description": "Marker of threads with changes you haven't read.",
+        "defaults": {
+          "dark": "editorWarning.foreground",
+          "light": "editorWarning.foreground",
+          "highContrast": "editorWarning.foreground",
+          "highContrastLight": "editorWarning.foreground"
+        }
+      },
       {
         "id": "annox.commentBackground",
         "description": "Background of text with a comment.",

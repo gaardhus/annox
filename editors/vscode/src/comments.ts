@@ -8,6 +8,7 @@ import {
   editedNote,
   isConflicted,
   isOrphaned,
+  isUnread,
   key,
   rangeOf,
 } from "./store.ts";
@@ -94,6 +95,7 @@ function flags(a: AnnotationView, reverted: boolean): string {
   if (reverted) f.push("reverted");
   if (a.local) f.push("draft");
   if (isConflicted(a)) f.push("conflicted");
+  if (isUnread(a)) f.push("unread");
   // A closed annotation is expected to lose its text, e.g. once a suggestion
   // is accepted, so only open ones count as orphaned.
   if (a.status === "open" && isOrphaned(a)) f.push("orphaned");
@@ -102,6 +104,7 @@ function flags(a: AnnotationView, reverted: boolean): string {
 
 function threadLabel(a: AnnotationView): string {
   const parts: string[] = [];
+  if (isUnread(a)) parts.push("● New");
   if (isConflicted(a)) parts.push("⚠ Conflicting changes");
   if (a.status === "open" && isOrphaned(a)) parts.push("⚠ Text not found");
   if (a.local) parts.push("Draft");
@@ -289,6 +292,7 @@ export class Threads implements vscode.Disposable {
         const tags = root
           ? [a.local ? "draft" : "", a.status !== "open" ? a.status : "", editedNote(a) ?? ""]
           : [view.local ? "draft" : "", editedNote(view) ?? ""];
+        if (view.unread) tags.unshift("new");
         if (tags.some(Boolean)) c.label = tags.filter(Boolean).join(", ");
         comments.set(view.id, c);
         return c;

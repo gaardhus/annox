@@ -15,6 +15,7 @@ import { HistoryDocs, Scratch } from "./scratch.ts";
 import { Sidebar } from "./sidebar/provider.ts";
 import { Store, fromRange } from "./store.ts";
 import { Suggesting } from "./suggesting.ts";
+import type { UnreadResult } from "./types.ts";
 import { AnnotationsView } from "./view.ts";
 
 /** What the extension exposes to tests. */
@@ -56,6 +57,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Api> {
       vscode.window.setStatusBarMessage(`annox: overlay ${shown ? "on" : "off"}`, 2000);
     }),
     ...presence(annox, store),
+    ...unreadStatus(annox, store),
     ...workspaceContext(store),
     vscode.workspace.onDidChangeConfiguration(async (e) => {
       if (!e.affectsConfiguration("annox.path") && !e.affectsConfiguration("annox.author")) return;
@@ -92,6 +94,28 @@ function presence(annox: Annox, store: Store): vscode.Disposable[] {
     vscode.window.onDidChangeActiveTextEditor(send),
     new vscode.Disposable(() => clearTimeout(timer)),
   ];
+}
+
+/** A status bar item counting the threads others changed since the user
+ * last read them (§5.13), across the workspace. It's recounted a second
+ * after annotations change, and opens the list of them when clicked. */
+function unreadStatus(annox: Annox, store: Store): vscode.Disposable[] {
+  const item = vscode.window.createStatusBarItem("annox.unread", vscode.StatusBarAlignment.Left, 50);
+  item.name = "annox: Unread";
+  item.command = "annox.unread";
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const update = () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const result = annox.client ? await annox.request<UnreadResult>("annox/unread", {}, true) : undefined;
+      const n = result?.documents.reduce((sum, d) => sum + d.annotations.length, 0) ?? 0;
+      if (n === 0) return item.hide();
+      item.text = `$(comment-unresolved) ${n}`;
+      item.tooltip = `annox: ${n} thread${n === 1 ? "" : "s"} with changes you haven't read`;
+      item.show();
+    }, 1000);
+  };
+  return [item, store.onDidChange(update), new vscode.Disposable(() => clearTimeout(timer))];
 }
 
 /** Sets `annox.inWorkspace` while the active file is in an annox workspace,

@@ -101,6 +101,7 @@ function card(c: Card, selected: boolean, replying: boolean): string {
       <span class="author">${escapeHtml(c.author)}</span>
       ${c.when ? `<span class="when">${escapeHtml(c.when)}</span>` : ""}
       ${edited(c.edited)}
+      ${c.unread ? `<span class="badge new">new</span>` : ""}
       ${badges.map((b) => `<span class="badge">${escapeHtml(b)}</span>`).join("")}
       <span class="where">${c.line ? `L${c.line}` : "text gone"}</span>
     </div>`;
@@ -113,7 +114,7 @@ function card(c: Card, selected: boolean, replying: boolean): string {
         .map(
           (r) => `
           <li>
-            <div class="meta"><span class="author">${escapeHtml(r.author)}</span><span class="when">${escapeHtml(r.when)}</span>${edited(r.edited)}</div>
+            <div class="meta"><span class="author">${escapeHtml(r.author)}</span><span class="when">${escapeHtml(r.when)}</span>${edited(r.edited)}${r.unread ? `<span class="badge new">new</span>` : ""}</div>
             <p class="body">${escapeHtml(r.body)}</p>
           </li>`,
         )
@@ -135,7 +136,7 @@ function card(c: Card, selected: boolean, replying: boolean): string {
       return `<button class="${primary}" data-action="${a}" data-id="${id}">${LABELS[a]}</button>`;
     })
     .join("");
-  const classes = ["card", c.kind, c.group, selected ? "selected" : ""].filter(Boolean).join(" ");
+  const classes = ["card", c.kind, c.group, selected ? "selected" : "", c.unread ? "unread" : ""].filter(Boolean).join(" ");
   return `
     <article class="${classes}" data-card="${id}">
       ${meta}${quote}${diff}${body}${notes}${replies}${box}

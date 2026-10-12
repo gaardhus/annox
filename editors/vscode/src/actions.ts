@@ -19,6 +19,7 @@ import {
   fromRange,
   isConflicted,
   isOrphaned,
+  isUnread,
   key,
   rangeOf,
   toRange,
@@ -32,6 +33,7 @@ import type {
   ConflictEntry,
   HistoryEvent,
   Range,
+  UnreadResult,
 } from "./types.ts";
 
 /** Options a command accepts when run with arguments. */
@@ -120,6 +122,9 @@ export class Actions {
       "annox.publishAll": (arg) => this.publish({ ...options(arg), all: true }),
       "annox.showThread": (arg) => this.showThread(arg),
       "annox.list": () => this.list(),
+      "annox.unread": () => this.unread(),
+      "annox.markRead": (arg) => this.markRead(arg),
+      "annox.markAllRead": () => this.markAllRead(),
       "annox.orphans": () => this.orphans(),
       "annox.reattach": (arg) => this.reattach(arg),
       "annox.retarget": (arg) => this.retarget(arg),
@@ -686,11 +691,19 @@ export class Actions {
     this.threads.reveal(a.id);
   }
 
+  /** Marks the thread of `a` read if it has unread changes and
+   * `annox.markReadOnOpen` is on, now that the user is looking at it. */
+  private seen(a: AnnotationView): void {
+    if (!isUnread(a) || !vscode.workspace.getConfiguration("annox").get<boolean>("markReadOnOpen", true)) return;
+    void this.annox.request("annox/markRead", { annotations: [a.id] }, true);
+  }
+
   /** Goes to an annotation and opens its thread, or, if it has no place in
    * the text, shows the thread and its history beside the editor. */
   private async open(arg: Arg): Promise<void> {
     const t = await this.target(arg, () => true, "annotation");
     if (!t) return;
+    this.seen(t.view);
     if (this.threads.threadOf(t.view.id)) {
       await this.revealAnnotation(t.uri, t.view);
       return;
@@ -704,7 +717,55 @@ export class Actions {
 
   private async showThread(arg: Arg): Promise<void> {
     const t = await this.target(arg, () => true, "annotation");
-    if (t) this.threads.reveal(t.view.id);
+    if (!t) return;
+    this.seen(t.view);
+    this.threads.reveal(t.view.id);
+  }
+
+  /** Lists the threads others changed since the user last read them (§5.13),
+   * across the workspace, open files or not, and goes to the one picked. */
+  private async unread(): Promise<void> {
+    if (!this.annox.client) await this.annox.start();
+    const result = await this.annox.request<UnreadResult>("annox/unread", {});
+    if (!result) return;
+    const items = result.documents.flatMap((d) =>
+      d.annotations.map((a) => {
+        const uri = vscode.Uri.parse(d.textDocument.uri);
+        const r = rangeOf(a);
+        const replies = (a.replies ?? []).filter((x) => x.unread && !x.deleted).length;
+        const news = [
+          a.unread ? (a.status === "open" ? "new" : a.status) : "",
+          replies ? `${replies} new repl${replies === 1 ? "y" : "ies"}` : "",
+        ].filter(Boolean);
+        const where = `${vscode.workspace.asRelativePath(uri)}${r ? `:${r.start.line + 1}` : ""}`;
+        return { label: describe(a), description: `${authorName(a)} · ${news.join(", ")}`, detail: where, uri, a };
+      }),
+    );
+    if (items.length === 0) {
+      info("nothing unread");
+      return;
+    }
+    const choice = await vscode.window.showQuickPick(items, {
+      placeHolder: "annox: unread threads",
+      matchOnDescription: true,
+      matchOnDetail: true,
+    });
+    if (!choice) return;
+    this.seen(choice.a);
+    await this.revealAnnotation(choice.uri, choice.a);
+  }
+
+  /** Marks the thread it was run from, or the unread one under the cursor,
+   * read (§5.13). */
+  private async markRead(arg: Arg): Promise<void> {
+    const t = await this.target(arg, isUnread, "unread thread");
+    if (t) await this.annox.request("annox/markRead", { annotations: [t.view.id] });
+  }
+
+  /** Marks every thread in the workspace read (§5.13). */
+  private async markAllRead(): Promise<void> {
+    if (!this.annox.client) await this.annox.start();
+    if (await this.annox.request("annox/markRead", { all: true })) info("marked everything read");
   }
 
   private async list(): Promise<void> {

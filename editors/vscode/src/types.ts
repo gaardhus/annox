@@ -48,6 +48,9 @@ export interface AnnotationView {
   resolution?: Resolution;
   applicable?: boolean;
   local?: boolean;
+  /** Whether it has changes by others the user hasn't read (§5.13). Covers
+   * only this annotation, not its replies. */
+  unread?: boolean;
   conflicts?: Record<string, ConflictEntry[]>;
   replies?: AnnotationView[];
   /** From `annox/annotationsAt`: the text it was made on. */
@@ -70,6 +73,11 @@ export interface AnnotationsResult {
 
 export interface DidChangeAnnotations extends AnnotationsResult {
   textDocument: { uri: string };
+}
+
+/** The result of `annox/unread`: unread threads across the workspace. */
+export interface UnreadResult {
+  documents: { textDocument: { uri: string }; annotations: AnnotationView[] }[];
 }
 
 export interface Peer {
