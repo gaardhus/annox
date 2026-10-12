@@ -25,8 +25,12 @@ fn setup() -> (tempfile::TempDir, Config) {
     let dir = tempfile::tempdir().unwrap();
     annox_core::storage::Workspace::init(dir.path()).unwrap();
     std::fs::write(dir.path().join("paper.md"), "We prove that teh bound is tight.\n").unwrap();
-    let config =
-        Config { root: dir.path().to_owned(), author: Some("urn:test:agent".into()), name: Some("Agent".into()) };
+    let config = Config {
+        root: dir.path().to_owned(),
+        author: Some("urn:test:agent".into()),
+        name: Some("Agent".into()),
+        channel: None,
+    };
     (dir, config)
 }
 
@@ -109,7 +113,7 @@ fn list_filters_and_show() {
     );
     let s = output(&created[0])["id"].clone();
     let c = output(&created[1])["id"].clone();
-    let other = Config { root: dir.path().to_owned(), author: Some("urn:test:user".into()), name: None };
+    let other = Config { root: dir.path().to_owned(), author: Some("urn:test:user".into()), name: None, channel: None };
     let responses = exchange(
         &other,
         &[
@@ -139,7 +143,8 @@ fn unread_uses_the_servers_identity() {
     // Someone else comments.
     let ada = Config { author: Some("mailto:ada@example.org".into()), name: None, ..config };
     exchange(&ada, &[call(1, "comment", json!({ "file": "paper.md", "quote": "teh", "body": "Typo?" }))]);
-    let config = Config { author: Some("urn:test:agent".into()), name: None, root: dir.path().to_owned() };
+    let config =
+        Config { author: Some("urn:test:agent".into()), name: None, root: dir.path().to_owned(), channel: None };
     let listed = unread(&config);
     assert_eq!(listed[0]["body"], "Typo?");
     assert_eq!(unread(&ada), json!([]));
@@ -147,4 +152,93 @@ fn unread_uses_the_servers_identity() {
     let id = listed[0]["id"].as_str().unwrap();
     output(&exchange(&config, &[call(2, "mark_read", json!({ "id": id }))])[0]);
     assert_eq!(unread(&config), json!([]));
+}
+
+/// Input that yields what is sent on a channel, and ends when it's dropped.
+struct Pipe(std::sync::mpsc::Receiver<String>, Vec<u8>);
+
+impl std::io::Read for Pipe {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.1.is_empty() {
+            match self.0.recv() {
+                Ok(line) => self.1 = line.into_bytes(),
+                Err(_) => return Ok(0),
+            }
+        }
+        let n = buf.len().min(self.1.len());
+        buf[..n].copy_from_slice(&self.1[..n]);
+        self.1.drain(..n);
+        Ok(n)
+    }
+}
+
+/// Output that can be read while the server is still writing it.
+#[derive(Clone, Default)]
+struct Shared(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for Shared {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().write(buf)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Shared {
+    fn messages(&self) -> Vec<Value> {
+        let text = String::from_utf8(self.0.lock().unwrap().clone()).unwrap();
+        text.lines().map(|l| serde_json::from_str(l).unwrap()).collect()
+    }
+}
+
+#[test]
+fn channel_pushes_threads_addressed_to_the_agent() {
+    let (dir, mut config) = setup();
+    config.channel = Some(annox_lsp::cli::Watch {
+        reader: config.author.clone(),
+        mention: vec!["@agent".into()],
+        settle: 0,
+        ..Default::default()
+    });
+    let (tx, rx) = std::sync::mpsc::channel();
+    let output = Shared::default();
+    let server = {
+        let (output, config) = (output.clone(), Config { channel: config.channel.clone(), ..config });
+        std::thread::spawn(move || serve(std::io::BufReader::new(Pipe(rx, Vec::new())), output, &config).unwrap())
+    };
+    let init =
+        json!({ "jsonrpc": "2.0", "id": 0, "method": "initialize", "params": { "protocolVersion": "2025-06-18" } });
+    tx.send(format!("{init}\n")).unwrap();
+    tx.send(format!("{}\n", json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }))).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(700));
+
+    let comment = |body: &str| {
+        let args = ["comment", "paper.md", "--quote", "teh", "--body", body, "--author", "urn:test:user"];
+        annox_lsp::cli::run(&args.map(str::to_owned), dir.path()).unwrap()
+    };
+    comment("Not for the agent.");
+    let asked = comment("@Agent, is this a typo?");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let events = loop {
+        let events: Vec<Value> =
+            output.messages().into_iter().filter(|m| m["method"] == "notifications/claude/channel").collect();
+        if !events.is_empty() || std::time::Instant::now() > deadline {
+            break events;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+    drop(tx);
+    server.join().unwrap();
+
+    let messages = output.messages();
+    assert_eq!(messages[0]["result"]["capabilities"]["experimental"]["claude/channel"], json!({}));
+    assert!(messages[0]["result"]["instructions"].as_str().unwrap().contains("<channel source=\"annox\""));
+    assert_eq!(events.len(), 1, "{events:?}");
+    let params = &events[0]["params"];
+    assert_eq!(params["meta"]["annotation_id"], asked["id"]);
+    assert_eq!(params["meta"]["path"], "paper.md");
+    assert_eq!(params["meta"]["line"], "1");
+    let thread: Value = serde_json::from_str(params["content"].as_str().unwrap()).unwrap();
+    assert_eq!(thread["body"], "@Agent, is this a typo?");
 }

@@ -3,6 +3,8 @@
 
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 
 use serde_json::{json, Value};
 
@@ -16,12 +18,21 @@ Read review comments with `list_annotations`, and answer with `reply`, `suggest`
 To pick up what others changed since your last session, list with `unread`, and `mark_read` each thread you dealt with. \
 Bodies are Markdown: write ≈ or \"about\" rather than `~`, since two single tildes strike through the text between them.";
 
+const CHANNEL_INSTRUCTIONS: &str = " \
+Threads that others changed and that are addressed to you arrive as <channel source=\"annox\" annotation_id=\"…\" path=\"…\">, \
+with the thread as list_annotations prints it. They're from the people reviewing the files: act on each one as they ask. \
+Answer with `reply`; propose changes to their prose with `suggest`, not by editing the file; then `mark_read` the thread. \
+If a thread needs nothing from you, just `mark_read` it.";
+
 pub struct Config {
     /// Directory commands run in: file paths are relative to it.
     pub root: PathBuf,
     /// Author id and name for write commands, when set.
     pub author: Option<String>,
     pub name: Option<String>,
+    /// When set, push the threads this watch reports to the client as
+    /// Claude Code channel events (`notifications/claude/channel`).
+    pub channel: Option<crate::cli::Watch>,
 }
 
 /// A tool: its name, the CLI command it runs, description, and parameters as
@@ -334,11 +345,17 @@ fn handle(method: &str, params: &Value, config: &Config) -> Result<Value, (i64, 
         "initialize" => {
             let requested = params["protocolVersion"].as_str().unwrap_or_default();
             let version = VERSIONS.iter().find(|v| **v == requested).unwrap_or(&VERSIONS[0]);
+            let mut capabilities = json!({ "tools": {} });
+            let mut instructions = INSTRUCTIONS.to_owned();
+            if config.channel.is_some() {
+                capabilities["experimental"] = json!({ "claude/channel": {} });
+                instructions.push_str(CHANNEL_INSTRUCTIONS);
+            }
             Ok(json!({
                 "protocolVersion": version,
-                "capabilities": { "tools": {} },
+                "capabilities": capabilities,
                 "serverInfo": { "name": "annox", "version": env!("CARGO_PKG_VERSION") },
-                "instructions": INSTRUCTIONS,
+                "instructions": instructions,
             }))
         }
         "ping" => Ok(json!({})),
@@ -348,8 +365,61 @@ fn handle(method: &str, params: &Value, config: &Config) -> Result<Value, (i64, 
     }
 }
 
+/// The channel event for a thread a watch reported.
+fn channel_event(thread: &Value) -> Value {
+    let meta: serde_json::Map<String, Value> = [("annotation_id", "id"), ("path", "path"), ("kind", "kind")]
+        .into_iter()
+        .filter_map(|(key, field)| Some((key.to_owned(), json!(thread[field].as_str()?))))
+        .chain(thread["line"].as_u64().map(|l| ("line".to_owned(), json!(l.to_string()))))
+        .collect();
+    json!({
+        "jsonrpc": "2.0",
+        "method": "notifications/claude/channel",
+        "params": { "content": serde_json::to_string_pretty(thread).unwrap_or_default(), "meta": meta },
+    })
+}
+
+fn send(output: &Mutex<impl Write>, message: &Value) -> std::io::Result<()> {
+    let mut output = output.lock().unwrap_or_else(|e| e.into_inner());
+    writeln!(output, "{message}")?;
+    output.flush()
+}
+
 /// Serves newline-delimited JSON-RPC messages from `input` until it closes.
-pub fn serve(input: impl BufRead, mut output: impl Write, config: &Config) -> std::io::Result<()> {
+/// With a channel, it also watches the workspace once the client has
+/// initialized, and pushes the threads the watch reports.
+pub fn serve(input: impl BufRead, output: impl Write + Send, config: &Config) -> std::io::Result<()> {
+    let output = Mutex::new(output);
+    let initialized = AtomicBool::new(false);
+    let done = AtomicBool::new(false);
+    std::thread::scope(|scope| {
+        if let Some(watch) = &config.channel {
+            let (output, initialized, done) = (&output, &initialized, &done);
+            scope.spawn(move || {
+                while !initialized.load(Ordering::Relaxed) {
+                    if done.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                let emit = |thread: Value| send(output, &channel_event(&thread)).map_err(anyhow::Error::from);
+                if let Err(e) = crate::cli::watch(watch.clone(), &config.root, done, emit) {
+                    eprintln!("annox mcp: channel stopped: {e:#}");
+                }
+            });
+        }
+        let result = respond(input, &output, &initialized, config);
+        done.store(true, Ordering::Relaxed);
+        result
+    })
+}
+
+fn respond(
+    input: impl BufRead,
+    output: &Mutex<impl Write>,
+    initialized: &AtomicBool,
+    config: &Config,
+) -> std::io::Result<()> {
     for line in input.lines() {
         let line = line?;
         if line.trim().is_empty() {
@@ -358,7 +428,12 @@ pub fn serve(input: impl BufRead, mut output: impl Write, config: &Config) -> st
         let response = match serde_json::from_str::<Value>(&line) {
             Err(e) => json!({ "jsonrpc": "2.0", "id": null, "error": { "code": -32700, "message": e.to_string() } }),
             // Notifications get no response.
-            Ok(msg) if msg.get("id").is_none() => continue,
+            Ok(msg) if msg.get("id").is_none() => {
+                if msg["method"] == "notifications/initialized" {
+                    initialized.store(true, Ordering::Relaxed);
+                }
+                continue;
+            }
             // Responses to requests we never send.
             Ok(msg) if msg.get("method").is_none() => continue,
             Ok(msg) => {
@@ -372,8 +447,7 @@ pub fn serve(input: impl BufRead, mut output: impl Write, config: &Config) -> st
                 }
             }
         };
-        writeln!(output, "{response}")?;
-        output.flush()?;
+        send(output, &response)?;
     }
     Ok(())
 }

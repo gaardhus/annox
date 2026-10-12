@@ -141,6 +141,25 @@ claude mcp add annox -- annox mcp --author urn:agent:claude --name Claude
 
 It works on the directory it's started in, or the one given with `--root`.
 
+#### Live: let the agent pick up threads as you write them
+
+`annox watch` prints, one JSON line each, the threads others changed for you, as they change: already unread ones first, then each new comment or reply once it has been unchanged for `--settle` milliseconds (default 2000). With `--mention @claude`, only threads that mention `@claude` or that the agent wrote in. Your own changes and threads you've marked read don't count, so an agent watching as itself never wakes itself up.
+
+```sh
+ANNOX_AUTHOR=urn:agent:claude annox watch --mention @claude
+```
+
+Anything that can read lines can drive an agent with it. In Claude Code, ask the agent to run that command with its Monitor tool and handle each thread as it arrives.
+
+`annox mcp --channel` does the same through a [Claude Code channel](https://code.claude.com/docs/en/channels-reference): it pushes the threads into the running session, which handles them without being prompted. Channels are a research preview, so a custom one has to be loaded explicitly:
+
+```sh
+claude mcp add annox -- annox mcp --author urn:agent:claude --name Claude --channel --mention @claude
+claude --dangerously-load-development-channels server:annox
+```
+
+Then comment `@claude …` in your editor and save. The agent reads files on disk, so it can't quote text you haven't saved yet. Its replies and suggestions appear in your editor as it writes them. Whoever can add annotations to the workspace can address the agent this way, collaborators through git or a sync hub included, so only use it in workspaces whose collaborators you trust with your session.
+
 ## Live sync
 
 To share annotations live instead of only through git, run a hub and point the workspace at it:

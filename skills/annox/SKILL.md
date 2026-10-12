@@ -87,6 +87,18 @@ annox delete ID / annox restore ID
 - **Don't change other people's annotations.** Don't edit, withdraw, or delete them. Reply instead.
 - **Suggestions you make go stale if you then edit the same text yourself.** Finish your direct edits first, or check `annox list --mine --broken` afterwards and retarget what it lists.
 
+## Watching for threads
+
+If the user asks you to keep an eye on the document, or to answer what they write as they write it, follow the threads addressed to you with `annox watch`, using your identity (see above):
+
+```sh
+annox watch --mention @claude    # one JSON line per thread, as `annox list` prints it
+```
+
+Run it with a tool that reports each line as it arrives, such as a monitor or background task, not one that waits for the command to end, since it never does. If you're connected to the `annox` MCP server as a channel, threads arrive as `<channel source="annox">` events instead, and you don't need to run it.
+
+For each thread: read what's new (entries with `unread: true`), do what it asks as described below (`reply`, or `suggest` and then `reply`), and `annox read ID` it, even if it needs nothing from you. A thread comes back when someone else changes it again. If a quote isn't found, the user may not have saved yet: reply asking them to save, rather than guessing.
+
 ## Setup
 
 If a command says the file isn't in an annox workspace, ask the user before running `annox init` at the project root. It creates `.annox/`, which is meant to be committed; `annox init --local` keeps it out of git instead.

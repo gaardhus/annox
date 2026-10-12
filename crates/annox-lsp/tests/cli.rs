@@ -556,3 +556,47 @@ fn unread_is_kept_per_reader() {
     assert_eq!(unread("urn:test:agent"), serde_json::json!([]));
     assert!(error(dir.path(), &["read", "nope"]).contains("unknown annotation"));
 }
+
+#[test]
+fn watch_reports_threads_addressed_to_the_reader() {
+    use std::time::{Duration, Instant};
+    let dir = setup(DOC);
+    let as_user = |args: &[&str]| {
+        let mut args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+        args.extend(["--author".into(), "urn:test:user".into()]);
+        cli::run(&args, dir.path()).unwrap()
+    };
+    // Already there when the agent starts watching.
+    as_user(&["comment", "paper.md", "--quote", "Section 3", "--body", "@agent before"]);
+    let options = cli::Watch {
+        reader: Some("urn:test:agent".into()),
+        mention: vec!["@Agent".into()],
+        settle: 1000,
+        ..cli::Watch::default()
+    };
+    let mut watcher = cli::Watcher::new(options, dir.path()).unwrap();
+    let start = Instant::now();
+    let ids = |views: Vec<Value>| views.iter().map(id).collect::<Vec<_>>();
+    assert_eq!(ids(watcher.poll(start).unwrap()), Vec::<String>::new(), "a new reader starts with nothing unread");
+
+    let asked = id(&as_user(&["comment", "paper.md", "--quote", "teh bound", "--body", "@agent typo?"]));
+    as_user(&["comment", "paper.md", "--quote", "Section 3", "--occurrence", "1", "--body", "not for the agent"]);
+    assert_eq!(ids(watcher.poll(start).unwrap()), Vec::<String>::new(), "it waits for the thread to settle");
+    let later = start + Duration::from_millis(1100);
+    assert_eq!(ids(watcher.poll(later).unwrap()), vec![asked.clone()]);
+    assert_eq!(ids(watcher.poll(later).unwrap()), Vec::<String>::new(), "reported once");
+
+    // The agent answers: its own writes don't make the thread unread.
+    annox(dir.path(), &["reply", &asked, "--body", "Fixed in a suggestion."]);
+    assert_eq!(ids(watcher.poll(later).unwrap()), Vec::<String>::new());
+    // A reply on a thread the agent wrote in is addressed to it, mention or not.
+    as_user(&["reply", &asked, "--body", "Thanks!"]);
+    watcher.poll(later).unwrap();
+    let much_later = later + Duration::from_millis(1100);
+    let reported = watcher.poll(much_later).unwrap();
+    assert_eq!(ids(reported.clone()), vec![asked.clone()]);
+    assert_eq!(reported[0]["replies"][1]["unread"], true);
+
+    annox(dir.path(), &["read", &asked]);
+    assert_eq!(ids(watcher.poll(much_later).unwrap()), Vec::<String>::new());
+}

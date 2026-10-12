@@ -47,7 +47,22 @@ enum Command {
         /// Display name for the agent's annotations
         #[arg(long, value_name = "NAME")]
         name: Option<String>,
+        /// Also act as a Claude Code channel: push threads others changed for the agent into the session
+        #[arg(long)]
+        channel: bool,
+        /// With --channel, only threads containing TEXT, such as "@claude", or that the agent wrote in
+        /// (repeatable)
+        #[arg(long, value_name = "TEXT", requires = "channel")]
+        mention: Vec<String>,
+        /// With --channel, how long a thread must stay unchanged before it's pushed, in milliseconds
+        #[arg(long, value_name = "MS", default_value_t = 2000, requires = "channel")]
+        settle: u64,
     },
+    /// Print threads others changed for you as they change, one JSON line each, until stopped
+    ///
+    /// Each line is a thread as `annox list` prints it. Threads already unread are printed at the
+    /// start. A thread is printed again when someone else changes it; `annox read` stops that.
+    Watch(annox_lsp::cli::Watch),
     /// Install the latest release over this binary, and the agent skill wherever it's installed
     ///
     /// Runs the release's install.sh, so it needs curl and sh; on Windows, its install.ps1, with
@@ -76,10 +91,26 @@ fn main() -> anyhow::Result<()> {
             serve(listener, HubConfig { data, token })?;
             Ok(())
         }
-        Command::Mcp { root, author, name } => {
+        Command::Mcp { root, author, name, channel, mention, settle } => {
             let root = root.map_or_else(std::env::current_dir, Ok)?;
-            let config = annox_lsp::mcp::Config { root, author, name };
-            annox_lsp::mcp::serve(std::io::stdin().lock(), std::io::stdout().lock(), &config)?;
+            let channel =
+                channel.then(|| annox_lsp::cli::Watch { file: None, reader: author.clone(), mention, settle });
+            let config = annox_lsp::mcp::Config { root, author, name, channel };
+            annox_lsp::mcp::serve(std::io::stdin().lock(), std::io::stdout(), &config)?;
+            Ok(())
+        }
+        Command::Watch(options) => {
+            let stop = std::sync::atomic::AtomicBool::new(false);
+            let print = |thread: serde_json::Value| {
+                use std::io::Write;
+                let mut out = std::io::stdout().lock();
+                writeln!(out, "{thread}")?;
+                Ok(out.flush()?)
+            };
+            if let Err(e) = annox_lsp::cli::watch(options, &std::env::current_dir()?, &stop, print) {
+                eprintln!("annox: {e:#}");
+                std::process::exit(1);
+            }
             Ok(())
         }
         Command::Annotations(command) => {

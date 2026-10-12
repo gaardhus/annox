@@ -1122,7 +1122,7 @@ impl Server<'_> {
 
 /// Names, sizes, and modification times of the event files under `root`, and
 /// of its read state (§5.13).
-fn fingerprint(root: &Path) -> Vec<(String, u64, std::time::SystemTime)> {
+pub(crate) fn fingerprint(root: &Path) -> Vec<(String, u64, std::time::SystemTime)> {
     let mut out = Vec::new();
     let read_file = root.join(read::READ_FILE);
     if let Ok(meta) = std::fs::metadata(&read_file) {
