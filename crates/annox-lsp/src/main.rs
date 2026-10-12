@@ -88,11 +88,46 @@ enum Command {
     },
 }
 
-fn main() -> anyhow::Result<()> {
+/// The subcommands under each heading of `annox --help`, in order.
+const GROUPS: &[(&str, &[&str])] = &[
+    ("Read", &["list", "show", "report", "history", "log", "watch"]),
+    ("Annotate", &["comment", "highlight", "suggest", "reply", "edit"]),
+    ("Review", &["status", "accept", "revert", "retarget", "reattach", "delete", "restore", "read"]),
+    ("Workspace", &["init", "commit"]),
+    ("Servers", &["lsp", "hub", "mcp"]),
+    ("Other", &["update"]),
+];
+
+/// `annox`'s command, with its subcommands listed under the headings of [`GROUPS`]: clap can't
+/// group subcommands itself.
+fn cli() -> clap::Command {
     use clap::CommandFactory;
-    let Some(command) = Cli::parse().command else {
+    let cmd = Cli::command();
+    let styles = annox_lsp::style::HELP;
+    let (header, literal) = (styles.get_header(), styles.get_literal());
+    let width = GROUPS.iter().flat_map(|(_, names)| names.iter().map(|n| n.len())).max().unwrap_or(0);
+    let mut groups = String::new();
+    for (heading, names) in GROUPS {
+        groups.push_str(&format!("{header}{heading}:{header:#}\n"));
+        for name in *names {
+            let about = cmd.find_subcommand(name).and_then(|c| c.get_about()).map(|a| a.to_string());
+            groups.push_str(&format!("  {literal}{name:width$}{literal:#}  {}\n", about.unwrap_or_default()));
+        }
+        groups.push('\n');
+    }
+    cmd.help_template(format!(
+        "{{before-help}}{{about-with-newline}}\n{{usage-heading}} {{usage}}\n\n{groups}\
+         {header}Options:{header:#}\n{{options}}{{after-help}}"
+    ))
+}
+
+fn main() -> anyhow::Result<()> {
+    use clap::FromArgMatches;
+    let mut cmd = cli();
+    let args = Cli::from_arg_matches(&cmd.get_matches_mut()).unwrap_or_else(|e| e.exit());
+    let Some(command) = args.command else {
         // Like clap's `arg_required_else_help`, but with the title the long help has.
-        anstream::eprint!("{}", Cli::command().render_long_help().ansi());
+        anstream::eprint!("{}", cmd.render_long_help().ansi());
         std::process::exit(2);
     };
     match command {
@@ -178,7 +213,7 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Update { version } => update(version),
         Command::Man { dir } => {
-            let cmd = Cli::command();
+            let cmd = cli();
             match dir {
                 Some(dir) => {
                     std::fs::create_dir_all(&dir)?;
@@ -324,7 +359,23 @@ fn curl(args: &[&str]) -> anyhow::Result<Vec<u8>> {
 mod tests {
     #[test]
     fn cli_is_well_formed() {
-        use clap::CommandFactory;
-        super::Cli::command().debug_assert();
+        super::cli().debug_assert();
+    }
+
+    #[test]
+    fn help_groups_every_subcommand() {
+        let grouped: Vec<&str> = super::GROUPS.iter().flat_map(|(_, names)| names.iter().copied()).collect();
+        let cmd = super::cli();
+        let shown: Vec<&str> = cmd.get_subcommands().filter(|c| !c.is_hide_set()).map(|c| c.get_name()).collect();
+        let mut sorted = grouped.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), grouped.len(), "a subcommand is in two groups");
+        for name in &shown {
+            assert!(grouped.contains(name), "`annox {name}` is in no group of `annox --help`");
+        }
+        for name in &grouped {
+            assert!(shown.contains(name), "`{name}` in GROUPS isn't a subcommand");
+        }
     }
 }
