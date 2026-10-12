@@ -232,7 +232,7 @@ body {
 .file .k { margin-left: auto; font: 600 11px var(--sans); letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
 .file svg { width: 14px; height: 14px; flex: none; fill: var(--muted); }
 .json {
-  position: absolute; left: 828px; top: 404px; width: 392px;
+  position: absolute; left: 828px; top: 452px; width: 392px;
   background: var(--inset); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
   font: 13px/1.6 var(--mono); white-space: pre; color: var(--ink); overflow: hidden;
 }
@@ -310,9 +310,9 @@ body {
       <div class="layer" id="s-review">
         <div class="cap" id="c1"><div class="eyebrow"><b>1</b>Annotate</div><h2>Comment on any span of text.</h2><p>Sam reviews a proposal in their editor and asks Claude for a date.</p></div>
         <div class="cap" id="c2"><div class="eyebrow"><b>2</b>Suggest</div><h2>Agents suggest edits, like people do.</h2><p>Claude proposes a replacement. Nothing changes until someone accepts it.</p></div>
-        <div class="cap" id="c3"><div class="eyebrow"><b>3</b>Store</div><h2>Every action writes one event file.</h2><p>Plain JSON in <code style="font-family:var(--mono);font-size:.9em">.annox/</code>, next to the document. Nothing is written into the text itself.</p></div>
-        <div class="cap" id="c4"><div class="eyebrow"><b>4</b>Anchor</div><h2>Annotations follow the text as it changes.</h2><p>Each one remembers its quote and context, so edits elsewhere don't knock it loose.</p></div>
-        <div class="cap" id="c5"><div class="eyebrow"><b>5</b>Decide</div><h2>Accept, and the edit is applied.</h2><p>Then reply and resolve the thread. The history stays in the event log.</p></div>
+        <div class="cap" id="c3"><div class="eyebrow"><b>3</b>Anchor</div><h2>Annotations follow the text as it changes.</h2><p>Each one remembers its quote and context, so edits elsewhere don't knock it loose.</p></div>
+        <div class="cap" id="c4"><div class="eyebrow"><b>4</b>Decide</div><h2>Accept, and the edit is applied.</h2><p>Then reply and resolve the thread. The history stays in the event log.</p></div>
+        <div class="cap" id="c5"><div class="eyebrow"><b>5</b>Store</div><h2>Every action writes one event file.</h2><p>Plain JSON in <code style="font-family:var(--mono);font-size:.9em">.annox/</code>, next to the document, not inside it.</p></div>
 
         <div class="editor" id="editor">
           <div class="ed-bar"><i></i><i></i><i></i><span>proposal.md</span></div>
@@ -362,6 +362,9 @@ body {
           <div class="tree-h">.annox/docs/proposal.md~01a116e1…/</div>
           <div class="file" id="f1"><svg viewBox="0 0 16 16"><path d="M3 1h6l4 4v10H3z"/></svg>01a116e1-b897….json<span class="k">comment</span></div>
           <div class="file" id="f2"><svg viewBox="0 0 16 16"><path d="M3 1h6l4 4v10H3z"/></svg>01a116e1-d211….json<span class="k">suggestion</span></div>
+          <div class="file" id="f3"><svg viewBox="0 0 16 16"><path d="M3 1h6l4 4v10H3z"/></svg>01a116e2-0a4c….json<span class="k">accepted</span></div>
+          <div class="file" id="f4"><svg viewBox="0 0 16 16"><path d="M3 1h6l4 4v10H3z"/></svg>01a116e2-1f90….json<span class="k">reply</span></div>
+          <div class="file" id="f5"><svg viewBox="0 0 16 16"><path d="M3 1h6l4 4v10H3z"/></svg>01a116e2-3b17….json<span class="k">resolved</span></div>
         </div>
         <div class="json" id="json">{
   <span class="k2">"type"</span>: <span class="s">"create"</span>,
@@ -489,39 +492,37 @@ body {
   tw("ins", [{ maxWidth: "0px", marginLeft: "0px" }, { maxWidth: "200px", marginLeft: "8px" }], 10.6, 1.2, "steps(18, end)");
   tw("gut2", [{ opacity: 0 }, { opacity: 1 }], 10.2, 0.3);
 
-  // 3 · Event files (14.5 – 19.5): cards step aside, the store appears
-  hide("card-sam", 14.5); hide("card-cl", 14.5); hide("tie1", 14.5);
-  show("tree", 14.9, 0.5);
-  show("f1", 15.3, 0.35, 8); show("f2", 15.7, 0.35, 8);
-  show("json", 16.3, 0.6);
-  hide("tree", 19.1); hide("json", 19.1);
-
-  // 4 · Anchors follow (19.5 – 24.5): a line is typed above; the annotated lines move down with their cards
-  show("card-sam", 19.5, 0.4, 0); show("card-cl", 19.5, 0.4, 0); show("tie1", 19.5, 0.4, 0);
-  tw("ln-new", [{ opacity: 0 }, { opacity: 1 }], 20.4, 0.2);
-  tw("mv", [{ transform: "none" }, { transform: "translateY(32px)" }], 20.3, 0.5, "inOut");
-  tw("tie1", [{ transform: "none" }, { transform: "translateY(32px)" }], 20.3, 0.5, "inOut");
-  tw("card-sam", [{ top: "214px" }, { top: "246px" }], 20.3, 0.5, "inOut");
-  tw("card-cl", [{ top: "440px" }, { top: "472px" }], 20.3, 0.5, "inOut");
-  tw("typed", [{ maxWidth: "0px" }, { maxWidth: "470px" }], 20.7, 2.2, "steps(46, end)");
-  tw("caret2", [{ opacity: 1 }, { opacity: 0 }], 23.2, 0.2);
+  // 3 · Anchors follow (14.5 – 19.5): a line is typed above; the annotated lines move down with their cards
+  tw("ln-new", [{ opacity: 0 }, { opacity: 1 }], 15.4, 0.2);
+  tw("mv", [{ transform: "none" }, { transform: "translateY(32px)" }], 15.3, 0.5, "inOut");
+  tw("tie1", [{ transform: "none" }, { transform: "translateY(32px)" }], 15.3, 0.5, "inOut");
+  tw("card-sam", [{ top: "214px" }, { top: "246px" }], 15.3, 0.5, "inOut");
+  tw("card-cl", [{ top: "440px" }, { top: "472px" }], 15.3, 0.5, "inOut");
+  tw("typed", [{ maxWidth: "0px" }, { maxWidth: "470px" }], 15.7, 2.2, "steps(46, end)");
+  tw("caret2", [{ opacity: 1 }, { opacity: 0 }], 18.2, 0.2);
   document.querySelectorAll("#mv .no").forEach((n) => {
     const v = +n.dataset.n; // renumber once the line is inserted
-    hooks.push((t) => { n.textContent = t >= 20.55 ? v + 1 : v; });
+    hooks.push((t) => { n.textContent = t >= 15.55 ? v + 1 : v; });
   });
-  tw("hl", [{ boxShadow: "0 0 0 0 rgba(250,204,21,0)" }, { boxShadow: "0 0 0 6px rgba(250,204,21,.35)", offset: 0.5 }, { boxShadow: "0 0 0 0 rgba(250,204,21,0)" }], 21.0, 1.0);
+  tw("hl", [{ boxShadow: "0 0 0 0 rgba(250,204,21,0)" }, { boxShadow: "0 0 0 6px rgba(250,204,21,.35)", offset: 0.5 }, { boxShadow: "0 0 0 0 rgba(250,204,21,0)" }], 16.0, 1.0);
 
-  // 5 · Decide (24.5 – 30)
-  tw("btn-acc", [{ transform: "none" }, { transform: "scale(.9)", offset: 0.4 }, { transform: "none" }], 25.4, 0.4);
-  tw("del", [{ maxWidth: "240px" }, { maxWidth: "0px" }], 25.9, 0.5, "inOut");
-  tw("ins", [{ color: "var(--accent)", backgroundColor: "var(--accent-soft)", marginLeft: "8px" }, { color: "var(--ink)", backgroundColor: "rgba(0,0,0,0)", marginLeft: "0px" }], 26.3, 0.5);
-  tw("gut2", [{ opacity: 1 }, { opacity: 0 }], 26.3, 0.4);
-  tw("st-acc", [{ opacity: 0, transform: "scale(1.6) rotate(-8deg)" }, { opacity: 1, transform: "rotate(-4deg)" }], 26.0, 0.35, "pop");
-  tw("reply", [{ maxHeight: "0px", opacity: 0, paddingTop: "0px", borderTopWidth: "0px" }, { maxHeight: "120px", opacity: 1, paddingTop: "10px", borderTopWidth: "1px" }], 27.0, 0.6);
-  tw("st-res", [{ opacity: 0, transform: "scale(1.6) rotate(-8deg)" }, { opacity: 1, transform: "rotate(-4deg)" }], 28.2, 0.35, "pop");
-  tw("hl", [{ backgroundSize: "100% 100%" }, { backgroundSize: "100% 0%" }], 28.4, 0.6);
-  tw("gut", [{ opacity: 1 }, { opacity: 0 }], 28.4, 0.4);
-  hide("tie1", 28.4);
+  // 4 · Decide (19.5 – 24.5)
+  tw("btn-acc", [{ transform: "none" }, { transform: "scale(.9)", offset: 0.4 }, { transform: "none" }], 20.4, 0.4);
+  tw("del", [{ maxWidth: "240px" }, { maxWidth: "0px" }], 20.9, 0.5, "inOut");
+  tw("ins", [{ color: "var(--accent)", backgroundColor: "var(--accent-soft)", marginLeft: "8px" }, { color: "var(--ink)", backgroundColor: "rgba(0,0,0,0)", marginLeft: "0px" }], 21.3, 0.5);
+  tw("gut2", [{ opacity: 1 }, { opacity: 0 }], 21.3, 0.4);
+  tw("st-acc", [{ opacity: 0, transform: "scale(1.6) rotate(-8deg)" }, { opacity: 1, transform: "rotate(-4deg)" }], 21.0, 0.35, "pop");
+  tw("reply", [{ maxHeight: "0px", opacity: 0, paddingTop: "0px", borderTopWidth: "0px" }, { maxHeight: "120px", opacity: 1, paddingTop: "10px", borderTopWidth: "1px" }], 22.0, 0.6);
+  tw("st-res", [{ opacity: 0, transform: "scale(1.6) rotate(-8deg)" }, { opacity: 1, transform: "rotate(-4deg)" }], 23.2, 0.35, "pop");
+  tw("hl", [{ backgroundSize: "100% 100%" }, { backgroundSize: "100% 0%" }], 23.4, 0.6);
+  tw("gut", [{ opacity: 1 }, { opacity: 0 }], 23.4, 0.4);
+  hide("tie1", 23.4);
+
+  // 5 · Event files (24.5 – 30): the cards step aside, and the store shows one file per action
+  hide("card-sam", 24.5); hide("card-cl", 24.5);
+  show("tree", 24.9, 0.5);
+  ["f1", "f2", "f3", "f4", "f5"].forEach((id, i) => show(id, 25.3 + i * 0.3, 0.35, 8));
+  show("json", 27.0, 0.6);
 
   // 6 · Share (30 – 35.5)
   layer("s-share", 29.9, 35.4);
@@ -549,8 +550,8 @@ body {
   // [name, from, at]: the pill lights up at `from`, halfway through the crossfade into the
   // scene, and clicking it jumps to `at`, once the scene's caption has faded in.
   const chapters = [
-    ["Intro", 0, 0], ["Annotate", 4.3, 5.0], ["Suggest", 9.7, 9.9], ["Store", 14.7, 14.95],
-    ["Anchor", 19.7, 20.0], ["Decide", 24.8, 25.1], ["Share", 30.0, 30.4], ["Install", 35.65, 36.0],
+    ["Intro", 0, 0], ["Annotate", 4.3, 5.0], ["Suggest", 9.7, 9.9], ["Anchor", 14.7, 15.0],
+    ["Decide", 19.8, 20.1], ["Store", 24.7, 24.95], ["Share", 30.0, 30.4], ["Install", 35.65, 36.0],
   ];
   const chapEl = $("chapters");
   const chapBtns = chapters.map(([n, , t]) => {
