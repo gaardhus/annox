@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.3](https://github.com/gaardhus/annox/compare/v0.15.2...v0.15.3) - 2026-10-12
+
+### Documentation
+
+- *(intro)* Have Sam ask @claude, so Claude's suggestion answers it
+- *(intro)* Move Store after Decide, so the review plays uninterrupted
+- *(intro)* Fold away the suggestion buttons, and show agents reading
+- *(intro)* Draw the Share wires as their nodes appear
+- *(intro)* Line up the hub and agents nodes in Share, a bit higher
+
 ## [0.15.2](https://github.com/gaardhus/annox/compare/v0.15.1...v0.15.2) - 2026-10-12
 
 ### Added
