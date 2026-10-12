@@ -4,18 +4,21 @@ A thin Neovim client for the annox language server. The server does all the anno
 
 ![Replying to a comment, commenting on a selection, accepting a suggestion, and suggesting edits in suggestion mode](../../assets/nvim-demo.gif)
 
-Requires Neovim 0.11+ and the `annox` binary (`cargo build --release` at the repository root).
+Requires Neovim 0.11+ and the `annox` binary on your `PATH` (see [the install script](../../README.md#reference-implementation)).
 
 ## Setup
 
-With [lazy.nvim](https://github.com/folke/lazy.nvim), pointing at this directory:
+With [lazy.nvim](https://github.com/folke/lazy.nvim). The plugin lives in `editors/nvim` of the annox repository, so `config` adds that directory to the runtimepath:
 
 ```lua
 {
-  dir = "/path/to/annox/editors/nvim",
-  config = function()
+  "gaardhus/annox",
+  -- tag = "v0.14.0",  -- pin the plugin to the release of your binary
+  lazy = false,
+  config = function(plugin)
+    vim.opt.rtp:append(plugin.dir .. "/editors/nvim")
     require("annox").setup({
-      cmd = { "/path/to/annox/target/release/annox", "lsp" },
+      -- cmd = { "/path/to/annox/target/release/annox", "lsp" },  -- defaults to `annox lsp` from PATH
       -- author = { id = "mailto:you@example.org", name = "You" },  -- defaults to ~/.config/annox/config.json, then git
       -- presence = false,  -- stop sharing your cursor with collaborators on a sync hub
       -- inline_suggestions = true,  -- always draw suggestions inline, not only in suggestion mode
@@ -28,6 +31,8 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim), pointing at this directory
   end,
 }
 ```
+
+To work on the plugin, use `dir = "/path/to/annox/editors/nvim"` in place of `"gaardhus/annox"` and drop the `rtp` line.
 
 The server attaches to files inside a directory that contains `.annox/`. To start annotating a project, run `:Annox init`. It creates the workspace at the git root, or the working directory if there's no git repository, after asking you to confirm.
 
@@ -84,10 +89,11 @@ With lazy.nvim, as in LazyVim, you can put the keymaps in the plugin spec instea
 ```lua
 return {
   {
-    dir = "/path/to/annox/editors/nvim",
+    "gaardhus/annox",
     lazy = false,
-    opts = { cmd = { "/path/to/annox/target/release/annox", "lsp" } },
-    config = function(_, opts)
+    opts = {},
+    config = function(plugin, opts)
+      vim.opt.rtp:append(plugin.dir .. "/editors/nvim")
       require("annox").setup(opts)
     end,
     keys = {
