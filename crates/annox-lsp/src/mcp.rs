@@ -14,11 +14,14 @@ const VERSIONS: [&str; 3] = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const INSTRUCTIONS: &str = "Annotations (comments and suggested edits) on files in an annox workspace. \
 Target text by quoting it exactly; if a quote occurs more than once, quote more of it or pass `occurrence`. \
 To propose changes to someone's prose, prefer `suggest` over editing the file, so they can review each change. \
+Make one suggestion per change, quoting only the words that change, so they can accept some and reject others; \
+suggest a whole sentence or paragraph only when rewriting most of it. \
 Read review comments with `list_annotations`, and answer with `reply`, `suggest`, and `set_status`. \
 To pick up what others changed since your last session, list with `unread`, and `mark_read` each thread you dealt with. \
 Bodies are Markdown: write ≈ or \"about\" rather than `~`, since two single tildes strike through the text between them.";
 
 const CHANNEL_INSTRUCTIONS: &str = " \
+If an `annox` skill is available, load it before handling the first thread. \
 Threads that others changed and that are addressed to you arrive as <channel source=\"annox\" annotation_id=\"…\" path=\"…\">, \
 with the thread as list_annotations prints it. They're from the people reviewing the files: act on each one as they ask. \
 Answer with `reply`; propose changes to their prose with `suggest`, not by editing the file; then `mark_read` the thread. \
