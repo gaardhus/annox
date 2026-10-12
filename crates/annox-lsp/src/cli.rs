@@ -18,6 +18,8 @@ use anyhow::{anyhow, bail, Context};
 use clap::{Parser, Subcommand};
 use serde_json::{json, Map, Value};
 
+use crate::style::{self, paint};
+
 /// The annotation commands. `annox` flattens these into its own subcommands.
 #[derive(Subcommand, Debug)]
 pub enum Command {
@@ -962,17 +964,21 @@ fn event_id(file: &str) -> Option<&str> {
     file.rsplit('/').next()?.strip_suffix(".json")
 }
 
-/// `report`'s output as text, one line per document.
+/// `report`'s output as text, one line per document, styled (see [`style`]).
 pub fn render_report(report: &Value) -> String {
     let documents = report["documents"].as_array().map_or(&[][..], Vec::as_slice);
     let count = |v: &Value| v.as_u64().unwrap_or(0);
     let plural = |n: u64, what: &str| format!("{n} {what}{}", if n == 1 { "" } else { "s" });
     let uncommitted = match count(&report["uncommitted"]) {
         0 => String::new(),
-        n => format!("{} to commit; see `annox commit --dry-run`\n", plural(n, "file")),
+        n => format!(
+            "{}; see `{}`\n",
+            paint(style::PENDING, format!("{} to commit", plural(n, "file"))),
+            paint(style::PATH, "annox commit --dry-run")
+        ),
     };
     if documents.is_empty() {
-        return format!("no annotations\n{uncommitted}");
+        return format!("{}\n{uncommitted}", paint(style::MUTED, "no annotations"));
     }
     let width = documents.iter().map(|d| d["path"].as_str().unwrap_or_default().chars().count()).max().unwrap_or(0);
     let mut out = String::new();
@@ -983,28 +989,34 @@ pub fn render_report(report: &Value) -> String {
             + ["accepted", "rejected", "withdrawn"].iter().map(|s| count(&suggestions[s])).sum::<u64>();
         let mut parts = Vec::new();
         if doc["missing"] == json!(true) {
-            parts.push("file missing".to_owned());
+            parts.push(paint(style::PROBLEM, "file missing"));
         }
         for (n, what) in [(count(&comments["open"]), "open comment"), (count(&suggestions["open"]), "open suggestion")]
         {
             if n > 0 {
-                parts.push(plural(n, what));
+                parts.push(paint(style::OPEN, plural(n, what)));
             }
         }
         for what in ["orphaned", "stale", "conflicted"] {
             if count(&doc[what]) > 0 {
-                parts.push(format!("{} {what}", count(&doc[what])));
+                parts.push(paint(style::PROBLEM, format!("{} {what}", count(&doc[what]))));
             }
         }
         if closed > 0 {
-            parts.push(format!("{closed} closed"));
+            parts.push(paint(style::MUTED, format!("{closed} closed")));
         }
         if count(&doc["uncommitted"]) > 0 {
-            parts.push(plural(count(&doc["uncommitted"]), "uncommitted change"));
+            parts.push(paint(style::PENDING, plural(count(&doc["uncommitted"]), "uncommitted change")));
         }
-        out.push_str(&format!("{:width$}  {}\n", doc["path"].as_str().unwrap_or_default(), parts.join(" · ")));
+        let path = paint(style::PATH, format!("{:width$}", doc["path"].as_str().unwrap_or_default()));
+        out.push_str(&format!("{path}  {}\n", parts.join(&separator())));
     }
     out + &uncommitted
+}
+
+/// What goes between the counts of a report line.
+fn separator() -> String {
+    paint(style::MUTED, " · ")
 }
 
 /// `report --verbose`'s output as text: each document's counts broken down
@@ -1013,19 +1025,23 @@ pub fn render_report_verbose(report: &Value) -> String {
     let documents = report["documents"].as_array().map_or(&[][..], Vec::as_slice);
     let count = |v: &Value| v.as_u64().unwrap_or(0);
     let counts = |of: &Value, names: &[&str]| -> Vec<String> {
-        names.iter().filter(|n| count(&of[n]) > 0).map(|n| format!("{} {n}", count(&of[n]))).collect()
+        names
+            .iter()
+            .filter(|n| count(&of[n]) > 0)
+            .map(|n| paint(style::of(n), format!("{} {n}", count(&of[n]))))
+            .collect()
     };
     let mut out = String::new();
     for doc in documents {
-        out.push_str(doc["path"].as_str().unwrap_or_default());
+        out.push_str(&paint(style::PATH, doc["path"].as_str().unwrap_or_default()));
         if doc["missing"] == json!(true) {
-            out.push_str("  (file missing)");
+            out.push_str(&format!("  {}", paint(style::PROBLEM, "(file missing)")));
         }
         out.push('\n');
         let uncommitted = match count(&doc["uncommitted"]) {
             0 => vec![],
-            1 => vec!["1 change".to_owned()],
-            n => vec![format!("{n} changes")],
+            1 => vec![paint(style::PENDING, "1 change")],
+            n => vec![paint(style::PENDING, format!("{n} changes"))],
         };
         let rows = [
             ("comments", counts(&doc["comments"], &["open", "resolved"])),
@@ -1034,7 +1050,7 @@ pub fn render_report_verbose(report: &Value) -> String {
             ("uncommitted", uncommitted),
         ];
         for (label, parts) in rows.iter().filter(|(_, parts)| !parts.is_empty()) {
-            out.push_str(&format!("  {label:11}  {}\n", parts.join(" · ")));
+            out.push_str(&format!("  {}  {}\n", paint(style::MUTED, format!("{label:11}")), parts.join(&separator())));
         }
     }
     // The empty report and the workspace-wide line read the same either way.
@@ -1042,7 +1058,8 @@ pub fn render_report_verbose(report: &Value) -> String {
     if documents.is_empty() {
         return summary;
     }
-    out + summary.strip_prefix("no annotations\n").unwrap_or(&summary)
+    let none = format!("{}\n", paint(style::MUTED, "no annotations"));
+    out + summary.strip_prefix(&none).unwrap_or(&summary)
 }
 
 /// The events of an annotation's thread in display order (§2.5.5).
@@ -1067,16 +1084,12 @@ pub fn render_history(events: &Value) -> String {
     for e in events {
         let detail = e["body"].as_str().or(e["edit"]["replacement"].as_str()).and_then(|d| d.lines().next());
         let detail = detail.map_or(String::new(), |d| format!(": {d}"));
+        let reply = e["type"] != "create" && e["annotation"].as_str().is_some_and(|a| replies.contains(a));
         out.push_str(&format!(
-            "{}  {:width$}  {}{}{detail}\n",
-            e["time"].as_str().unwrap_or_default(),
-            name(e),
-            action(e),
-            if e["type"] != "create" && e["annotation"].as_str().is_some_and(|a| replies.contains(a)) {
-                " reply"
-            } else {
-                ""
-            },
+            "{}  {}  {}{detail}\n",
+            paint(style::MUTED, e["time"].as_str().unwrap_or_default()),
+            paint(style::AUTHOR, format!("{:width$}", name(e))),
+            painted_action(e, reply),
         ));
     }
     out
@@ -1157,15 +1170,21 @@ pub fn render_log(events: &Value) -> String {
         let detail = detail.map_or(String::new(), |d| format!(": {d}"));
         let reply = e["type"] != "create" && e["annotation"] != e["thread"];
         out.push_str(&format!(
-            "{}  {:path_width$}  {:width$}  {}{}{detail}\n",
-            e["time"].as_str().unwrap_or_default(),
-            path(e),
-            name(e),
-            action(e),
-            if reply { " reply" } else { "" },
+            "{}  {}  {}  {}{detail}\n",
+            paint(style::MUTED, e["time"].as_str().unwrap_or_default()),
+            paint(style::PATH, format!("{:path_width$}", path(e))),
+            paint(style::AUTHOR, format!("{:width$}", name(e))),
+            painted_action(e, reply),
         ));
     }
     out
+}
+
+/// [`action`], styled by what it did, and saying so if it changed a reply.
+fn painted_action(event: &Value, reply: bool) -> String {
+    let action = action(event);
+    let verb = action.split(' ').next().unwrap_or_default();
+    paint(style::of(verb), format!("{action}{}", if reply { " reply" } else { "" }))
 }
 
 /// What an event did, as a past-tense verb for history views.

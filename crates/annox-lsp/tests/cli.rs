@@ -395,7 +395,7 @@ fn history_lists_who_did_what() {
     let shown = annox(dir.path(), &["show", &c]);
     assert_eq!(shown["editedBy"], Value::Null);
     assert_eq!(shown["replies"][0]["editedBy"]["author"]["name"], "Agent");
-    let text = cli::render_history(&events);
+    let text = plain(cli::render_history(&events));
     let actions: Vec<&str> = text.lines().map(|l| l.split("  ").nth(2).unwrap()).collect();
     assert_eq!(
         actions,
@@ -403,7 +403,7 @@ fn history_lists_who_did_what() {
     );
     assert!(text.lines().all(|l| l.contains("  Agent  ")), "{text}");
 
-    let text = cli::render_history(&annox(dir.path(), &["history", &s]));
+    let text = plain(cli::render_history(&annox(dir.path(), &["history", &s])));
     assert_eq!(text.lines().map(|l| l.split("  ").nth(2).unwrap()).collect::<Vec<_>>(), ["suggested: the", "accepted"]);
     assert!(error(dir.path(), &["history", "nope"]).contains("unknown annotation"));
 }
@@ -447,19 +447,19 @@ fn report_counts_each_document() {
     assert_eq!((&paper["suggestions"]["open"], &paper["stale"]), (&1.into(), &0.into()));
     assert_eq!(annox(dir.path(), &["report", "paper.md"])["documents"].as_array().unwrap().len(), 1);
 
-    let text = cli::render_report(&report);
+    let text = plain(cli::render_report(&report));
     assert_eq!(
         text,
         "notes.md  file missing · 1 open comment · 1 orphaned\npaper.md  1 open comment · 1 open suggestion · 1 closed\n"
     );
-    assert_eq!(cli::render_report(&serde_json::json!({ "documents": [] })), "no annotations\n");
+    assert_eq!(plain(cli::render_report(&serde_json::json!({ "documents": [] }))), "no annotations\n");
 
     assert_eq!(
-        cli::render_report_verbose(&report),
+        plain(cli::render_report_verbose(&report)),
         "notes.md  (file missing)\n  comments     1 open\n  needs work   1 orphaned\n\
          paper.md\n  comments     1 open · 1 resolved\n  suggestions  1 open\n"
     );
-    assert_eq!(cli::render_report_verbose(&serde_json::json!({ "documents": [] })), "no annotations\n");
+    assert_eq!(plain(cli::render_report_verbose(&serde_json::json!({ "documents": [] }))), "no annotations\n");
 }
 
 fn git(dir: &Path, args: &[&str]) -> String {
@@ -486,9 +486,9 @@ fn commit_takes_only_annotation_events() {
     let report = annox(dir.path(), &["report"]);
     // annox.json, .gitignore, the document event, and two annotation events.
     assert_eq!((&report["uncommitted"], &report["documents"][0]["uncommitted"]), (&5.into(), &2.into()));
-    assert!(cli::render_report(&report).contains("2 uncommitted changes"));
-    assert!(cli::render_report(&report).ends_with("5 files to commit; see `annox commit --dry-run`\n"));
-    let verbose = cli::render_report_verbose(&report);
+    assert!(plain(cli::render_report(&report)).contains("2 uncommitted changes"));
+    assert!(plain(cli::render_report(&report)).ends_with("5 files to commit; see `annox commit --dry-run`\n"));
+    let verbose = plain(cli::render_report_verbose(&report));
     assert!(verbose.contains("\n  uncommitted  2 changes\n"));
     assert!(verbose.ends_with("5 files to commit; see `annox commit --dry-run`\n"));
 
@@ -624,7 +624,7 @@ fn log_lists_and_follows_every_event() {
     );
     assert_eq!(log[0]["path"], "paper.md");
     assert_eq!(annox(dir.path(), &["log"]).as_array().unwrap().len(), 4);
-    let text = cli::render_log(&log);
+    let text = plain(cli::render_log(&log));
     assert!(text.lines().nth(2).unwrap().ends_with("edited reply: The third one."), "{text}");
 
     // Following prints only what's written after it starts, by anyone.
@@ -652,4 +652,9 @@ fn log_lists_and_follows_every_event() {
         (&seen[0]["type"], &seen[0]["status"], &seen[0]["author"]["id"]),
         (&"status".into(), &"resolved".into(), &"urn:test:agent".into())
     );
+}
+
+/// A renderer's output without its colors.
+fn plain(text: String) -> String {
+    anstream::adapter::strip_str(&text).to_string()
 }

@@ -12,10 +12,15 @@ use lsp_server::Connection;
 /// ANNOX_AUTHOR_NAME, then the author in ~/.config/annox/config.json, and
 /// otherwise use git's identity.
 #[derive(Parser)]
-#[command(name = "annox", version, arg_required_else_help = true)]
+#[command(
+    name = "annox",
+    version,
+    styles = annox_lsp::style::HELP,
+    before_long_help = annox_lsp::style::banner()
+)]
 struct Cli {
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Subcommand)]
@@ -84,7 +89,13 @@ enum Command {
 }
 
 fn main() -> anyhow::Result<()> {
-    match Cli::parse().command {
+    use clap::CommandFactory;
+    let Some(command) = Cli::parse().command else {
+        // Like clap's `arg_required_else_help`, but with the title the long help has.
+        anstream::eprint!("{}", Cli::command().render_long_help().ansi());
+        std::process::exit(2);
+    };
+    match command {
         Command::Lsp => {
             let (connection, io_threads) = Connection::stdio();
             annox_lsp::run(&connection)?;
@@ -122,8 +133,7 @@ fn main() -> anyhow::Result<()> {
                 annox_lsp::cli::watch(watcher, &stop, print)
             });
             if let Err(e) = watched {
-                eprintln!("annox: {e:#}");
-                std::process::exit(1);
+                fail(e);
             }
             Ok(())
         }
@@ -131,7 +141,7 @@ fn main() -> anyhow::Result<()> {
             let stop = std::sync::atomic::AtomicBool::new(false);
             let print = |event: serde_json::Value| {
                 use std::io::Write;
-                let mut out = std::io::stdout().lock();
+                let mut out = anstream::stdout().lock();
                 if json {
                     writeln!(out, "{event}")?;
                 } else {
@@ -140,8 +150,7 @@ fn main() -> anyhow::Result<()> {
                 Ok(out.flush()?)
             };
             if let Err(e) = annox_lsp::cli::follow_log(file.as_deref(), &std::env::current_dir()?, &stop, print) {
-                eprintln!("annox: {e:#}");
-                std::process::exit(1);
+                fail(e);
             }
             Ok(())
         }
@@ -157,22 +166,18 @@ fn main() -> anyhow::Result<()> {
             };
             match (annox_lsp::cli::execute(command, &std::env::current_dir()?), render) {
                 (Ok(output), Some(render)) => {
-                    print!("{}", render(&output));
+                    anstream::print!("{}", render(&output));
                     Ok(())
                 }
                 (Ok(output), None) => {
                     println!("{}", serde_json::to_string_pretty(&output)?);
                     Ok(())
                 }
-                (Err(e), _) => {
-                    eprintln!("annox: {e:#}");
-                    std::process::exit(1);
-                }
+                (Err(e), _) => fail(e),
             }
         }
         Command::Update { version } => update(version),
         Command::Man { dir } => {
-            use clap::CommandFactory;
             let cmd = Cli::command();
             match dir {
                 Some(dir) => {
@@ -184,6 +189,12 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }
     }
+}
+
+/// Prints `e` as annox's errors read, and exits with status 1.
+fn fail(e: anyhow::Error) -> ! {
+    anstream::eprintln!("{} {e:#}", annox_lsp::style::paint(annox_lsp::style::ERROR, "annox:"));
+    std::process::exit(1);
 }
 
 const REPO: &str = "gaardhus/annox";

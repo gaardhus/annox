@@ -18,6 +18,8 @@ version = "0.15.1"
 dependencies = [
  "annox-core",
  "annox-sync",
+ "anstream",
+ "anstyle",
  "anyhow",
  "clap",
  "clap_mangen",

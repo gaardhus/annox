@@ -6,6 +6,7 @@ pub mod cli;
 pub mod mcp;
 mod methods;
 pub mod position;
+pub mod style;
 mod views;
 
 use std::cell::RefCell;
