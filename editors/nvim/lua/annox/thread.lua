@@ -79,6 +79,38 @@ local function conceal_escapes(fbuf)
   end)
 end
 
+--- Colors each @mention, such as `@claude`, in float `fbuf` with
+--- `AnnoxMention`, outside code. An `@` inside a word, as in an email
+--- address, doesn't start one.
+local function mark_mentions(fbuf)
+  local fenced = false
+  for row, line in ipairs(vim.api.nvim_buf_get_lines(fbuf, 0, -1, false)) do
+    if line:match("^%s*```") or line:match("^%s*~~~") then
+      fenced = not fenced
+    elseif not fenced then
+      -- Code spans blanked out, keeping the columns.
+      local text = line:gsub("(`+).-%1", function(m)
+        return string.rep(" ", #m)
+      end)
+      local init = 1
+      while true do
+        local s, e = text:find("@[%w_][%w_.-]*", init)
+        if not s then
+          break
+        end
+        -- A mention doesn't end in "." or "-", as in "ask @ada."
+        while text:sub(e, e):match("[.-]") do
+          e = e - 1
+        end
+        if not text:sub(s - 1, s - 1):match("[%w_.@/-]") then
+          vim.api.nvim_buf_set_extmark(fbuf, diff_ns, row - 1, s - 1, { end_col = e, hl_group = "AnnoxMention" })
+        end
+        init = e + 1
+      end
+    end
+  end
+end
+
 --- The text suggestion `a` replaces: the quote it was made on once it's
 --- closed, if the view has one (`annox/annotationsAt`), else read from `bufnr`.
 local function old_text(a, bufnr)
@@ -201,6 +233,7 @@ local function open_thread(a, bufnr, opts)
   -- Styled here, for `a`, which needn't be under the cursor.
   vim.b[fbuf].annox_own_float = true
   conceal_escapes(fbuf)
+  mark_mentions(fbuf)
   if a.kind == "suggestion" and bufnr then
     style_diff_blocks(fbuf, { suggestion_change(a, bufnr) })
   end
@@ -244,6 +277,7 @@ local function style_hover(win, fbuf)
   end
   vim.api.nvim_buf_clear_namespace(fbuf, diff_ns, 0, -1)
   conceal_escapes(fbuf)
+  mark_mentions(fbuf)
   style_diff_blocks(fbuf, changes)
 end
 
@@ -379,6 +413,7 @@ function M.here(opts)
     local fbuf = vim.lsp.util.open_floating_preview(lines, "markdown", { border = "rounded", focus_id = "annox-here" })
     vim.b[fbuf].annox_own_float = true
     conceal_escapes(fbuf)
+    mark_mentions(fbuf)
     style_diff_blocks(fbuf, changes)
   end)
 end

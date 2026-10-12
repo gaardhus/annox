@@ -62,9 +62,12 @@ export function changeMarkdown(original: string | undefined, replacement: string
   return `${fence}diff\n${body}\n${fence}`;
 }
 
-/** `md` with each lone `~` escaped, outside code: GFM reads a pair of them as
- * strikethrough, but authors mostly mean "approximately". `~~` is kept. */
-export function escapeTildes(md: string): string {
+/** Message body `md` as shown, outside code: each lone `~` escaped, since GFM
+ * reads a pair of them as strikethrough but authors mostly mean
+ * "approximately" (`~~` is kept), and each @mention, such as `@claude`, in
+ * bold. Comment widgets can't be given a color. An `@` inside a word, as in
+ * an email address, doesn't start a mention. */
+export function bodyMarkdown(md: string): string {
   let fenced = false;
   return md
     .split("\n")
@@ -75,7 +78,9 @@ export function escapeTildes(md: string): string {
       }
       if (fenced) return line;
       // Code spans are kept whole; elsewhere a `~` without a `~` or `\` next to it is escaped.
-      return line.replace(/(`+)[^]*?\1|(?<![~\\])~(?!~)/g, (m) => (m === "~" ? "\\~" : m));
+      return line.replace(/(`+)[^]*?\1|(?<![~\\])~(?!~)|(?<![\w.@/*-])@\w(?:[\w.-]*\w)?/g, (m) =>
+        m === "~" ? "\\~" : m.startsWith("@") ? `**${m}**` : m,
+      );
     })
     .join("\n");
 }
@@ -246,7 +251,7 @@ export class Threads implements vscode.Disposable {
     if (conflicted.length) {
       lines.push(`$(warning) **Conflicting changes:** ${conflicted.join(", ")}. Use *Resolve Conflicts*.`);
     }
-    if (a.body) lines.push(escapeTildes(a.body));
+    if (a.body) lines.push(bodyMarkdown(a.body));
     else if (a.label) lines.push(`*${a.label}*`);
     else if (a.kind === "comment") lines.push("*(highlight)*");
     return markdown(lines.join("\n\n"));
@@ -300,7 +305,7 @@ export class Threads implements vscode.Disposable {
       const list = [build(a, true, this.rootBody(a, doc))];
       for (const r of a.replies ?? []) {
         // Pushed while a restore asked for deleted annotations.
-        if (!r.deleted) list.push(build(r, false, markdown(escapeTildes(r.body ?? ""))));
+        if (!r.deleted) list.push(build(r, false, markdown(bodyMarkdown(r.body ?? ""))));
       }
       entry.comments = comments;
       thread.comments = list;

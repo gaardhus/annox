@@ -44,6 +44,8 @@ local function set_highlights()
     AnnoxPresence = "DiagnosticVirtualTextHint",
     AnnoxPresenceRange = "Visual",
     AnnoxInsertion = "Added",
+    -- An @mention, such as @claude, in a thread.
+    AnnoxMention = "Special",
   }
   for group, link in pairs(links) do
     vim.api.nvim_set_hl(0, group, { default = true, link = link })

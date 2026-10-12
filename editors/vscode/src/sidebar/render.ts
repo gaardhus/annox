@@ -37,6 +37,15 @@ export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
+/** A message body as HTML, with each @mention, such as `@claude`, marked.
+ * An `@` inside a word, as in an email address, doesn't start one. */
+export function bodyHtml(s: string): string {
+  return s
+    .split(/((?<![\w.@/-])@\w(?:[\w.-]*\w)?)/)
+    .map((part, i) => (i % 2 ? `<span class="mention">${escapeHtml(part)}</span>` : escapeHtml(part)))
+    .join("");
+}
+
 /** How long ago `iso` was, briefly: `now`, `5m`, `3h`, `2d`, or the date. */
 export function ago(iso: string | undefined, now = Date.now()): string {
   const t = iso ? Date.parse(iso) : Number.NaN;
@@ -107,7 +116,7 @@ function card(c: Card, selected: boolean, replying: boolean): string {
     </div>`;
   const quote = c.quote ? `<blockquote class="quote">${escapeHtml(c.quote)}</blockquote>` : "";
   const diff = c.diff ? `<div class="diff">${c.diff.map(segment).join("") || "<i>(no change)</i>"}</div>` : "";
-  const body = c.body ? `<p class="body">${escapeHtml(c.body)}</p>` : "";
+  const body = c.body ? `<p class="body">${bodyHtml(c.body)}</p>` : "";
   const notes = c.notes.map((n) => `<p class="note">${escapeHtml(n)}</p>`).join("");
   const replies = c.replies.length
     ? `<ol class="replies">${c.replies
@@ -115,7 +124,7 @@ function card(c: Card, selected: boolean, replying: boolean): string {
           (r) => `
           <li>
             <div class="meta"><span class="author">${escapeHtml(r.author)}</span><span class="when">${escapeHtml(r.when)}</span>${edited(r.edited)}${r.unread ? `<span class="badge new">new</span>` : ""}</div>
-            <p class="body">${escapeHtml(r.body)}</p>
+            <p class="body">${bodyHtml(r.body)}</p>
           </li>`,
         )
         .join("")}</ol>`

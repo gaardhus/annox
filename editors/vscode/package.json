@@ -824,6 +824,16 @@
         }
       },
       {
+        "id": "annox.mentionForeground",
+        "description": "An @mention, such as @claude, in the sidebar.",
+        "defaults": {
+          "dark": "textLink.foreground",
+          "light": "textLink.foreground",
+          "highContrast": "textLink.foreground",
+          "highContrastLight": "textLink.foreground"
+        }
+      },
+      {
         "id": "annox.labelForeground",
         "description": "Comment text at the end of lines.",
         "defaults": {

@@ -111,7 +111,7 @@ When the workspace syncs through a hub, collaborators' cursors appear with their
 | `annox.markReadOnOpen` | `true` | Mark a thread read when you open it from the annox view, the sidebar, a list, or *Show Thread*. |
 | `annox.suggestionDelay`   | `750`   | In suggestion mode, the pause in milliseconds after which your edits become suggestions.                                          |
 
-The colors can be changed in `workbench.colorCustomizations`: `annox.commentBackground`, `annox.suggestionBackground`, `annox.draftBackground`, `annox.pointForeground`, `annox.deletionForeground`, `annox.insertionForeground`, `annox.labelForeground`, `annox.presenceForeground`, `annox.presenceBackground` and `annox.unreadForeground`.
+The colors can be changed in `workbench.colorCustomizations`: `annox.commentBackground`, `annox.suggestionBackground`, `annox.draftBackground`, `annox.pointForeground`, `annox.deletionForeground`, `annox.insertionForeground`, `annox.labelForeground`, `annox.mentionForeground`, `annox.presenceForeground`, `annox.presenceBackground` and `annox.unreadForeground`.
 
 ## Tests
 

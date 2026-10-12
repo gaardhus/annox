@@ -3,7 +3,7 @@
 
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { changeMarkdown, escapeTildes } from "./comments.ts";
+import { changeMarkdown, bodyMarkdown } from "./comments.ts";
 import { type Store, authorName, describe, isConflicted, isOrphaned, isUnread, rangeOf, summary } from "./store.ts";
 import type { AnnotationView } from "./types.ts";
 
@@ -49,8 +49,8 @@ export function threadMarkdown(
   const original = a.status !== "open" ? a.quote : r && doc ? doc.getText(doc.validateRange(r)) : undefined;
   if (a.kind === "suggestion") lines.push(changeMarkdown(original, a.edit?.replacement ?? ""), "");
   for (const link of store.revertLinks(a)) lines.push(link, "");
-  if (a.body) lines.push(escapeTildes(a.body), "");
-  for (const r of a.replies ?? []) lines.push("---", "", person(r), "", escapeTildes(r.body ?? ""), "");
+  if (a.body) lines.push(bodyMarkdown(a.body), "");
+  for (const r of a.replies ?? []) lines.push("---", "", person(r), "", bodyMarkdown(r.body ?? ""), "");
   return lines.join("\n");
 }
 

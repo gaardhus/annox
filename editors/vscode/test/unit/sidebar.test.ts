@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Card, State } from "../../src/sidebar/protocol.ts";
-import { type Ui, ago, render } from "../../src/sidebar/render.ts";
+import { type Ui, ago, bodyHtml, render } from "../../src/sidebar/render.ts";
 
 const ui = (): Ui => ({ collapsed: {}, replying: new Map() });
 
@@ -114,4 +114,14 @@ test("an unread card or reply is marked new", () => {
   assert.match(html, /class="card comment open unread" data-card="n"/);
   assert.equal(html.match(/<span class="badge new">new<\/span>/g)?.length, 2);
   assert.doesNotMatch(html, /class="[^"]*unread[^"]*" data-card="r"/);
+});
+
+test("marks @mentions in bodies, but not email addresses", () => {
+  assert.equal(
+    bodyHtml("'@claude', ask @ada.l. <a@b.c>"),
+    `&#39;<span class="mention">@claude</span>&#39;, ask <span class="mention">@ada.l</span>. &#60;a@b.c&#62;`,
+  );
+  const html = render(state([card({ body: "@sam?", replies: [{ author: "Bob", when: "1d", body: "cc @ada" }] })]), ui());
+  assert.match(html, /<span class="mention">@sam<\/span>\?/);
+  assert.match(html, /cc <span class="mention">@ada<\/span>/);
 });

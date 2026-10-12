@@ -168,6 +168,10 @@ button.primary:hover {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.body .mention {
+  color: var(--vscode-annox-mentionForeground);
+  font-weight: 600;
+}
 .note {
   margin: 4px 0;
   color: var(--vscode-editorWarning-foreground);
