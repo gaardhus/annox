@@ -78,6 +78,8 @@ jobs:
           cargo update --workspace
           # The VS Code extension shares the version.
           (cd editors/vscode && npm version "${next#v}" --no-git-tag-version --allow-same-version)
+          # So does the tag the Neovim README pins the plugin to.
+          sed -i "s/tag = \"v[0-9.]*\",  -- pin/tag = \"$next\",  -- pin/" editors/nvim/README.md
           git cliff --unreleased --tag "$next" --strip header -o section.md
           python3 - <<'EOF'
           from pathlib import Path
@@ -101,6 +103,7 @@ jobs:
             CHANGELOG.md
             editors/vscode/package.json
             editors/vscode/package-lock.json
+            editors/nvim/README.md
 
   # Attach `annox` binaries to the release.
   binaries:
