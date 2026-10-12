@@ -1,11 +1,35 @@
-build:
-    cargo build --release
+# Build the release binary. `just build v0.14.0` builds a tag (or any commit) from a
+# temporary worktree instead, leaving the working tree alone, and puts the binary in
+# target/tags/v0.14.0/annox. Tag builds get their own target directory: cargo decides
+# what to rebuild by file times, so sharing target/ makes the next plain build think the
+# older files in the working tree are already built.
+build ref="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ref='{{ ref }}'
+    if [ -z "$ref" ]; then
+        exec cargo build --release
+    fi
+    case "$ref" in -*) echo "not a git ref: $ref" >&2; exit 1 ;; esac
+    dir="$(mktemp -d)"
+    trap 'git worktree remove --force "$dir"' EXIT
+    git worktree add --detach "$dir" "$ref"
+    cargo build --release --locked --manifest-path "$dir/Cargo.toml" --target-dir "$PWD/target/tag"
+    mkdir -p "target/tags/$ref"
+    cp target/tag/release/annox "target/tags/$ref/annox"
 
 hub:
     @annox hub --data /tmp/annox-hub/ --listen 127.0.0.1:7878
 
-link:
-    ln -sf "$PWD/target/release/annox" ~/.local/bin/annox
+# Put annox on the PATH. `just link v0.14.0` links the binary from `just build v0.14.0`.
+link ref="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ref='{{ ref }}'
+    bin="$PWD/target/release/annox"
+    if [ -n "$ref" ]; then bin="$PWD/target/tags/$ref/annox"; fi
+    [ -x "$bin" ] || { echo "no binary at $bin; run just build $ref first" >&2; exit 1; }
+    ln -sf "$bin" ~/.local/bin/annox
 
 # Install the git hooks (formatting, linting, commit messages).
 hooks:
