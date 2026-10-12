@@ -217,7 +217,8 @@ annox-demo {
   color: var(--muted);
 }
 .points p code,
-.use p code {
+.use p code,
+.editor p code {
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--line);
@@ -304,7 +305,8 @@ annox-demo {
 .use > div {
   min-width: 0;
 }
-.use pre {
+.use pre,
+.editor pre {
   margin: 1rem 0 0;
   padding: 1rem 1.1rem;
   overflow-x: auto;
@@ -313,11 +315,19 @@ annox-demo {
   border-radius: 8px;
   font: 0.8rem/1.6 var(--mono);
 }
-.use pre code {
+.use pre code,
+.editor pre code {
   font: inherit;
 }
-.use pre .comment {
+.use pre .comment,
+.editor pre .comment {
   color: var(--muted);
+}
+.use pre + p {
+  margin-top: 1rem;
+}
+.editor pre + p {
+  margin: 1rem 0 0;
 }
 .copyable {
   position: relative;
