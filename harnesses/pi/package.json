@@ -1,0 +1,18 @@
+{
+  "name": "annox-pi",
+  "description": "Let pi answer annox threads addressed to it as you write them",
+  "license": "MIT",
+  "keywords": ["pi-package", "annox"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gaardhus/annox",
+    "directory": "harnesses/pi"
+  },
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}

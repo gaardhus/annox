@@ -151,7 +151,7 @@ jobs:
           cp README.md LICENSE "$name/"
           # The agent skill, which install.sh --skill installs.
           mkdir "$name/skills"
-          cp -R skills/annox "$name/skills/"
+          cp -R harnesses/skills/annox "$name/skills/"
           if [[ "$TARGET" == *windows* ]]; then
             cp "target/$TARGET/release/annox.exe" "$name/"
             7z a "$name.zip" "$name"

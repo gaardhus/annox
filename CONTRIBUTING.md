@@ -7,7 +7,7 @@ Bug reports, fixes, and ideas are welcome. For anything bigger than a small fix,
 - **`spec/`** is the specification: numbered sections, [`decisions.md`](spec/decisions.md) with the reasoning behind each design choice, a [changelog](spec/CHANGELOG.md), and conformance vectors in [`spec/tests/`](spec/tests/).
 - **`crates/`** is the Rust reference implementation. `annox-core` is the library (§2–§5), `annox-sync` the hub and replica (§7), `annox-lsp` the `annox` binary (the CLI, `annox lsp`, `annox mcp`, and `annox hub`), and `annox-wasm` builds `annox-core` for the website's demo.
 - **`editors/`** has the [Neovim plugin](editors/nvim/README.md) and the [VS Code extension](editors/vscode/README.md).
-- **`skills/annox/`** is the agent skill.
+- **`harnesses/`** is for agent harnesses: [`skills/annox/`](harnesses/skills/annox/SKILL.md) is the agent skill, and [`pi/`](harnesses/pi/README.md) the pi extension.
 - **`site/`** is the website, built with `just site`.
 
 ## Building and testing

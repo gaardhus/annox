@@ -130,7 +130,7 @@ if [ "$skill" = 1 ]; then
   else
     # Claude Code reads only its own directory; most other agents read the shared one.
     install_skill "$HOME/.claude/skills" " (Claude Code)"
-    install_skill "$HOME/.agents/skills" " (Codex, Gemini CLI, Copilot CLI, Cursor, OpenCode, ...)"
+    install_skill "$HOME/.agents/skills" " (Codex, Gemini CLI, Copilot CLI, Cursor, OpenCode, pi, ...)"
   fi
 fi
 

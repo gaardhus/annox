@@ -127,11 +127,11 @@ Write commands use `--author`/`--name`, or `ANNOX_AUTHOR`/`ANNOX_AUTHOR_NAME`, a
 
 ### Agents
 
-[`skills/annox/`](skills/annox/SKILL.md) is a skill that teaches an agent the CLI and how to use it well: suggest instead of editing text you own, and answer comments in their threads. Install it with `install.sh --skill` (see [above](#reference-implementation)). That puts it in `~/.claude/skills` for Claude Code, and in `~/.agents/skills`, which Codex, Gemini CLI, Copilot CLI, Cursor, and OpenCode read. Pass `--skill-dir DIR` to install it only in `DIR`. Or link it into your skills from a checkout:
+[`harnesses/skills/annox/`](harnesses/skills/annox/SKILL.md) is a skill that teaches an agent the CLI and how to use it well: suggest instead of editing text you own, and answer comments in their threads. Install it with `install.sh --skill` (see [above](#reference-implementation)). That puts it in `~/.claude/skills` for Claude Code, and in `~/.agents/skills`, which Codex, Gemini CLI, Copilot CLI, Cursor, OpenCode, and pi read. Pass `--skill-dir DIR` to install it only in `DIR`. Or link it into your skills from a checkout:
 
 ```sh
-ln -s "$PWD/skills/annox" ~/.claude/skills/annox
-ln -s "$PWD/skills/annox" ~/.agents/skills/annox
+ln -s "$PWD/harnesses/skills/annox" ~/.claude/skills/annox
+ln -s "$PWD/harnesses/skills/annox" ~/.agents/skills/annox
 ```
 
 For agents that can't run shell commands, `annox mcp` serves the same commands as MCP tools over stdio:
@@ -162,6 +162,8 @@ claude --dangerously-load-development-channels server:annox
 ```
 
 Then comment `@claude …` in your editor and save. The agent reads files on disk, so it can't quote text you haven't saved yet. Its replies and suggestions appear in your editor as it writes them. Whoever can add annotations to the workspace can address the agent this way, collaborators through git or a sync hub included, so only use it in workspaces whose collaborators you trust with your session.
+
+In [pi](https://pi.dev), the [annox extension](harnesses/pi/README.md) does the same: start pi with `--annox-watch=@pi`, or run `/annox-watch` in a session.
 
 ## Live sync
 

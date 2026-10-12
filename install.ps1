@@ -104,7 +104,7 @@ function Install-Annox {
         # Claude Code reads only its own directory; most other agents read the shared one.
         @(
           @{ Dir = Join-Path $HOME '.claude\skills'; For = ' (Claude Code)' },
-          @{ Dir = Join-Path $HOME '.agents\skills'; For = ' (Codex, Gemini CLI, Copilot CLI, Cursor, OpenCode, ...)' }
+          @{ Dir = Join-Path $HOME '.agents\skills'; For = ' (Codex, Gemini CLI, Copilot CLI, Cursor, OpenCode, pi, ...)' }
         )
       }
       foreach ($t in $targets) {
