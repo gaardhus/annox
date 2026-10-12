@@ -840,16 +840,14 @@ fn thread_shape(view: &Value) -> String {
     json!([view["status"], view["deleted"], entries]).to_string()
 }
 
-/// Runs a [`Watcher`] until `stop` is set, passing each thread it reports to
+/// Runs `watcher` until `stop` is set, passing each thread it reports to
 /// `emit`. Errors while polling, such as a half-written file, are printed
 /// and retried; an error from `emit` ends the watch.
 pub fn watch(
-    options: Watch,
-    cwd: &Path,
+    mut watcher: Watcher,
     stop: &AtomicBool,
     mut emit: impl FnMut(Value) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
-    let mut watcher = Watcher::new(options, cwd)?;
     let mut last = None;
     while !stop.load(Ordering::Relaxed) {
         let print = crate::fingerprint(&watcher.root);

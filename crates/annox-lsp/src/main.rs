@@ -107,7 +107,12 @@ fn main() -> anyhow::Result<()> {
                 writeln!(out, "{thread}")?;
                 Ok(out.flush()?)
             };
-            if let Err(e) = annox_lsp::cli::watch(options, &std::env::current_dir()?, &stop, print) {
+            let watched = annox_lsp::cli::Watcher::new(options, &std::env::current_dir()?).and_then(|watcher| {
+                // Easy to miss: watching as yourself, your own comments never show up.
+                eprintln!("annox: watching as {}; changes made as that id don't show up", watcher.reader());
+                annox_lsp::cli::watch(watcher, &stop, print)
+            });
+            if let Err(e) = watched {
                 eprintln!("annox: {e:#}");
                 std::process::exit(1);
             }

@@ -403,7 +403,8 @@ pub fn serve(input: impl BufRead, output: impl Write + Send, config: &Config) ->
                     std::thread::sleep(std::time::Duration::from_millis(20));
                 }
                 let emit = |thread: Value| send(output, &channel_event(&thread)).map_err(anyhow::Error::from);
-                if let Err(e) = crate::cli::watch(watch.clone(), &config.root, done, emit) {
+                let watched = crate::cli::Watcher::new(watch.clone(), &config.root);
+                if let Err(e) = watched.and_then(|watcher| crate::cli::watch(watcher, done, emit)) {
                     eprintln!("annox mcp: channel stopped: {e:#}");
                 }
             });
