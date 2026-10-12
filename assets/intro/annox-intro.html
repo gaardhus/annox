@@ -239,6 +239,8 @@ body {
 .json .k2 { color: var(--accent); }
 .json .s { color: var(--muted); }
 
+.mention { color: var(--accent); font-weight: 600; background: var(--accent-soft); border-radius: 3px; padding: 0 3px; }
+
 /* Share diagram */
 .node {
   position: absolute; display: flex; align-items: center; gap: 10px;
@@ -306,7 +308,7 @@ body {
 
       <!-- Scenes 1–5: the review, in one editor -->
       <div class="layer" id="s-review">
-        <div class="cap" id="c1"><div class="eyebrow"><b>1</b>Annotate</div><h2>Comment on any span of text.</h2><p>Sam reviews a proposal in their editor and asks for a date.</p></div>
+        <div class="cap" id="c1"><div class="eyebrow"><b>1</b>Annotate</div><h2>Comment on any span of text.</h2><p>Sam reviews a proposal in their editor and asks Claude for a date.</p></div>
         <div class="cap" id="c2"><div class="eyebrow"><b>2</b>Suggest</div><h2>Agents suggest edits, like people do.</h2><p>Claude proposes a replacement. Nothing changes until someone accepts it.</p></div>
         <div class="cap" id="c3"><div class="eyebrow"><b>3</b>Store</div><h2>Every action writes one event file.</h2><p>Plain JSON in <code style="font-family:var(--mono);font-size:.9em">.annox/</code>, next to the document. Nothing is written into the text itself.</p></div>
         <div class="cap" id="c4"><div class="eyebrow"><b>4</b>Anchor</div><h2>Annotations follow the text as it changes.</h2><p>Each one remembers its quote and context, so edits elsewhere don't knock it loose.</p></div>
@@ -338,7 +340,7 @@ body {
         <div class="card" id="card-sam" style="top:214px">
           <div class="who"><span class="av sam">S</span>Sam Reviewer<span class="kind">Comment</span></div>
           <div class="quote">“by the end of the month”</div>
-          <div class="body">Which month? Please give a date.</div>
+          <div class="body"><span class="mention">@claude</span> which month? Please give a date.</div>
           <div class="reply" id="reply">
             <div class="who"><span class="av claude">C</span>Claude<span class="kind">Reply</span></div>
             <div class="body">Changed to a fixed date in the accepted text.</div>
