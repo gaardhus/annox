@@ -207,7 +207,7 @@ body {
 .diff { font: 14px var(--mono); display: grid; gap: 2px; }
 .diff .m { color: var(--red); text-decoration: line-through; }
 .diff .p { color: var(--accent); }
-.acts { display: flex; gap: 8px; }
+.acts { display: flex; gap: 8px; overflow: hidden; }
 .pill {
   font: 600 13px var(--sans); padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--paper);
 }
@@ -353,7 +353,7 @@ body {
           <div class="who"><span class="av claude">C</span>Claude<span class="kind" id="cl-kind">Suggestion</span></div>
           <div class="diff"><span class="m">by the end of the month</span><span class="p">by 30 October 2026</span></div>
           <div class="body">A fixed date, as asked in the review.</div>
-          <div class="acts"><span class="pill go" id="btn-acc">Accept</span><span class="pill">Reject</span></div>
+          <div class="acts" id="acts"><span class="pill go" id="btn-acc">Accept</span><span class="pill">Reject</span></div>
           <span class="stamp ok" id="st-acc">Accepted</span>
         </div>
 
@@ -379,7 +379,7 @@ body {
 
       <!-- Scene 6: share -->
       <div class="layer" id="s-share">
-        <div class="cap" id="c6"><div class="eyebrow"><b>6</b>Share</div><h2>One format for editors, agents, and git.</h2><p>Editors talk to one server. Scripts and agents write the files directly. Commit them, or sync live through a hub.</p></div>
+        <div class="cap" id="c6"><div class="eyebrow"><b>6</b>Share</div><h2>One format for editors, agents, and git.</h2><p>Editors talk to one server. Scripts and agents read and write the files. Commit them, or sync live through a hub.</p></div>
         <svg class="wires" viewBox="0 0 1280 720" aria-hidden="true">
           <path d="M262 300 C 330 300, 330 420, 400 420"/>
           <path d="M262 420 H 400"/>
@@ -391,6 +391,7 @@ body {
           <text x="560" y="408">events</text>
           <text x="880" y="408">commit, pull</text>
           <text x="484" y="530">live sync</text>
+          <text x="784" y="540">watch, write</text>
         </svg>
         <div class="node cl" id="n1" style="left:96px;top:274px">Neovim</div>
         <div class="node cl" id="n2" style="left:96px;top:394px">VS Code</div>
@@ -398,10 +399,10 @@ body {
         <div class="node" id="n4" style="left:400px;top:388px"><span>annox lsp<small>one server</small></span></div>
         <div class="node store" id="n5" style="left:690px;top:388px"><span>.annox/<small>event files</small></span></div>
         <div class="node" id="n6" style="left:1000px;top:388px"><span>git remote<small>reviewed like code</small></span></div>
-        <div class="node" id="n7" style="left:654px;top:610px"><span class="av claude" style="width:24px;height:24px;font-size:12px">C</span><span>Agents &amp; CLI<small>annox mcp, annox …</small></span></div>
+        <div class="node" id="n7" style="left:654px;top:610px"><span class="av claude" style="width:24px;height:24px;font-size:12px">C</span><span>Agents &amp; CLI<small>annox mcp, annox watch</small></span></div>
         <div class="node" id="n8" style="left:396px;top:590px"><span>annox hub<small>collaborators</small></span></div>
         <div class="pkt" id="p1"></div><div class="pkt" id="p2"></div><div class="pkt y" id="p3"></div>
-        <div class="pkt" id="p4"></div><div class="pkt" id="p5"></div><div class="pkt y" id="p6"></div>
+        <div class="pkt" id="p4"></div><div class="pkt" id="p5"></div><div class="pkt y" id="p6"></div><div class="pkt" id="p7"></div>
       </div>
 
       <!-- Scene 7: end -->
@@ -511,6 +512,7 @@ body {
   tw("del", [{ maxWidth: "240px" }, { maxWidth: "0px" }], 20.9, 0.5, "inOut");
   tw("ins", [{ color: "var(--accent)", backgroundColor: "var(--accent-soft)", marginLeft: "8px" }, { color: "var(--ink)", backgroundColor: "rgba(0,0,0,0)", marginLeft: "0px" }], 21.3, 0.5);
   tw("gut2", [{ opacity: 1 }, { opacity: 0 }], 21.3, 0.4);
+  tw("acts", [{ opacity: 1, maxHeight: "40px", marginTop: "0px" }, { opacity: 0, maxHeight: "0px", marginTop: "-8px" }], 21.3, 0.5, "inOut");
   tw("st-acc", [{ opacity: 0, transform: "scale(1.6) rotate(-8deg)" }, { opacity: 1, transform: "rotate(-4deg)" }], 21.0, 0.35, "pop");
   tw("reply", [{ maxHeight: "0px", opacity: 0, paddingTop: "0px", borderTopWidth: "0px" }, { maxHeight: "120px", opacity: 1, paddingTop: "10px", borderTopWidth: "1px" }], 22.0, 0.6);
   tw("st-res", [{ opacity: 0, transform: "scale(1.6) rotate(-8deg)" }, { opacity: 1, transform: "rotate(-4deg)" }], 23.2, 0.35, "pop");
@@ -537,7 +539,8 @@ body {
   };
   run("p1", [[262, 300], [330, 360], [400, 420], [690, 420]], 32.2, 1.4);
   run("p2", [[262, 420], [400, 420], [690, 420], [700, 420]], 32.6, 1.3);
-  run("p3", [[770, 610], [770, 520], [770, 456], [770, 450]], 32.9, 0.9);
+  run("p7", [[770, 450], [770, 456], [770, 540], [770, 610]], 33.5, 0.8); // an editor's event reaches the agent
+  run("p3", [[770, 610], [770, 520], [770, 456], [770, 450]], 34.3, 0.8); // and its answer comes back
   run("p4", [[852, 420], [920, 420], [1000, 420], [1004, 420]], 33.6, 0.9);
   run("p5", [[470, 456], [470, 520], [470, 590], [470, 594]], 33.4, 0.9);
   run("p6", [[262, 540], [330, 480], [400, 420], [540, 420]], 33.9, 1.0);
