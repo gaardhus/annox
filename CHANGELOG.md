@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0](https://github.com/gaardhus/annox/compare/v0.14.0...v0.15.0) - 2026-10-12
+
+### Added
+
+- Let agents watch for threads addressed to them
+- *(cli)* Say which identity annox watch follows
+- *(cli)* Add annox log, with --follow for a live feed
+
 ## [0.14.0](https://github.com/gaardhus/annox/compare/v0.13.0...v0.14.0) - 2026-10-12
 
 ### Added
