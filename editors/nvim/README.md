@@ -13,7 +13,7 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim). The plugin lives in `edito
 ```lua
 {
   "gaardhus/annox",
-  -- tag = "v0.15.3",  -- pin the plugin to the release of your binary
+  -- tag = "v0.15.4",  -- pin the plugin to the release of your binary
   lazy = false,
   config = function(plugin)
     vim.opt.rtp:append(plugin.dir .. "/editors/nvim")

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.4](https://github.com/gaardhus/annox/compare/v0.15.3...v0.15.4) - 2026-10-12
+
+### Added
+
+- Style @mentions in threads
+- Add a pi extension that answers threads addressed to it
+
+### Documentation
+
+- *(examples)* Have Sam ask @claude about a follow-up date
+
 ## [0.15.3](https://github.com/gaardhus/annox/compare/v0.15.2...v0.15.3) - 2026-10-12
 
 ### Documentation
