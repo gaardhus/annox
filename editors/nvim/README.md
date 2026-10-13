@@ -32,7 +32,7 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim). The plugin lives in `edito
 }
 ```
 
-To work on the plugin, use `dir = "/path/to/annox/editors/nvim"` in place of `"gaardhus/annox"` and drop the `rtp` line.
+To work on the plugin, use `dir = "/path/to/annox/editors/nvim"` and `name = "annox"` in place of `"gaardhus/annox"`, and drop the `rtp` line. Without `name`, lazy.nvim names the plugin after the directory, `nvim`.
 
 The server attaches to files inside a directory that contains `.annox/`. To start annotating a project, run `:Annox init`. It creates the workspace at the git root, or the working directory if there's no git repository, after asking you to confirm.
 
