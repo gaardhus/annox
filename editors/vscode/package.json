@@ -2,7 +2,7 @@
   "name": "annox",
   "displayName": "annox",
   "description": "Portable document annotations: comments, suggestions and review threads stored in .annox/.",
-  "version": "0.15.4",
+  "version": "0.15.5",
   "publisher": "gaardhus",
   "license": "MIT",
   "private": true,
