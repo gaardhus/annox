@@ -1,7 +1,13 @@
 // The latest state pushed by the server, per document.
 
 import * as vscode from "vscode";
-import type { AnnotationView, AnnotationsResult, HistoryEvent, Peer, Range } from "./types.ts";
+import type { AnnotationView, AnnotationsResult, HistoryEvent, Peer, Range, ReactedBy } from "./types.ts";
+
+/** The reaction that approves a suggestion (§4.4.2). */
+export const APPROVAL = "👍";
+
+/** The reactions offered on every message. */
+export const REACTIONS = ["👍", "👎", "👀", "🎉", "❤️", "😄"];
 
 /** A canonical string for a document URI, so URIs from the server and from
  * VS Code compare equal. */
@@ -64,6 +70,43 @@ export function authorName(a: { author?: { id: string; name?: string } }): strin
   return a.author?.name ?? a.author?.id ?? "unknown";
 }
 
+/** `people`'s names, as in "Ada, Bob and Cy". */
+export function names(people: ReactedBy[]): string {
+  const n = people.map((p) => authorName(p));
+  return n.length < 2 ? (n[0] ?? "") : `${n.slice(0, -1).join(", ")} and ${n[n.length - 1]}`;
+}
+
+/** A message's reactions on one line, such as "👀 Bob · 🎉 Ada and Cy",
+ * leaving out `skip`, or undefined if it has none. */
+export function reactionsLine(a: AnnotationView, skip?: string): string | undefined {
+  const parts = Object.entries(a.reactions ?? {})
+    .filter(([r, by]) => r !== skip && by.length > 0)
+    .map(([r, by]) => `${r} ${names(by)}`);
+  return parts.length ? parts.join(" · ") : undefined;
+}
+
+/** Who approved suggestion `a`: current approvals, then those given before
+ * it was re-targeted. */
+export function approvalLines(a: AnnotationView): string[] {
+  const approvals = a.approvals ?? [];
+  const current = approvals.filter((x) => !x.stale);
+  const stale = approvals.filter((x) => x.stale);
+  const lines: string[] = [];
+  if (current.length) lines.push(`${APPROVAL} Approved by ${names(current)}`);
+  if (stale.length) lines.push(`${names(stale)} approved an earlier version`);
+  return lines;
+}
+
+/** How many people approved suggestion `a`, not counting stale approvals. */
+export function approvalCount(a: AnnotationView): number {
+  return (a.approvals ?? []).filter((x) => !x.stale).length;
+}
+
+/** Whether the user approved suggestion `a`. */
+export function approvedByMe(a: AnnotationView): boolean {
+  return a.kind === "suggestion" && (a.ownReactions ?? []).includes(APPROVAL);
+}
+
 /** "edited" if the body was edited, naming the editor if it isn't the author
  * (§2.4). */
 export function editedNote(a: AnnotationView): string | undefined {
@@ -89,7 +132,9 @@ export function eventActions(events: HistoryEvent[]): string[] {
     const verb =
       e.type === "create"
         ? (created[String(e.kind)] ?? "created")
-        : e.type === "status"
+        : e.type === "react"
+          ? `${e.removed === true ? "removed" : "reacted"} ${String(e.reaction)}${replies.has(e.annotation) ? " on reply" : ""}`
+          : e.type === "status"
           ? (statuses[String(e.status)] ?? String(e.status))
           : (verbs[e.type] ?? e.type) + (replies.has(e.annotation) ? " reply" : "");
     const detail = firstLine(e.body ?? e.edit?.replacement);

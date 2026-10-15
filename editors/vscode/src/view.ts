@@ -4,7 +4,19 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { changeMarkdown, bodyMarkdown } from "./comments.ts";
-import { type Store, authorName, describe, isConflicted, isOrphaned, isUnread, rangeOf, summary } from "./store.ts";
+import {
+  APPROVAL,
+  type Store,
+  approvalLines,
+  authorName,
+  describe,
+  isConflicted,
+  isOrphaned,
+  isUnread,
+  rangeOf,
+  reactionsLine,
+  summary,
+} from "./store.ts";
 import type { AnnotationView } from "./types.ts";
 
 type Node = { uri: string } | { uri: string; a: AnnotationView };
@@ -48,9 +60,17 @@ export function threadMarkdown(
   const r = rangeOf(a);
   const original = a.status !== "open" ? a.quote : r && doc ? doc.getText(doc.validateRange(r)) : undefined;
   if (a.kind === "suggestion") lines.push(changeMarkdown(original, a.edit?.replacement ?? ""), "");
+  if (a.kind === "suggestion") for (const l of approvalLines(a)) lines.push(`*${l}*`, "");
   for (const link of store.revertLinks(a)) lines.push(link, "");
   if (a.body) lines.push(bodyMarkdown(a.body), "");
-  for (const r of a.replies ?? []) lines.push("---", "", person(r), "", bodyMarkdown(r.body ?? ""), "");
+  // A suggestion's 👍 is listed as its approval, above.
+  const reacted = reactionsLine(a, a.kind === "suggestion" ? APPROVAL : undefined);
+  if (reacted) lines.push(reacted, "");
+  for (const r of a.replies ?? []) {
+    lines.push("---", "", person(r), "", bodyMarkdown(r.body ?? ""), "");
+    const own = reactionsLine(r);
+    if (own) lines.push(own, "");
+  }
   return lines.join("\n");
 }
 

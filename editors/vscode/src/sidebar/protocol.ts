@@ -15,6 +15,8 @@ export type Action =
   | "publish"
   | "reopen"
   | "revert"
+  | "approve"
+  | "unapprove"
   | "conflicts"
   | "history";
 
@@ -32,6 +34,8 @@ export interface Reply {
   /** "edited", or "edited by" someone other than the author. */
   edited?: string;
   body: string;
+  /** Its reactions on one line, such as "👀 Bob · 🎉 Ada and Cy". */
+  reactions?: string;
 }
 
 export interface Card {
@@ -54,6 +58,10 @@ export interface Card {
   diff?: Segment[];
   /** Warnings and links to other threads, as plain text. */
   notes: string[];
+  /** Who approved a suggestion, and who approved an earlier version (§4.4.2). */
+  approvals?: string[];
+  /** Its other reactions on one line. */
+  reactions?: string;
   replies: Reply[];
   actions: Action[];
 }

@@ -41,8 +41,8 @@ fn expand_conflicts(a: &Analysis, conflicts: &Value) -> Value {
     Value::Object(out)
 }
 
-/// A derived state turned into a view: no `target`, expanded conflicts, and
-/// the `local` and `unread` flags.
+/// A derived state turned into a view: no `target`, expanded conflicts, the
+/// `local` and `unread` flags, and the session author's `ownReactions`.
 fn base_view(a: &Analysis, state: &Value) -> Map<String, Value> {
     let mut view = state.as_object().cloned().unwrap_or_default();
     view.remove("target");
@@ -50,6 +50,14 @@ fn base_view(a: &Analysis, state: &Value) -> Map<String, Value> {
     view.insert("conflicts".into(), expand_conflicts(a, &state["conflicts"]));
     view.insert("local".into(), json!(a.area(id) == Area::Local));
     view.insert("unread".into(), json!(a.unread.contains(id)));
+    let own: Vec<&String> = state["reactions"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter(|(_, by)| by.as_array().is_some_and(|b| b.iter().any(|b| b["author"]["id"] == a.reader.as_str())))
+        .map(|(r, _)| r)
+        .collect();
+    view.insert("ownReactions".into(), json!(own));
     view
 }
 

@@ -125,3 +125,21 @@ test("marks @mentions in bodies, but not email addresses", () => {
   assert.match(html, /<span class="mention">@sam<\/span>\?/);
   assert.match(html, /cc <span class="mention">@ada<\/span>/);
 });
+
+test("shows approvals and reactions, and the approve button", () => {
+  const html = render(
+    state([
+      card({
+        kind: "suggestion",
+        approvals: ["👍 Approved by Ada", "Bob approved an earlier version"],
+        reactions: "👀 Cy",
+        replies: [{ author: "Bob", when: "1d", body: "Yes.", reactions: "🎉 Ada" }],
+        actions: ["accept", "reject", "approve", "reply"],
+      }),
+    ]),
+    ui(),
+  );
+  assert.match(html, /<p class="reactions">👍 Approved by Ada<\/p><p class="reactions">Bob approved an earlier version<\/p><p class="reactions">👀 Cy<\/p>/);
+  assert.match(html, /<p class="reactions">🎉 Ada<\/p>/);
+  assert.match(html, /data-action="approve" data-id="a1">👍 Approve</);
+});

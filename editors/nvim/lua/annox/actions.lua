@@ -135,8 +135,8 @@ local reactions = { "👍", "👎", "👀", "🎉", "❤️", "😄" }
 
 --- Reacts to the comment or suggestion under the cursor, or one of its
 --- replies, asking which, and which emoji unless `opts.reaction` is given.
---- With `opts.removed`, removes the reaction instead, offering those the
---- message has. opts: { annotation?, reaction?, removed? }
+--- With `opts.removed`, removes the reaction instead, offering your own.
+--- opts: { annotation?, reaction?, removed? }
 function M.react(opts)
   opts = opts or {}
   local bufnr = vim.api.nvim_get_current_buf()
@@ -153,7 +153,8 @@ function M.react(opts)
     end
     local choices = reactions
     if opts.removed then
-      choices = vim.tbl_keys(type(a.reactions) == "table" and a.reactions or {})
+      -- Only your own, which the server lists (§6.6.1).
+      choices = type(a.ownReactions) == "table" and vim.deepcopy(a.ownReactions) or {}
       table.sort(choices)
       if #choices == 0 then
         return vim.notify("annox: no reactions to remove", vim.log.levels.INFO)

@@ -7,7 +7,10 @@ import * as path from "node:path";
 import { diffWordsWithSpace } from "diff";
 import * as vscode from "vscode";
 import {
+  APPROVAL,
   type Store,
+  approvalLines,
+  approvedByMe,
   authorName,
   editedNote,
   isConflicted,
@@ -16,6 +19,7 @@ import {
   key,
   oneLine,
   rangeOf,
+  reactionsLine,
   toRange,
 } from "../store.ts";
 import type { AnnotationView } from "../types.ts";
@@ -32,6 +36,8 @@ const COMMANDS: Record<Action, string> = {
   publish: "annox.publish",
   reopen: "annox.reopenThread",
   revert: "annox.revertSuggestion",
+  approve: "annox.approve",
+  unapprove: "annox.unapprove",
   conflicts: "annox.resolveConflicts",
   history: "annox.history",
 };
@@ -58,7 +64,7 @@ function actions(a: AnnotationView, store: Store): Action[] {
   if (a.local) out.push("publish");
   if (a.kind === "suggestion") {
     if (a.applicable) out.push("accept", "edit");
-    out.push("reject");
+    out.push("reject", approvedByMe(a) ? "unapprove" : "approve");
   } else {
     out.push("resolve");
   }
@@ -176,6 +182,9 @@ export class Sidebar implements vscode.WebviewViewProvider, vscode.Disposable {
       line: r ? r.start.line + 1 : undefined,
       body: a.body ?? a.label ?? undefined,
       notes: notes(a, this.store),
+      approvals: a.kind === "suggestion" ? approvalLines(a) : undefined,
+      // A suggestion's 👍 is listed as its approval.
+      reactions: reactionsLine(a, a.kind === "suggestion" ? APPROVAL : undefined),
       replies: (a.replies ?? [])
         .filter((x) => !x.deleted)
         .map((x) => ({
@@ -184,6 +193,7 @@ export class Sidebar implements vscode.WebviewViewProvider, vscode.Disposable {
           when: ago(x.created),
           edited: editedNote(x),
           body: x.body ?? "",
+          reactions: reactionsLine(x),
         })),
       actions: actions(a, this.store),
     };

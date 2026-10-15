@@ -29,6 +29,8 @@ const LABELS: Record<Action, string> = {
   publish: "Publish",
   reopen: "Reopen",
   revert: "Revert",
+  approve: "👍 Approve",
+  unapprove: "Withdraw approval",
   conflicts: "Resolve conflicts",
   history: "History",
 };
@@ -118,6 +120,9 @@ function card(c: Card, selected: boolean, replying: boolean): string {
   const diff = c.diff ? `<div class="diff">${c.diff.map(segment).join("") || "<i>(no change)</i>"}</div>` : "";
   const body = c.body ? `<p class="body">${bodyHtml(c.body)}</p>` : "";
   const notes = c.notes.map((n) => `<p class="note">${escapeHtml(n)}</p>`).join("");
+  const reacted = [...(c.approvals ?? []), ...(c.reactions ? [c.reactions] : [])]
+    .map((r) => `<p class="reactions">${escapeHtml(r)}</p>`)
+    .join("");
   const replies = c.replies.length
     ? `<ol class="replies">${c.replies
         .map(
@@ -125,6 +130,7 @@ function card(c: Card, selected: boolean, replying: boolean): string {
           <li>
             <div class="meta"><span class="author">${escapeHtml(r.author)}</span><span class="when">${escapeHtml(r.when)}</span>${edited(r.edited)}${r.unread ? `<span class="badge new">new</span>` : ""}</div>
             <p class="body">${bodyHtml(r.body)}</p>
+            ${r.reactions ? `<p class="reactions">${escapeHtml(r.reactions)}</p>` : ""}
           </li>`,
         )
         .join("")}</ol>`
@@ -148,7 +154,7 @@ function card(c: Card, selected: boolean, replying: boolean): string {
   const classes = ["card", c.kind, c.group, selected ? "selected" : "", c.unread ? "unread" : ""].filter(Boolean).join(" ");
   return `
     <article class="${classes}" data-card="${id}">
-      ${meta}${quote}${diff}${body}${notes}${replies}${box}
+      ${meta}${quote}${diff}${body}${reacted}${notes}${replies}${box}
       <div class="actions">${buttons}</div>
     </article>`;
 }

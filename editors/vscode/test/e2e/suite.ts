@@ -561,6 +561,46 @@ export async function run(): Promise<void> {
     assert.deepEqual(left?.documents, []);
   });
 
+  step("approve a suggestion and react to a reply", async () => {
+    await focus();
+    const bin = vscode.workspace.getConfiguration("annox").get<string>("path") as string;
+    const s = JSON.parse(
+      execFileSync(
+        bin,
+        ["suggest", "paper.tex", "--quote", "conclude", "--replace", "close", "--author", "mailto:bob@example.org"],
+        { cwd: root, encoding: "utf8" },
+      ),
+    ).id as string;
+    const thread = await wait("thread", () => api.threads.threadOf(s), 15000);
+    assert.doesNotMatch(thread.contextValue ?? "", /\bapproved\b/);
+    assert.ok(api.sidebar.state().cards.find((c) => c.id === s)?.actions.includes("approve"));
+
+    await exec("annox.approve", { annotation: s });
+    await wait("approved", () => get(s)?.ownReactions?.includes("👍"));
+    await wait("thread knows it's yours", () => /\bapproved\b/.test(thread.contextValue ?? ""));
+    const first = thread.comments[0] as AnnoxComment;
+    assert.match((first.body as vscode.MarkdownString).value, /Approved by Ada/);
+    const thumbs = first.reactions.find((r) => r.label === "👍");
+    assert.deepEqual([thumbs?.count, thumbs?.authorHasReacted], [1, true]);
+    assert.deepEqual(api.sidebar.state().cards.find((c) => c.id === s)?.approvals, ["👍 Approved by Ada"]);
+
+    // Clicking a reaction under a reply toggles it.
+    await exec("annox.reply", { annotation: s, body: "Shorter." });
+    await wait("reply in thread", () => thread.comments.length === 2);
+    const reply = thread.comments[1] as AnnoxComment;
+    const party = reply.reactions.find((r) => r.label === "🎉") as vscode.CommentReaction;
+    assert.equal(party.count, 0, "offered before anyone reacts");
+    await api.threads.controller.reactionHandler?.(reply, party);
+    await wait("reaction on the reply", () => get(s)?.replies?.[0]?.reactions?.["🎉"]?.length === 1);
+    await wait("shown in the sidebar", () => api.sidebar.state().cards.find((c) => c.id === s)?.replies[0]?.reactions);
+
+    await exec("annox.unapprove", { annotation: s });
+    await wait("approval withdrawn", () => get(s)?.approvals?.length === 0);
+    await exec("annox.react", { annotation: s, reaction: "👀" });
+    await wait("reacted", () => get(s)?.ownReactions?.includes("👀"));
+    await exec("annox.rejectSuggestion", { annotation: s });
+  });
+
   step("initializing a workspace", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "annox-init-"));
     await exec("annox.init", { root: dir, confirm: false });

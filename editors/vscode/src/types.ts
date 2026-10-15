@@ -30,6 +30,12 @@ export interface Resolution {
   suggested?: { range: Range; score: number };
 }
 
+/** Who reacted or approved, and when (§2.5.7). */
+export interface ReactedBy {
+  author?: Author;
+  time?: string;
+}
+
 export interface AnnotationView {
   id: string;
   kind: "comment" | "suggestion";
@@ -52,6 +58,13 @@ export interface AnnotationView {
    * only this annotation, not its replies. */
   unread?: boolean;
   conflicts?: Record<string, ConflictEntry[]>;
+  /** Who reacted with each emoji (§2.5.7). */
+  reactions?: Record<string, ReactedBy[]>;
+  /** A suggestion's approvals: its 👍 reactions, stale once it was
+   * re-targeted (§4.4.2). */
+  approvals?: (ReactedBy & { stale?: boolean })[];
+  /** The reactions of the session's author (§6.6.1). */
+  ownReactions?: string[];
   replies?: AnnotationView[];
   /** From `annox/annotationsAt`: the text it was made on. */
   quote?: string;

@@ -135,6 +135,24 @@
         "icon": "$(discard)"
       },
       {
+        "command": "annox.approve",
+        "title": "Approve Suggestion",
+        "category": "annox",
+        "icon": "$(thumbsup)"
+      },
+      {
+        "command": "annox.unapprove",
+        "title": "Withdraw Approval",
+        "category": "annox",
+        "icon": "$(thumbsup-filled)"
+      },
+      {
+        "command": "annox.react",
+        "title": "React",
+        "category": "annox",
+        "icon": "$(reactions)"
+      },
+      {
         "command": "annox.publish",
         "title": "Publish Draft",
         "category": "annox",
@@ -429,6 +447,18 @@
           "when": "annox.inWorkspace"
         },
         {
+          "command": "annox.approve",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.unapprove",
+          "when": "annox.inWorkspace"
+        },
+        {
+          "command": "annox.react",
+          "when": "annox.inWorkspace"
+        },
+        {
           "command": "annox.publish",
           "when": "annox.inWorkspace"
         },
@@ -491,6 +521,16 @@
           "command": "annox.rejectSuggestion",
           "group": "inline@2",
           "when": "commentController == annox && commentThread =~ /\\bsuggestion\\b/ && commentThread =~ /\\bopen\\b/"
+        },
+        {
+          "command": "annox.approve",
+          "group": "inline@2",
+          "when": "commentController == annox && commentThread =~ /\\bsuggestion\\b/ && commentThread =~ /\\bopen\\b/ && commentThread !~ /\\bapproved\\b/"
+        },
+        {
+          "command": "annox.unapprove",
+          "group": "inline@2",
+          "when": "commentController == annox && commentThread =~ /\\bapproved\\b/"
         },
         {
           "command": "annox.editAnnotation",
@@ -638,6 +678,14 @@
         {
           "command": "annox.resolveThread",
           "group": "2_thread@4"
+        },
+        {
+          "command": "annox.approve",
+          "group": "2_thread@5"
+        },
+        {
+          "command": "annox.react",
+          "group": "2_thread@6"
         },
         {
           "command": "annox.list",

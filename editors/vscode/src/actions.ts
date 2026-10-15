@@ -12,6 +12,8 @@ import { AnnoxComment, type Threads } from "./comments.ts";
 import type { HistoryDocs, Scratch } from "./scratch.ts";
 import { threadMarkdown } from "./view.ts";
 import {
+  APPROVAL,
+  REACTIONS,
   type Store,
   authorName,
   describe,
@@ -56,6 +58,8 @@ export interface Options {
   confirm?: boolean;
   /** A commit message, which skips the prompt. */
   message?: string;
+  /** For react: the emoji, which skips the prompt. */
+  reaction?: string;
 }
 
 type Arg = vscode.CommentThread | AnnoxComment | vscode.CommentReply | Options | undefined;
@@ -118,6 +122,9 @@ export class Actions {
       "annox.resolveAll": (arg) => this.setStatus({ ...options(arg), all: true }, "comment", "resolved", "Resolve"),
       "annox.reopenThread": (arg) => this.reopen(arg),
       "annox.revertSuggestion": (arg) => this.revert(arg),
+      "annox.approve": (arg) => this.approve(arg, false),
+      "annox.unapprove": (arg) => this.approve(arg, true),
+      "annox.react": (arg) => this.react(arg),
       "annox.publish": (arg) => this.publish(arg),
       "annox.publishAll": (arg) => this.publish({ ...options(arg), all: true }),
       "annox.showThread": (arg) => this.showThread(arg),
@@ -134,6 +141,15 @@ export class Actions {
       "annox.open": (arg) => this.open(arg),
       "annox.commit": (arg) => this.commit(options(arg)),
       "annox.restartServer": () => this.annox.restart(),
+    };
+    // Clicking a reaction under a comment, or picking one, toggles yours.
+    this.threads.controller.reactionHandler = async (comment, reaction) => {
+      if (!(comment instanceof AnnoxComment)) return;
+      await this.annox.request("annox/react", {
+        annotation: comment.view.id,
+        reaction: reaction.label,
+        removed: reaction.authorHasReacted,
+      });
     };
     return Object.entries(commands).map(([id, fn]) => vscode.commands.registerCommand(id, fn));
   }
@@ -551,6 +567,37 @@ export class Actions {
     }
     const t = await this.target(arg, (a) => a.kind === kind && a.status === "open", kind);
     if (t) await this.annox.request("annox/setStatus", { annotation: t.view.id, status });
+  }
+
+  /** Approves the open suggestion of the thread or under the cursor with a
+   * 👍 (§4.4.2), or with `removed` withdraws the approval. */
+  private async approve(arg: Arg, removed: boolean): Promise<void> {
+    const t = await this.target(arg, (a) => a.kind === "suggestion" && a.status === "open", "open suggestion");
+    if (t) await this.annox.request("annox/react", { annotation: t.view.id, reaction: APPROVAL, removed });
+  }
+
+  /** Adds a reaction to the annotation of the thread or under the cursor, or
+   * removes it if it's already yours, asking which unless `reaction` is
+   * given. Reactions to replies are made under the reply itself. */
+  private async react(arg: Arg): Promise<void> {
+    const t = await this.target(arg, () => true, "annotation");
+    if (!t) return;
+    const own = t.view.ownReactions ?? [];
+    let reaction = options(arg).reaction;
+    if (!reaction) {
+      const offered = [...new Set([...REACTIONS, ...Object.keys(t.view.reactions ?? {})])];
+      const choice = await vscode.window.showQuickPick(
+        offered.map((r) => ({
+          label: r,
+          description: own.includes(r) ? "yours; pick to remove" : undefined,
+          detail: t.view.reactions?.[r]?.map((x) => authorName(x)).join(", ") || undefined,
+        })),
+        { placeHolder: `React to ${describe(t.view)}` },
+      );
+      reaction = choice?.label;
+    }
+    if (!reaction) return;
+    await this.annox.request("annox/react", { annotation: t.view.id, reaction, removed: own.includes(reaction) });
   }
 
   private async reopen(arg: Arg): Promise<void> {

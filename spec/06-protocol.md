@@ -120,6 +120,7 @@ LSP has no standard way to ask the user for free text, so writing comments, repl
   "applicable": true,
   "local": false,
   "unread": false,
+  "ownReactions": [],
   "conflicts": {},
   "replies": []
 }
@@ -131,6 +132,7 @@ LSP has no standard way to ask the user for free text, so writing comments, repl
 - `applicable` is present only for open suggestions (§4.2).
 - `local` is true for local-only annotations (§5.11).
 - `unread` is true if the annotation has events the session's author hasn't read (§5.13). It covers only the annotation itself: a thread is unread if its root or any reply is.
+- `ownReactions` lists the reactions of the session's author (§2.5.7), so a client can show which are theirs and offer to remove them without knowing the identity the server writes as.
 - `replies` holds the thread's reply AnnotationViews, in the order of §2.5.5. Replies have no `resolution`.
 - `conflicts` maps each conflicted field to a list of **ConflictEntry** objects (the competing events, with their values), instead of the bare event ids used in §2.5.6, so the client can show them:
 

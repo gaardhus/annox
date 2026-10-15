@@ -172,6 +172,10 @@ button.primary:hover {
   color: var(--vscode-annox-mentionForeground);
   font-weight: 600;
 }
+.reactions {
+  margin: 4px 0;
+  color: var(--vscode-descriptionForeground);
+}
 .note {
   margin: 4px 0;
   color: var(--vscode-editorWarning-foreground);

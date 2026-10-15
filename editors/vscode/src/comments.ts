@@ -3,7 +3,11 @@
 
 import * as vscode from "vscode";
 import {
+  APPROVAL,
+  REACTIONS,
   type Store,
+  approvalLines,
+  approvedByMe,
   authorName,
   editedNote,
   isConflicted,
@@ -14,6 +18,20 @@ import {
 } from "./store.ts";
 import type { AnnotationView } from "./types.ts";
 
+/** The reactions of a message, as VS Code shows them: those it has, with how
+ * many reacted and whether you did, and the others offered at 0 so the
+ * reaction picker lists them. An empty icon shows the emoji itself. */
+export function commentReactions(view: AnnotationView): vscode.CommentReaction[] {
+  const own = view.ownReactions ?? [];
+  const labels = [...new Set([...REACTIONS, ...Object.keys(view.reactions ?? {})])];
+  return labels.map((label) => ({
+    label,
+    iconPath: "",
+    count: view.reactions?.[label]?.length ?? 0,
+    authorHasReacted: own.includes(label),
+  }));
+}
+
 /** A comment in a thread: the root annotation or one of its replies. */
 export class AnnoxComment implements vscode.Comment {
   body: string | vscode.MarkdownString;
@@ -21,6 +39,7 @@ export class AnnoxComment implements vscode.Comment {
   author: vscode.CommentAuthorInformation;
   label?: string;
   timestamp?: Date;
+  reactions: vscode.CommentReaction[];
   contextValue: string;
   /** The text to edit: the annotation's body. */
   text: string;
@@ -35,6 +54,7 @@ export class AnnoxComment implements vscode.Comment {
     this.text = view.body ?? "";
     this.author = { name: authorName(view) };
     if (view.created) this.timestamp = new Date(view.created);
+    this.reactions = commentReactions(view);
     const kind = root && view.kind === "suggestion" ? "suggestion" : "";
     this.contextValue = ["annox", root ? "root" : "reply", kind, editable ? "editable" : ""]
       .filter(Boolean)
@@ -101,6 +121,7 @@ function flags(a: AnnotationView, reverted: boolean): string {
   if (a.local) f.push("draft");
   if (isConflicted(a)) f.push("conflicted");
   if (isUnread(a)) f.push("unread");
+  if (a.status === "open" && approvedByMe(a)) f.push("approved");
   // A closed annotation is expected to lose its text, e.g. once a suggestion
   // is accepted, so only open ones count as orphaned.
   if (a.status === "open" && isOrphaned(a)) f.push("orphaned");
@@ -236,6 +257,8 @@ export class Threads implements vscode.Disposable {
       lines.push(...this.store.revertLinks(a));
       const by = a.retargetedBy?.author;
       if (by && by.id !== a.author?.id) lines.push(`*Re-targeted by ${by.name ?? by.id}*`);
+      // Approvals are named here; the 👍 below the comment only counts them.
+      lines.push(...approvalLines(a).map((l) => `*${l.replace(APPROVAL, "$(thumbsup)")}*`));
       if (a.status === "open" && !a.applicable) {
         lines.push("$(warning) *The text changed since this was suggested. Re-target it to apply it.*");
       }

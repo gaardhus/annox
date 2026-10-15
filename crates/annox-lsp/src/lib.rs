@@ -337,6 +337,8 @@ pub(crate) struct Analysis {
     /// Roots and replies with events this session's author hasn't read
     /// (§5.13).
     unread: BTreeSet<String>,
+    /// This session's author id, whose reactions views list as their own.
+    reader: String,
 }
 
 impl Analysis {
@@ -679,7 +681,8 @@ impl Server<'_> {
             items.push(Item { id, state, target, resolution, suggested });
         }
         let version = text.version.clone();
-        let analysis = Rc::new(Analysis { ws, rel, index, loaded, text, items, replies, unread });
+        let reader = self.reader(&ws);
+        let analysis = Rc::new(Analysis { ws, rel, index, loaded, text, items, replies, unread, reader });
         self.cache.borrow_mut().analyses.insert(uri.clone(), (generation, version, analysis.clone()));
         Some(analysis)
     }

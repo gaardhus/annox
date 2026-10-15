@@ -468,6 +468,7 @@ fn reactions_and_approvals() {
     let approved = c.call("annox/react", json!({ "annotation": id, "reaction": "👍" }));
     assert_eq!(approved["reactions"]["👍"][0]["author"]["id"], "mailto:ada@example.org");
     assert_eq!(approved["approvals"][0]["stale"], false);
+    assert_eq!(approved["ownReactions"], json!(["👍"]));
     // Approving again writes nothing.
     c.call("annox/react", json!({ "annotation": id, "reaction": "👍" }));
     let history = c.call("annox/history", json!({ "annotation": id }));
