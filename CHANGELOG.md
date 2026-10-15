@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0](https://github.com/gaardhus/annox/compare/v0.15.5...v0.16.0) - 2026-10-15
+
+### Added
+
+- React to annotations, and approve suggestions with 👍
+- Show reactions and approvals in nvim and annox report
+- *(lsp)* Show reactions and approvals on hover
+- *(vscode)* React to comments, and approve suggestions
+
+### Documentation
+
+- *(spec)* Add reactions, with 👍 on a suggestion as approval
+- Show reactions and approvals in the example, site and intro
+
 ## [0.15.5](https://github.com/gaardhus/annox/compare/v0.15.4...v0.15.5) - 2026-10-14
 
 ### Added
