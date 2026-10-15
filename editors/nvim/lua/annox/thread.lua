@@ -120,6 +120,51 @@ local function old_text(a, bufnr)
   return bufnr and resolved_text(a, bufnr) or ""
 end
 
+--- `people`' names, as in "Ada, Bob and Cy".
+local function names(people)
+  local out = {}
+  for _, p in ipairs(people) do
+    local author = type(p.author) == "table" and p.author or {}
+    table.insert(out, author.name or author.id or "unknown")
+  end
+  if #out < 2 then
+    return out[1] or ""
+  end
+  return table.concat(out, ", ", 1, #out - 1) .. " and " .. out[#out]
+end
+
+--- The reactions of message `x` as one line, such as "👀 Bob · 🎉 Ada and Cy",
+--- leaving out `skip`, or nil if it has none.
+local function reactions_line(x, skip)
+  local parts = {}
+  local reactions = type(x.reactions) == "table" and x.reactions or {}
+  local keys = vim.tbl_keys(reactions)
+  table.sort(keys)
+  for _, r in ipairs(keys) do
+    if r ~= skip and type(reactions[r]) == "table" and #reactions[r] > 0 then
+      table.insert(parts, r .. " " .. names(reactions[r]))
+    end
+  end
+  return #parts > 0 and table.concat(parts, " · ") or nil
+end
+
+--- Who approved suggestion `a` (§4.4.2), as lines: current approvals, then
+--- those of an earlier version, after it was re-targeted.
+local function approval_lines(a)
+  local current, stale = {}, {}
+  for _, ap in ipairs(type(a.approvals) == "table" and a.approvals or {}) do
+    table.insert(ap.stale == true and stale or current, ap)
+  end
+  local lines = {}
+  if #current > 0 then
+    table.insert(lines, "👍 _approved by " .. names(current) .. "_")
+  end
+  if #stale > 0 then
+    table.insert(lines, "_" .. names(stale) .. " approved an earlier version_")
+  end
+  return lines
+end
+
 --- The thread as markdown lines, and its messages as { id, header }, root
 --- first, where `header` is the line that starts the message. A suggestion's
 --- old text is read from `bufnr`.
@@ -154,6 +199,7 @@ local function thread_lines(a, bufnr)
     if type(by) == "table" and by.id ~= (a.author or {}).id then
       table.insert(lines, string.format("_re-targeted by %s_", by.name or by.id))
     end
+    vim.list_extend(lines, approval_lines(a))
     table.insert(lines, "")
   end
   if type(a.conflicts) == "table" and next(a.conflicts) then
@@ -164,12 +210,21 @@ local function thread_lines(a, bufnr)
   table.insert(messages, { id = a.id, header = header })
   table.insert(lines, header)
   vim.list_extend(lines, escape_tildes(str(a.body)))
+  -- A suggestion's 👍 is shown as its approval, above.
+  local reacted = reactions_line(a, a.kind == "suggestion" and "👍" or nil)
+  if reacted then
+    vim.list_extend(lines, { "", reacted })
+  end
   for _, r in ipairs(a.replies or {}) do
     -- The markdown float expands a thematic break into a full-width rule.
     table.insert(lines, "---")
     table.insert(messages, { id = r.id, header = person(r) })
     table.insert(lines, person(r))
     vim.list_extend(lines, escape_tildes(str(r.body)))
+    reacted = reactions_line(r)
+    if reacted then
+      vim.list_extend(lines, { "", reacted })
+    end
   end
   return lines, messages
 end
@@ -300,7 +355,8 @@ function M.thread(opts)
       return
     end
     vim.b[fbuf].annox_thread_keys = true
-    local footer = " e edit · r reply · d delete · q close "
+    local footer = (a.kind == "suggestion" and a.status == "open" and " a approve ·" or "")
+      .. " + react · e edit · r reply · d delete · q close "
     pcall(vim.api.nvim_win_set_config, win, { footer = footer, footer_pos = "right" })
     -- Back in the annotated buffer, which the commands act on.
     local function act(fn)
@@ -328,6 +384,17 @@ function M.thread(opts)
     map("r", function()
       require("annox.actions").reply({ annotation = a.id })
     end, "annox: reply to the thread")
+    map("+", function(id)
+      require("annox.actions").react({ annotation = id })
+    end, "annox: react to the message under the cursor")
+    map("-", function(id)
+      require("annox.actions").react({ annotation = id, removed = true })
+    end, "annox: remove a reaction from the message under the cursor")
+    if a.kind == "suggestion" and a.status == "open" then
+      map("a", function()
+        require("annox.actions").approve({ annotation = a.id })
+      end, "annox: approve the suggestion")
+    end
   end)
 end
 
@@ -348,6 +415,10 @@ local function event_action(e, replies)
   local verb
   if e.type == "create" then
     verb = create_verbs[e.kind] or "created"
+  elseif e.type == "react" then
+    local reaction = tostring(e.reaction)
+    verb = (e.removed == true and "removed " .. reaction or "reacted " .. reaction)
+      .. (replies[e.annotation] and " on reply" or "")
   elseif e.type == "status" then
     verb = status_verbs[e.status] or tostring(e.status)
   else

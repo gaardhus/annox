@@ -27,6 +27,18 @@ local function inline(bufnr, a)
   return a.kind == "suggestion" and a.applicable and (store.config.inline_suggestions or store.suggesting[bufnr] ~= nil)
 end
 
+--- How many people approved suggestion `a` (§4.4.2), leaving out those who
+--- approved an earlier version.
+local function approval_count(a)
+  local n = 0
+  for _, ap in ipairs(type(a.approvals) == "table" and a.approvals or {}) do
+    if ap.stale ~= true then
+      n = n + 1
+    end
+  end
+  return n
+end
+
 --- The number of open annotations in `bufnr` whose text could not be found,
 --- e.g. for a statusline.
 function M.orphan_count(bufnr)
@@ -165,6 +177,10 @@ function M.render(bufnr)
       if store.config.virtual_text and label then
         local replies = #(a.replies or {})
         local text = replies > 0 and string.format("%s (+%d)", label, replies) or label
+        local approved = approval_count(a)
+        if approved > 0 then
+          text = string.format("%s 👍%d", text, approved)
+        end
         if a["local"] then
           text = "[draft] " .. text
         end

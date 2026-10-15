@@ -1078,12 +1078,14 @@ fn authored_name(shares: &[Share]) -> Option<String> {
         .map(|(_, name)| name.to_owned())
 }
 
-/// The counts of a `report` entry: suggestions and comments by status,
-/// replies, and the open annotations that need work.
+/// The counts of a `report` entry: suggestions and comments by status, the
+/// open suggestions someone approved (§4.4.2), replies, and the open
+/// annotations that need work.
 fn count_shares(shares: &[Share]) -> Value {
     let mut counts = json!({
         "suggestions": { "open": 0, "accepted": 0, "rejected": 0, "withdrawn": 0 },
         "comments": { "open": 0, "resolved": 0 },
+        "approved": 0,
         "replies": 0,
         "orphaned": 0,
         "stale": 0,
@@ -1099,6 +1101,9 @@ fn count_shares(shares: &[Share]) -> Value {
         let (kind, status) =
             (thread["kind"].as_str().unwrap_or_default(), thread["status"].as_str().unwrap_or_default());
         add(&mut counts[format!("{kind}s")][status], 1);
+        if status == "open" && kind == "suggestion" && is_approved(thread) {
+            add(&mut counts["approved"], 1);
+        }
         if status == "open" {
             if share.missing || thread["resolution"] == "orphaned" {
                 add(&mut counts["orphaned"], 1);
@@ -1111,6 +1116,11 @@ fn count_shares(shares: &[Share]) -> Value {
         }
     }
     counts
+}
+
+/// Whether a listed suggestion has an approval that isn't stale (§2.5.7).
+fn is_approved(view: &Value) -> bool {
+    view["approvals"].as_array().is_some_and(|a| a.iter().any(|a| a["stale"] == json!(false)))
 }
 
 /// The event id of an event file's path.
@@ -1206,6 +1216,9 @@ pub fn render_report(report: &Value) -> String {
                 parts.push(paint(style::OPEN, plural(n, what)));
             }
         }
+        if count(&entry["approved"]) > 0 {
+            parts.push(paint(style::DONE, format!("{} approved", count(&entry["approved"]))));
+        }
         if count(&entry["replies"]) > 0 {
             parts.push(plural(count(&entry["replies"]), "reply"));
         }
@@ -1261,8 +1274,12 @@ pub fn render_report_verbose(report: &Value) -> String {
             1 => vec![paint(style::PENDING, "1 change")],
             n => vec![paint(style::PENDING, format!("{n} changes"))],
         };
+        let mut suggestions = counts(&entry["suggestions"], &["open", "accepted", "rejected", "withdrawn"]);
+        if count(&entry["approved"]) > 0 {
+            suggestions.insert(1, paint(style::DONE, format!("{} approved", count(&entry["approved"]))));
+        }
         let rows = [
-            ("suggestions", counts(&entry["suggestions"], &["open", "accepted", "rejected", "withdrawn"])),
+            ("suggestions", suggestions),
             ("comments", counts(&entry["comments"], &["open", "resolved"])),
             ("replies", [count(&entry["replies"])].into_iter().filter(|n| *n > 0).map(|n| n.to_string()).collect()),
             ("needs work", counts(entry, &["orphaned", "stale", "conflicted"])),

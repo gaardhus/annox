@@ -1,5 +1,6 @@
 --- Commands that create annotations or change their status: comment,
---- suggest, reply, accept, reject, resolve, revert, publish, read and commit.
+--- suggest, reply, react, approve, accept, reject, resolve, revert, publish,
+--- read and commit.
 
 local util = require("annox.util")
 local open_thread = require("annox.thread").open_thread
@@ -126,6 +127,59 @@ function M.delete(opts)
     request(bufnr, "annox/delete", { annotation = a.id }, function()
       vim.notify(string.format("annox: deleted the %s (:Annox restore brings it back)", a.kind))
     end)
+  end)
+end
+
+-- The reactions `react` offers when it isn't given one.
+local reactions = { "👍", "👎", "👀", "🎉", "❤️", "😄" }
+
+--- Reacts to the comment or suggestion under the cursor, or one of its
+--- replies, asking which, and which emoji unless `opts.reaction` is given.
+--- With `opts.removed`, removes the reaction instead, offering those the
+--- message has. opts: { annotation?, reaction?, removed? }
+function M.react(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  local roots = opts.annotation and buffer_annotations(bufnr, function()
+    return true
+  end) or util.under_cursor(bufnr)
+  local prompt = opts.removed and "Remove a reaction from" or "React to"
+  util.pick(opts, util.with_replies(roots), prompt, function(a)
+    local function send(reaction)
+      request(bufnr, "annox/react", { annotation = a.id, reaction = reaction, removed = opts.removed == true })
+    end
+    if opts.reaction then
+      return send(opts.reaction)
+    end
+    local choices = reactions
+    if opts.removed then
+      choices = vim.tbl_keys(type(a.reactions) == "table" and a.reactions or {})
+      table.sort(choices)
+      if #choices == 0 then
+        return vim.notify("annox: no reactions to remove", vim.log.levels.INFO)
+      end
+    end
+    vim.ui.select(choices, { prompt = opts.removed and "Remove" or "React with" }, function(reaction)
+      if reaction then
+        send(reaction)
+      end
+    end)
+  end)
+end
+
+--- Approves the open suggestion under the cursor with a 👍 (§4.4.2), asking
+--- which if there are several. With `opts.removed`, withdraws the approval.
+--- opts: { annotation?, removed? }
+function M.approve(opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  local open_suggestion = function(a)
+    return a.kind == "suggestion" and a.status == "open"
+  end
+  local candidates = opts.annotation and buffer_annotations(bufnr, open_suggestion)
+    or vim.tbl_filter(open_suggestion, util.under_cursor(bufnr))
+  util.pick(opts, candidates, opts.removed and "Unapprove" or "Approve", function(a)
+    request(bufnr, "annox/react", { annotation = a.id, reaction = "👍", removed = opts.removed == true })
   end)
 end
 

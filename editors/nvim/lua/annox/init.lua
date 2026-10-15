@@ -60,6 +60,8 @@ M.suggest = actions.suggest
 M.reply = actions.reply
 M.delete = actions.delete
 M.restore = actions.restore
+M.react = actions.react
+M.approve = actions.approve
 M.revert = actions.revert
 M.accept = actions.accept
 M.publish = actions.publish
@@ -253,6 +255,12 @@ local subcommands = {
   end,
   restore = function()
     M.restore()
+  end,
+  react = function(o)
+    M.react({ reaction = o.fargs[2], removed = o.bang })
+  end,
+  approve = function(o)
+    M.approve({ removed = o.bang })
   end,
   resolve = function(o)
     M.resolve({ visual = o.range > 0, all = o.bang })

@@ -742,4 +742,11 @@ fn reactions_and_approvals() {
     let history = cli::render_history(&annox(dir.path(), &["history", &s]));
     assert!(history.contains("reacted 👍") && history.contains("removed 👍"), "{history}");
     assert!(error(dir.path(), &["react", &s, ""]).contains("empty"));
+
+    // Approved open suggestions are counted in the report.
+    annox(dir.path(), &["react", &s, "👍"]);
+    let report = annox(dir.path(), &["report"]);
+    assert_eq!(report["documents"][0]["approved"], 1);
+    assert_eq!(plain(cli::render_report(&report)), "paper.md  1 open suggestion · 1 approved\n");
+    assert_eq!(plain(cli::render_report_verbose(&report)), "paper.md\n  suggestions  1 open · 1 approved\n");
 }
