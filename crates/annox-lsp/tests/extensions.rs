@@ -478,6 +478,15 @@ fn reactions_and_approvals() {
     assert_eq!(reacted["reactions"]["🎉"].as_array().unwrap().len(), 1);
     assert!(reacted.get("approvals").is_none(), "only suggestions have approvals");
 
+    // Hover shows the approval, and the reply's reaction (§6.5.2).
+    let hover = c.call(
+        "textDocument/hover",
+        json!({ "textDocument": { "uri": uri }, "position": { "line": 1, "character": 20 } }),
+    );
+    let markdown = hover["contents"]["value"].as_str().unwrap();
+    assert!(markdown.contains("```\n\n👍 _approved by Ada_\n\n**Ada**"), "{markdown}");
+    assert!(markdown.ends_with("Agreed.\n\n🎉 Ada"), "{markdown}");
+
     let removed = c.call("annox/react", json!({ "annotation": id, "reaction": "👍", "removed": true }));
     assert_eq!(removed["reactions"], json!({}));
     assert_eq!(removed["approvals"], json!([]));
