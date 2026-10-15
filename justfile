@@ -94,6 +94,8 @@ vscode-icon:
 code-install:
     code --install-extension "editors/vscode/annox-$(node -p "require('./editors/vscode/package.json').version").vsix"
 
+vscode: vsix code-install
+
 # Build the website in site/: annox-core as WebAssembly, the logos, the install scripts,
 # and the animated intro, with its font path pointed at site/fonts.
 site:
