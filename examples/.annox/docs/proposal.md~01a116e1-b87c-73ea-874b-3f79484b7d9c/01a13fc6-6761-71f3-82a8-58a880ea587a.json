@@ -1,0 +1,14 @@
+{
+  "id": "01a13fc6-6761-71f3-82a8-58a880ea587a",
+  "annotation": "01a116e1-b8e6-7601-b482-c24f96741f06",
+  "after": [
+    "01a116e1-b8e6-7601-b482-c24f96741f06"
+  ],
+  "type": "react",
+  "author": {
+    "id": "mailto:sam@example.com",
+    "name": "Sam Reviewer"
+  },
+  "time": "2026-10-15T13:35:29Z",
+  "reaction": "👍"
+}

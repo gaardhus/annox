@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 972 460" width="972" height="460" role="img" aria-labelledby="wf-title wf-desc">
   <title id="wf-title">The annox review workflow</title>
-  <desc id="wf-desc">Four steps. Annotate: highlight, comment on, or suggest edits to a plain-text file, from an editor or an agent. Discuss: reply in threads, while anchors follow edits to the text. Decide: resolve or reopen comments, and accept, reject, or withdraw suggestions; accepting applies the edit, and a reverting suggestion undoes it. Share: commit the event files with git, or sync them live through a hub. Every action writes one immutable event file to .annox/.</desc>
+  <desc id="wf-desc">Four steps. Annotate: highlight, comment on, or suggest edits to a plain-text file, from an editor or an agent. Discuss: reply in threads and react to notes, while anchors follow edits to the text. Decide: resolve or reopen comments, approve suggestions with a thumbs-up, and accept, reject, or withdraw them; accepting applies the edit, and a reverting suggestion undoes it. Share: commit the event files with git, or sync them live through a hub. Every action writes one immutable event file to .annox/.</desc>
   <style>
     text { font-family: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1f2937; }
     .h { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
@@ -78,7 +78,7 @@
     <circle class="num" cx="274" cy="26" r="13"/>
     <text class="t b on-accent" x="274" y="30.5" text-anchor="middle">2</text>
     <text class="h" x="296" y="32">Discuss</text>
-    <text class="s muted" x="260" y="60">Reply in threads beside the text</text>
+    <text class="s muted" x="260" y="60">Reply and react beside the text</text>
 
     <circle class="num" cx="526" cy="26" r="13"/>
     <text class="t b on-accent" x="526" y="30.5" text-anchor="middle">3</text>
@@ -148,6 +148,8 @@
     <text class="s b on-accent" x="308" y="175" text-anchor="middle" font-size="10">C</text>
     <text class="s b" x="322" y="175">Claude</text>
     <text class="t" x="302" y="198">Added, see Section 3.</text>
+    <rect class="pill" x="386" y="162" width="50" height="18" rx="9"/>
+    <text class="s" x="411" y="175" text-anchor="middle">👍 Ada</text>
     <path class="rule" d="M276 228H444"/>
     <text class="t b" x="276" y="252">Anchors follow edits</text>
     <text class="s muted" x="276" y="272">When the text changes, each</text>
@@ -180,9 +182,10 @@
     <path class="step" d="M588 239L614 217" marker-end="url(#wf-step)"/>
     <path class="step" d="M588 243H614" marker-end="url(#wf-step)"/>
     <path class="step" d="M588 247L614 269" marker-end="url(#wf-step)"/>
-    <text class="s muted" x="528" y="314">Accepting applies the edit.</text>
-    <text class="s muted" x="528" y="330">Undo it later with a</text>
-    <text class="s muted" x="528" y="346">suggestion that reverts it.</text>
+    <text class="s muted" x="528" y="306">A 👍 approves it for others.</text>
+    <text class="s muted" x="528" y="322">Accepting applies the edit.</text>
+    <text class="s muted" x="528" y="338">Undo it later with a</text>
+    <text class="s muted" x="528" y="354">suggestion that reverts it.</text>
   </g>
 
   <!-- 4. Share -->

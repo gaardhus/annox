@@ -13,8 +13,17 @@ import * as annox from "./annox.js";
 
 const YOU = { id: "urn:annox-demo:you", name: "You" };
 
+/** The reaction that approves a suggestion (§4.4.2). */
+const APPROVAL = "👍";
+
 /** A comment with nothing to read yet: no body and no replies (§2.2). */
 const isHighlight = (n) => n.kind === "comment" && !n.body && !n.replies.length;
+
+/** `people`'s names, as in "Ada, Bob and Cy". */
+function names(people) {
+  const n = people.map((p) => p.author?.name ?? p.author?.id ?? "someone");
+  return n.length < 2 ? (n[0] ?? "") : `${n.slice(0, -1).join(", ")} and ${n.at(-1)}`;
+}
 
 const esc = (s) =>
   String(s ?? "").replace(
@@ -155,6 +164,7 @@ ins { color: var(--annox-ins); text-decoration: none; }
 .body { margin: .3rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .reply { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--annox-line); font-size: .9rem; }
 .reply strong { font-weight: 600; }
+.reactions { margin: .45rem 0 0; color: var(--annox-muted); font-size: .8125rem; }
 .actions { display: flex; gap: .4rem; margin-top: .65rem; flex-wrap: wrap; align-items: center; }
 .actions .status { color: var(--annox-muted); font-size: .8125rem; margin-right: auto; }
 form { display: flex; flex-direction: column; gap: .45rem; margin-top: .6rem; }
@@ -219,8 +229,9 @@ class AnnoxDemo extends HTMLElement {
 
   /**
    * Seed notes, created when the demo loads or resets. Each is
-   * `{ kind: "comment" | "suggestion", quote, body, replacement, author, replies, status }`,
-   * where `quote` is the text to anchor to and `replies` is `[{ author, body }]`.
+   * `{ kind: "comment" | "suggestion", quote, body, replacement, author, replies, reactions, status }`,
+   * where `quote` is the text to anchor to, `replies` is `[{ author, body }]`, and
+   * `reactions` is `[{ author, reaction }]`. A 👍 on a suggestion approves it.
    */
   get annotations() {
     return this.#seed;
@@ -275,6 +286,8 @@ class AnnoxDemo extends HTMLElement {
       const id = this.#create(s.kind, target, s.body, s.replacement, author);
       for (const r of s.replies ?? [])
         this.#reply(id, r.body, r.author ?? this.you);
+      for (const r of s.reactions ?? [])
+        this.#append(id, "react", { reaction: r.reaction }, r.author ?? this.you);
       if (s.status) this.#setStatus(id, s.status, author);
     }
     this.#changed();
@@ -331,6 +344,15 @@ class AnnoxDemo extends HTMLElement {
       fields.appliedVersion = r.version;
     }
     this.#append(id, "status", fields, author);
+  }
+
+  /** Adds your approval of suggestion `id`, or takes it back (§4.4.2). */
+  #toggleApproval(id) {
+    const n = this.#notes.find((x) => x.id === id);
+    const mine = n.approvals.some((a) => a.author.id === this.you.id);
+    const fields = { reaction: APPROVAL };
+    if (mine) fields.removed = true;
+    this.#append(id, "react", fields);
   }
 
   /** Suggests putting back the text an accepted suggestion replaced (§4.3.4). */
@@ -593,14 +615,25 @@ class AnnoxDemo extends HTMLElement {
         actions = `<button class="primary" data-action="status" data-status="accepted" ${applicable ? "" : 'disabled title="The whitespace around this text changed, so the edit can\'t be applied"'}>Accept</button>`;
       }
       actions += `<button data-action="status" data-status="rejected">Reject</button>`;
+      const mine = n.approvals.some((a) => a.author.id === this.you.id);
+      actions += `<button data-action="approve" aria-pressed="${mine}" title="Tell other reviewers you agree, without applying it">${mine ? "Unapprove" : `${APPROVAL} Approve`}</button>`;
     } else {
       actions = `<button data-action="status" data-status="resolved">Resolve</button>`;
     }
+
+    // A suggestion's 👍 is its approval (§2.5.7); approvals of an earlier
+    // version are left out.
+    const approved = suggestion ? n.approvals.filter((a) => !a.stale) : [];
+    const reactions = Object.entries(n.reactions ?? {})
+      .filter(([r]) => !(suggestion && r === APPROVAL))
+      .map(([r, by]) => `${r} ${esc(names(by))}`);
+    if (approved.length) reactions.unshift(`${APPROVAL} Approved by ${esc(names(approved))}`);
 
     return `<article class="note ${n.kind} ${active ? "active" : ""} ${n.status !== "open" ? "closed" : ""} ${r.state === "orphaned" ? "orphan" : ""}" data-id="${esc(n.id)}">
       <header><strong>${esc(n.author?.name ?? n.author?.id)}</strong> ${suggestion ? (n.reverts ? "suggested a revert" : "suggested") : n.body ? "commented" : "highlighted"} ${n.status === "open" ? state : ""}</header>
       <div class="quote">${target}</div>
       ${n.body ? `<p class="body">${esc(n.body)}</p>` : ""}
+      ${reactions.length ? `<p class="reactions">${reactions.join(" · ")}</p>` : ""}
       ${n.replies.map((x) => `<div class="reply"><strong>${esc(x.author?.name ?? x.author?.id)}</strong> ${esc(x.body)}</div>`).join("")}
       <div class="actions">${actions}</div>
       ${active && n.status === "open" ? `<form data-form="reply"><input name="reply" placeholder="Reply" aria-label="Reply" required></form>` : ""}
@@ -643,6 +676,9 @@ class AnnoxDemo extends HTMLElement {
         ?.focus();
     } else if (action?.dataset.action === "revert" && note) {
       this.#active = this.#revert(note.dataset.id);
+      this.#changed();
+    } else if (action?.dataset.action === "approve" && note) {
+      this.#toggleApproval(note.dataset.id);
       this.#changed();
     } else if (action?.dataset.action === "cancel") {
       this.#draft = null;

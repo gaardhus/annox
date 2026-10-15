@@ -40,6 +40,19 @@ The spec and the reference implementation change together. A change to the spec 
 
 The spec is versioned separately from the code. It's still a draft, so incompatible changes are fine when the better design needs them.
 
+## Keeping the docs and site up to date
+
+A user-facing feature isn't done until everything that shows or explains it does. When you add or change one, go through these and update the ones it touches, in the same change:
+
+- **[`README.md`](README.md)**: the overview, the CLI listing, and the description of `examples/`.
+- **Editor READMEs**: [`editors/nvim/README.md`](editors/nvim/README.md) (commands and thread keys) and [`editors/vscode/README.md`](editors/vscode/README.md).
+- **The agent skill**, [`harnesses/skills/annox/SKILL.md`](harnesses/skills/annox/SKILL.md), and the MCP tool descriptions in `crates/annox-lsp/src/mcp.rs`.
+- **The website**: [`site/index.html`](site/index.html), [`site/how-it-works.html`](site/how-it-works.html), and the live demo in [`site/annox-demo/`](site/annox-demo/annox-demo.js), which runs `annox-core` and can show the feature. Check them with `just serve-site`.
+- **The workflow diagram**, [`assets/annox-workflow.svg`](assets/annox-workflow.svg), shown in the README and on the site.
+- **The animated intro**, [`assets/intro/annox-intro.html`](assets/intro/annox-intro.html). `just site` copies it to the site; re-render the video with `just intro-video`.
+- **The example**, [`examples/`](examples/): add a few annotations that use the feature, written with the example's authors (`mailto:sam@example.com`, `urn:agent:claude`).
+- **[`assets/nvim-demo.gif`](assets/nvim-demo.gif)**, recorded with `just nvim-demo`, if the feature changes what it shows.
+
 ## Commits and pull requests
 
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat: …`, `fix(nvim): …`). A commit-msg hook and CI check them with [committed](https://github.com/crate-ci/committed) (see `committed.toml`), and PR titles too, since PRs are squash-merged. The PR title becomes the commit message on `main`, and the changelog entry.
