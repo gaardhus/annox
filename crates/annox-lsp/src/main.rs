@@ -92,7 +92,7 @@ enum Command {
 const GROUPS: &[(&str, &[&str])] = &[
     ("Read", &["list", "show", "report", "history", "log", "watch"]),
     ("Annotate", &["comment", "highlight", "suggest", "reply", "edit"]),
-    ("Review", &["status", "accept", "revert", "retarget", "reattach", "delete", "restore", "read"]),
+    ("Review", &["status", "react", "accept", "revert", "retarget", "reattach", "delete", "restore", "read"]),
     ("Workspace", &["init", "commit"]),
     ("Servers", &["lsp", "hub", "mcp"]),
     ("Other", &["update"]),

@@ -226,6 +226,18 @@ pub enum Command {
         #[command(flatten)]
         author: Author,
     },
+    /// React to an annotation or reply with an emoji; 👍 on a suggestion approves it
+    React {
+        /// The annotation's id, as printed by `annox list`
+        id: String,
+        /// The emoji, such as 👍 or 👀
+        reaction: String,
+        /// Remove the reaction instead
+        #[arg(long)]
+        remove: bool,
+        #[command(flatten)]
+        author: Author,
+    },
     /// Mark threads read, so `annox list --unread` stops listing them until someone changes them again
     Read {
         /// Annotation ids, as printed by `annox list`; a reply's marks its thread
@@ -457,6 +469,7 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
         Command::Reattach { id, at, author } => move_target(&id, &at, None, &author, &cwd),
         Command::Delete { id, author } => set_deleted(&id, true, &author, &cwd),
         Command::Restore { id, author } => set_deleted(&id, false, &author, &cwd),
+        Command::React { id, reaction, remove, author } => react(&id, &reaction, remove, &author, &cwd),
         Command::Read { ids, all, author: who } => mark_read(&ids, all, &who, &cwd),
         Command::Commit { message, dry_run } => commit(message.as_deref(), dry_run, &cwd),
     }
@@ -587,6 +600,16 @@ fn set_deleted(id: &str, deleted: bool, who: &Author, cwd: &Path) -> anyhow::Res
     let event = if deleted { "delete" } else { "restore" };
     ops::append_event(&ws, &index, id, event, Map::new(), &author(who, &ws)?)?;
     Ok(json!({ "id": id, "deleted": deleted }))
+}
+
+fn react(id: &str, reaction: &str, remove: bool, who: &Author, cwd: &Path) -> anyhow::Result<Value> {
+    let (ws, index) = open_workspace(cwd)?;
+    derived(&index, id)?;
+    if reaction.is_empty() {
+        bail!("the reaction is empty");
+    }
+    let changed = ops::react(&ws, &index, id, reaction, remove, &author(who, &ws)?)?.is_some();
+    Ok(json!({ "id": id, "reaction": reaction, "removed": remove, "changed": changed }))
 }
 
 /// The author to write events as: flags, then environment, then the user
@@ -1398,6 +1421,14 @@ fn action(event: &Value) -> String {
         ("retarget", _) => "retargeted".into(),
         ("delete", _) => "deleted".into(),
         ("restore", _) => "restored".into(),
+        ("react", _) => {
+            let reaction = event["reaction"].as_str().unwrap_or_default();
+            if event["removed"] == json!(true) {
+                format!("removed {reaction}")
+            } else {
+                format!("reacted {reaction}")
+            }
+        }
         (kind, _) => kind.into(),
     }
 }
@@ -1418,6 +1449,21 @@ fn show(id: &str, cwd: &Path) -> anyhow::Result<Value> {
 
 /// One root annotation as listed: where it is now, and its thread, with
 /// deleted replies only when `deleted_replies`.
+/// Copies `reactions` and `approvals` from a derived state into a listed
+/// view, if there are any.
+fn add_reactions(view: &mut Value, state: &Value) {
+    for field in ["reactions", "approvals"] {
+        let any = match &state[field] {
+            Value::Object(o) => !o.is_empty(),
+            Value::Array(a) => !a.is_empty(),
+            _ => false,
+        };
+        if any {
+            view[field] = state[field].clone();
+        }
+    }
+}
+
 fn item(
     id: &str,
     state: &Value,
@@ -1434,13 +1480,15 @@ fn item(
         .filter(|r| r["kind"] == "reply" && r["parent"] == json!(id))
         .filter(|r| deleted_replies || r["deleted"] == json!(false))
         .map(|r| {
-            json!({
+            let mut reply = json!({
                 "id": r["id"],
                 "author": r["author"],
                 "created": r["created"],
                 "body": r["body"],
                 "editedBy": r["editedBy"],
-            })
+            });
+            add_reactions(&mut reply, r);
+            reply
         })
         .collect();
     let target: Option<Anchor> = serde_json::from_value(state["target"].clone()).ok();
@@ -1489,6 +1537,7 @@ fn item(
     if state["deleted"] != json!(false) {
         view["deleted"] = json!(true);
     }
+    add_reactions(&mut view, state);
     if area == Area::Local {
         view["local"] = json!(true);
     }

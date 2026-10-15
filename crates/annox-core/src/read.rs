@@ -101,6 +101,7 @@ impl ReadState {
             .collect();
         log.events.values().any(|e| {
             e.kind != "reanchor"
+                && e.kind != "react"
                 && author_id(e) != Some(reader)
                 && !covering.iter().any(|c| *c == e.id || log.is_ancestor(&e.id, c))
         })
@@ -265,6 +266,12 @@ mod tests {
     #[test]
     fn reanchors_are_not_unread() {
         let events = vec![ev("a", &[], "create", BOB), ev("b", &["a"], "reanchor", BOB)];
+        assert!(!seen(&["a"]).is_unread(ADA, &events, "a"));
+    }
+
+    #[test]
+    fn reactions_are_not_unread() {
+        let events = vec![ev("a", &[], "create", BOB), ev("b", &["a"], "react", BOB)];
         assert!(!seen(&["a"]).is_unread(ADA, &events, "a"));
     }
 

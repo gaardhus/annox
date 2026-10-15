@@ -113,6 +113,7 @@ annox highlight paper.md --quote "the bound is tight"
 annox suggest paper.md --quote "teh" --replace "the" --body "typo"
 annox reply ID --body "Fixed."
 annox status ID resolved
+annox react ID 👍 [--remove]                        # 👍 on a suggestion approves it
 annox accept ID
 annox revert ID [--accept] [--body TEXT]
 annox read ID... | --all

@@ -208,6 +208,51 @@ fn annotation_writes(kind: &str, root_id: &str, e: &Event) -> Writes {
     w
 }
 
+/// The reaction that marks approval of a suggestion (§4.4.2).
+pub const APPROVAL: &str = "👍";
+
+/// The author id and reaction of a valid `react` event, and whether it removes
+/// the reaction (§2.4).
+fn react(e: &Event) -> Option<(&str, &str, bool)> {
+    if e.kind != "react" {
+        return None;
+    }
+    let author = e.author.get("id").and_then(Value::as_str)?;
+    let reaction = str_field(e, "reaction").filter(|r| !r.is_empty())?;
+    let removed = match e.field("removed") {
+        None => false,
+        Some(r) => r.as_bool()?,
+    };
+    Some((author, reaction, removed))
+}
+
+/// The reactions present on a log (§2.5.7): for each reaction, the events
+/// that added it, sorted by id. Each author and reaction is a field of its
+/// own, decided by its head with the greatest id, so it never conflicts.
+fn reactions<'a>(log: &Log<'a>) -> BTreeMap<&'a str, Vec<&'a Event>> {
+    let mut writers: BTreeMap<(&str, &str), Vec<&str>> = BTreeMap::new();
+    for (id, e) in &log.events {
+        if let Some((author, reaction, _)) = react(e) {
+            writers.entry((author, reaction)).or_default().push(id);
+        }
+    }
+    let mut present: BTreeMap<&str, Vec<&Event>> = BTreeMap::new();
+    for ((_, reaction), ids) in writers {
+        let head = log.events[log.field_heads(&ids).last().expect("a written field has a head")];
+        if react(head).is_some_and(|(_, _, removed)| !removed) {
+            present.entry(reaction).or_default().push(head);
+        }
+    }
+    for events in present.values_mut() {
+        events.sort_by(|a, b| a.id.cmp(&b.id));
+    }
+    present
+}
+
+fn by(e: &Event) -> Value {
+    json!({ "author": e.author, "time": e.time })
+}
+
 /// Derives the state of annotation `id` (§2.5.6) from events, which may
 /// include events of other annotations. Returns `None` if the annotation has
 /// no valid `create` event.
@@ -228,6 +273,7 @@ pub fn derive_annotation(events: &[Event], id: &str) -> Option<Value> {
     let mut conflicts = fields.conflicts.clone();
 
     // Special rule 2: delete conflicts with changes the deleter hadn't seen.
+    // `react` events write no fields here, so they never count (§2.5.7).
     if !conflicts.contains_key("deleted") {
         let delete = fields.sources["deleted"];
         if delete.kind == "delete" {
@@ -262,9 +308,8 @@ pub fn derive_annotation(events: &[Event], id: &str) -> Option<Value> {
     }
     out.insert("body".into(), fields.values["body"].clone());
     let source = fields.sources["body"];
-    let edited =
-        if source.kind == "edit" { json!({ "author": source.author, "time": source.time }) } else { Value::Null };
-    out.insert("editedBy".into(), edited);
+    out.insert("editedBy".into(), if source.kind == "edit" { by(source) } else { Value::Null });
+    let reactions = reactions(&log);
     if kind != "reply" {
         out.insert("label".into(), fields.values["label"].clone());
         let status = &fields.values["status"];
@@ -272,12 +317,21 @@ pub fn derive_annotation(events: &[Event], id: &str) -> Option<Value> {
         if kind == "suggestion" {
             out.insert("edit".into(), json!({ "replacement": fields.values["replacement"] }));
             let source = fields.sources["replacement"];
-            let retargeted = if source.kind == "retarget" {
-                json!({ "author": source.author, "time": source.time })
-            } else {
-                Value::Null
-            };
-            out.insert("retargetedBy".into(), retargeted);
+            out.insert("retargetedBy".into(), if source.kind == "retarget" { by(source) } else { Value::Null });
+            // An approval is stale if it hasn't seen every head of the
+            // replacement (§2.5.7).
+            let replacement_heads: Vec<String> =
+                fields.conflicts.get("replacement").cloned().unwrap_or_else(|| vec![source.id.clone()]);
+            let approvals: Vec<Value> = reactions
+                .get(APPROVAL)
+                .into_iter()
+                .flatten()
+                .map(|e| {
+                    let stale = replacement_heads.iter().any(|h| !log.is_ancestor(h, &e.id));
+                    json!({ "author": e.author, "time": e.time, "stale": stale })
+                })
+                .collect();
+            out.insert("approvals".into(), json!(approvals));
             if let Some(reverts) = create.field("reverts").filter(|r| r.is_string()) {
                 out.insert("reverts".into(), reverts.clone());
             }
@@ -287,6 +341,9 @@ pub fn derive_annotation(events: &[Event], id: &str) -> Option<Value> {
         }
     }
     out.insert("deleted".into(), fields.values["deleted"].clone());
+    let reactions: Map<String, Value> =
+        reactions.into_iter().map(|(r, events)| (r.to_owned(), events.into_iter().map(by).collect())).collect();
+    out.insert("reactions".into(), Value::Object(reactions));
     out.insert("conflicts".into(), json!(conflicts));
     Some(Value::Object(out))
 }

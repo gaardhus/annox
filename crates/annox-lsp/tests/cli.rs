@@ -718,3 +718,28 @@ fn log_lists_and_follows_every_event() {
 fn plain(text: String) -> String {
     anstream::adapter::strip_str(&text).to_string()
 }
+
+#[test]
+fn reactions_and_approvals() {
+    let dir = setup(DOC);
+    let s = id(&annox(dir.path(), &["suggest", "paper.md", "--quote", "teh", "--replace", "the"]));
+    let reacted = annox(dir.path(), &["react", &s, "👍"]);
+    assert_eq!(reacted["changed"], true);
+    // Reacting again changes nothing.
+    assert_eq!(annox(dir.path(), &["react", &s, "👍"])["changed"], false);
+    let list = annox(dir.path(), &["list"]);
+    assert_eq!(list[0]["reactions"]["👍"][0]["author"]["id"], "urn:test:agent");
+    assert_eq!(list[0]["approvals"][0]["stale"], false);
+
+    // Re-targeting makes the approval stale.
+    annox(dir.path(), &["retarget", &s, "--quote", "teh bound", "--replace", "the bound"]);
+    assert_eq!(annox(dir.path(), &["list"])[0]["approvals"][0]["stale"], true);
+
+    annox(dir.path(), &["react", &s, "👍", "--remove"]);
+    let list = annox(dir.path(), &["list"]);
+    assert!(list[0].get("reactions").is_none() && list[0].get("approvals").is_none(), "{list}");
+
+    let history = cli::render_history(&annox(dir.path(), &["history", &s]));
+    assert!(history.contains("reacted 👍") && history.contains("removed 👍"), "{history}");
+    assert!(error(dir.path(), &["react", &s, ""]).contains("empty"));
+}

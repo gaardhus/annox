@@ -53,6 +53,7 @@ impl Server<'_> {
             "annox/reattach" => self.m_reattach(&params),
             "annox/delete" => self.m_simple(&params, "delete"),
             "annox/restore" => self.m_simple(&params, "restore"),
+            "annox/react" => self.m_react(&params),
             "annox/moveDocument" => self.m_move_document(&params),
             "annox/history" => self.m_history(&params),
             "annox/commit" => self.m_commit(&params),
@@ -304,6 +305,20 @@ impl Server<'_> {
         let id = str_param(params, "annotation")?;
         let (uri, a) = self.locate(id)?;
         self.write_and_view(&uri, &a, id, kind, Map::new())
+    }
+
+    fn m_react(&self, params: &Value) -> Result<Value, Failure> {
+        let id = str_param(params, "annotation")?;
+        let reaction = str_param(params, "reaction")?;
+        if reaction.is_empty() {
+            return fail(INVALID_PARAMS, "empty reaction");
+        }
+        let removed = params["removed"].as_bool().unwrap_or(false);
+        let (uri, a) = self.locate(id)?;
+        let result = ops::react(&a.ws, &a.index, id, reaction, removed, &self.author(&a.ws));
+        self.invalidate();
+        result.map_err(io_failure)?;
+        self.view_of(&uri, id)
     }
 
     fn m_move_document(&self, params: &Value) -> Result<Value, Failure> {

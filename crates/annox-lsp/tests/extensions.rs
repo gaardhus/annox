@@ -451,3 +451,36 @@ fn accepting_carries_comments_on_the_replaced_text() {
     assert_eq!(view["resolution"], json!({ "state": "exact", "step": 0, "range": range(1, 14, 36) }));
     f.client.shutdown();
 }
+
+#[test]
+fn reactions_and_approvals() {
+    let mut f = setup();
+    let uri = f.uri.clone();
+    let c = &mut f.client;
+    let s = c.call(
+        "annox/create",
+        json!({ "textDocument": { "uri": uri }, "kind": "suggestion", "range": range(1, 14, 27), "replacement": "we show that" }),
+    );
+    assert_eq!(s["reactions"], json!({}));
+    assert_eq!(s["approvals"], json!([]));
+    let id = s["id"].as_str().unwrap().to_owned();
+
+    let approved = c.call("annox/react", json!({ "annotation": id, "reaction": "👍" }));
+    assert_eq!(approved["reactions"]["👍"][0]["author"]["id"], "mailto:ada@example.org");
+    assert_eq!(approved["approvals"][0]["stale"], false);
+    // Approving again writes nothing.
+    c.call("annox/react", json!({ "annotation": id, "reaction": "👍" }));
+    let history = c.call("annox/history", json!({ "annotation": id }));
+    assert_eq!(history.as_array().unwrap().len(), 2);
+
+    let reply = c.call("annox/reply", json!({ "parent": id, "body": "Agreed." }));
+    let reacted = c.call("annox/react", json!({ "annotation": reply["id"], "reaction": "🎉" }));
+    assert_eq!(reacted["reactions"]["🎉"].as_array().unwrap().len(), 1);
+    assert!(reacted.get("approvals").is_none(), "only suggestions have approvals");
+
+    let removed = c.call("annox/react", json!({ "annotation": id, "reaction": "👍", "removed": true }));
+    assert_eq!(removed["reactions"], json!({}));
+    assert_eq!(removed["approvals"], json!([]));
+    assert_eq!(c.call_err("annox/react", json!({ "annotation": id, "reaction": "" })), -32602);
+    f.client.shutdown();
+}

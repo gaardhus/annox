@@ -300,6 +300,39 @@ pub fn append_event(
     Ok(event)
 }
 
+/// Adds `author`'s `reaction` to `annotation`, or with `removed` removes it
+/// (§2.4). Writes nothing and returns `None` if that wouldn't change it.
+pub fn react(
+    ws: &Workspace,
+    index: &Index,
+    annotation: &str,
+    reaction: &str,
+    removed: bool,
+    author: &Value,
+) -> io::Result<Option<Event>> {
+    if reaction.is_empty() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "empty reaction"));
+    }
+    let own: Vec<Event> = index
+        .events
+        .values()
+        .filter(|(e, _)| e.annotation.as_deref() == Some(annotation))
+        .map(|(e, _)| e.clone())
+        .collect();
+    let state = replay::derive_annotation(&own, annotation)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "unknown annotation"))?;
+    let has =
+        state["reactions"][reaction].as_array().is_some_and(|by| by.iter().any(|b| b["author"]["id"] == author["id"]));
+    if has != removed {
+        return Ok(None);
+    }
+    let mut fields = Map::from_iter([("reaction".into(), json!(reaction))]);
+    if removed {
+        fields.insert("removed".into(), json!(true));
+    }
+    append_event(ws, index, annotation, "react", fields, author).map(Some)
+}
+
 /// Marks the thread of `annotation` read for `author`, who just wrote to it
 /// (§5.13). Read state is a convenience, so failing to save it isn't an error.
 fn mark_read(ws: &Workspace, index: &Index, annotation: &str, author: &Value) {

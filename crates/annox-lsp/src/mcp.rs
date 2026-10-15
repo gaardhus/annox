@@ -239,6 +239,18 @@ const TOOLS: &[Tool] = &[
         read_only: false,
     },
     Tool {
+        name: "react",
+        command: "react",
+        description: "React to an annotation or reply with an emoji, or remove your reaction. A 👍 on a suggestion approves it: it tells other reviewers you read it and agree, without accepting it.",
+        positional: &["id", "reaction"],
+        params: &[
+            ID,
+            ("reaction", "string", true, "One emoji, such as 👍 or 👀."),
+            ("remove", "boolean", false, "Remove the reaction instead."),
+        ],
+        read_only: false,
+    },
+    Tool {
         name: "delete",
         command: "delete",
         description: "Hide an annotation or reply. Its history is kept, and `restore` undoes it.",

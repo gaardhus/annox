@@ -62,6 +62,7 @@ annox suggest paper.md --quote "teh bound" --replace "the bound" --body "Typo."
 annox reply ID --body "Done in §3."
 annox status ID resolved            # comments: open | resolved
 annox status ID withdrawn           # suggestions: open | rejected | withdrawn
+annox react ID 👍                   # approve a suggestion; --remove takes it back
 annox edit ID --body "…"            # change your own comment
 annox retarget ID --quote "new text" --replace "…"   # move a suggestion to new text
 annox reattach ID --quote "new text"                 # move a comment to new text
