@@ -102,6 +102,17 @@ Re-targets a stale suggestion (§4.2.1): the anchor and the replacement change t
 
 **Deleting hides, it doesn't erase.** A deleted annotation's content stays in its event files, and in version-control history. Clients SHOULD make this clear to users, for example with the wording "delete" rather than "erase". Actually erasing content means removing files by hand and rewriting history, which is outside this specification. Events from other copies that refer to removed files become dangling (§2.5.1).
 
+### `react`
+
+Adds or removes the author's reaction to an annotation of any kind, replies included.
+
+- `reaction`: a non-empty string, normally a single emoji. Reactions are compared as exact strings, so `👍` and `👍🏽` are different reactions.
+- `removed`: optional boolean. If `true`, the event removes the reaction instead of adding it. `false` is the same as leaving it out. Writers SHOULD leave it out when adding.
+
+Each author has at most one of each reaction on an annotation. Adding a reaction the author already has, or removing one they don't, changes nothing. A `👍` on a suggestion is an **approval** (§4.4.2).
+
+Viewers and Clients SHOULD show an annotation's reactions with who made them, and Clients SHOULD offer to add and remove the user's own.
+
 ### Invalid and unknown events
 
 An event that breaks the rules above, such as a `retarget` on a comment or a `status` on a reply, is **invalid**. An event whose `type` the reader doesn't recognize is **unknown**. Both are kept and still count in the causal graph (§2.5.1), but they change no fields. Readers SHOULD NOT report unknown events as errors.
@@ -129,8 +140,9 @@ The state of a comment or suggestion is made up of **fields**. Each event type w
 | `retarget` | `target`, `replacement` |
 | `delete` | `deleted` (= true) |
 | `restore` | `deleted` (= false) |
+| `react` | the reaction of its author (§2.5.7) |
 
-Replies have only `body` and `deleted`.
+Replies have only `body`, `deleted`, and reactions.
 
 The **heads of a field** are the valid events writing that field that are not ancestors of any other valid event writing that field. If a field has one head, its value is the value written by that head. If it has several heads, those writes were concurrent and the field is **conflicted**.
 
@@ -141,7 +153,7 @@ A conflicted field is presented as a conflict: readers report every head. Viewer
 There are two special rules:
 
 1. **Anchor rewrites never conflict.** If every head of `target` except at most one is a `reanchor` event, the field is not conflicted. Its value comes from the one non-`reanchor` head if there is one (a deliberate `retarget` wins over a concurrent automatic refresh). Otherwise it comes from the `reanchor` head with the greatest id. If two or more heads are `create` or `retarget` events, the field is conflicted as usual.
-2. **Delete conflicts with concurrent changes.** If `deleted` has a single head that is a `delete` event, and some valid event that isn't a `reanchor` is not an ancestor of that head, the annotation has a **delete conflict**. Someone changed it without having seen the deletion, or changed it after it was deleted. The `deleted` field is then reported as conflicted, with the `delete` head and those events as the competing entries.
+2. **Delete conflicts with concurrent changes.** If `deleted` has a single head that is a `delete` event, and some valid event that isn't a `reanchor` or a `react` is not an ancestor of that head, the annotation has a **delete conflict**. Someone changed it without having seen the deletion, or changed it after it was deleted. The `deleted` field is then reported as conflicted, with the `delete` head and those events as the competing entries.
 
 ### 2.5.4 Resolving conflicts
 
@@ -174,16 +186,28 @@ The derived state of an annotation has this shape. It is used by the test vector
   "label": null,
   "status": "open",
   "deleted": false,
+  "reactions": { "👀": [{ "author": { "id": "mailto:bob@example.org", "name": "Bob" }, "time": "2026-09-28T14:40:00Z" }] },
   "conflicts": {}
 }
 ```
 
 - `author` and `created` come from the `create` event.
 - `editedBy` is `{ author, time }` from the event that wrote the current `body` if that event is an `edit`, and `null` otherwise (§2.4). When `body` is conflicted, that is the head its provisional value comes from.
-- For suggestions, `replacement` appears as `edit.replacement`, and `appliedVersion` appears when `status` is `accepted`. `retargetedBy` is `{ author, time }` from the event that wrote the current `replacement` if that event is a `retarget`, and `null` otherwise (§4.2.1). `reverts` appears only if the `create` event has it. For replies, `parent` is present and `target`, `label`, and `status` are omitted.
+- For suggestions, `replacement` appears as `edit.replacement`, and `appliedVersion` appears when `status` is `accepted`. `retargetedBy` is `{ author, time }` from the event that wrote the current `replacement` if that event is a `retarget`, and `null` otherwise (§4.2.1). `approvals` is described in §2.5.7. `reverts` appears only if the `create` event has it. For replies, `parent` is present and `target`, `label`, and `status` are omitted.
+- `reactions` is described in §2.5.7. It is present for every kind, and `{}` if there are none.
 - `conflicts` maps each conflicted field name to the ids of its competing events, sorted by ascending id. The field itself holds the provisional value.
 
 A reply whose parent is deleted, missing, or not a root SHOULD still be shown, for example under a placeholder thread.
+
+### 2.5.7 Reactions
+
+Each pair of an author id and a reaction is a field of its own, written only by that author's valid `react` events with that `reaction`. Its heads are found as in §2.5.2. The reaction is present if the head with the greatest id adds it, and absent if that head removes it. Reactions never conflict: only one person writes each of these fields, so concurrent heads come from the same person on two branches, and showing that as a conflict would ask them to choose between two of their own clicks.
+
+`reactions` maps each reaction that is present for at least one author to a list of `{ author, time }`, taken from the head that added it, sorted by that head's id.
+
+For suggestions, `approvals` lists the authors whose `👍` is present (§4.4.2), as `{ author, time, stale }`, in the same order as `reactions["👍"]`, and is `[]` if there are none. An approval is **stale** if some head of `replacement` is not an ancestor of the `react` event that added it: the replacement was re-targeted since the approver saw it, or concurrently. Edits of the body or label, status changes, and `reanchor` events don't make approvals stale.
+
+`react` events aren't counted when deciding whether an annotation was changed concurrently with its deletion (§2.5.3), or whether it is unread (§5.13).
 
 ## 2.6 Example
 

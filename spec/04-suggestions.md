@@ -153,6 +153,14 @@ Suggestions that are `accepted`, `rejected`, or `withdrawn` are **closed**.
 - A closed suggestion MUST NOT be presented as orphaned. §3.7.3 applies to open annotations only.
 - Clients MUST NOT rewrite the anchors of closed suggestions. The anchor, together with the applied version, records exactly what changed.
 
+### 4.4.2 Approval
+
+A reviewer **approves** a suggestion by reacting to it with `👍` (U+1F44D, without a skin-tone modifier), and withdraws the approval by removing that reaction (§2.4). Approval tells the other reviewers that someone has read the suggestion and agrees with it. It is not a status: an approved suggestion is still `open`, and accepting it is a separate decision that anyone may make, approved or not ([D11](decisions.md#d11-accepting-a-suggestion-applies-it-2026-09-28)).
+
+- Clients SHOULD show the approvals of open suggestions, with who approved, for example "approved by Bob and Cy".
+- An approval is stale once the suggestion is re-targeted (§2.5.7), because the approver hasn't seen the new replacement. Clients SHOULD mark stale approvals, for example "Bob approved an earlier version", and SHOULD NOT count them as approvals.
+- A client MAY offer to filter or accept suggestions by approval. Accepting several at once follows §4.3 as usual.
+
 ## 4.5 Example
 
 Using the document from §3.9 after its edit (`As shown in Section 3, …`), a suggestion on "we prove that" with `replacement: "we show that"` resolves by step 3 to `[41, 54)`. It is applicable, and accepting it produces:

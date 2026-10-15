@@ -109,7 +109,9 @@ LSP has no standard way to ask the user for free text, so writing comments, repl
   "status": "open",
   "edit": { "replacement": "we show that" },
   "retargetedBy": null,
+  "approvals": [],
   "deleted": false,
+  "reactions": {},
   "resolution": {
     "state": "relocated",
     "step": 3,
@@ -162,6 +164,7 @@ Every request that changes something writes the corresponding events (§2.4), th
 | `annox/retarget` | `{ annotation, range, replacement }` | `retarget` event (§4.2.1). |
 | `annox/reattach` | `{ annotation, range }` | A user-confirmed location for an orphaned comment (§3.7.4): `reanchor` event. Suggestions use `annox/retarget` instead. |
 | `annox/delete`, `annox/restore` | `{ annotation }` | `delete` or `restore` event. |
+| `annox/react` | `{ annotation, reaction, removed?: boolean }` | `react` event (§2.4) by the session's author, on any kind of annotation. With `removed: true`, removes the reaction. Writes nothing if the session's author already has that reaction, or with `removed`, doesn't have it. Approving a suggestion is `reaction: "👍"` (§4.4.2). |
 | `annox/resolveConflict` | `{ annotation, field, value, revert?: boolean }` | Writes the resolving event described in §2.5.4, with `after` covering all competing heads. `value` has the type of the field. For a status conflict involving `accepted`, `revert: true` asks the server to revert the edit (§4.3.3), applied as below. |
 | `annox/moveDocument` | `{ from: DocumentUri, to: DocumentUri }` | Re-attaches a missing document (§5.7.3): `move` events for the documents at `from`. |
 | `annox/history` | `{ annotation }` | Returns the events of the annotation's thread (its root's and every reply's, also when `annotation` is a reply) in the order of §2.5.5, for history views. Changes nothing. |

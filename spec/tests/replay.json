@@ -98,6 +98,7 @@
         "label": null,
         "status": "resolved",
         "deleted": false,
+        "reactions": {},
         "conflicts": {}
       }
     },
@@ -211,6 +212,7 @@
         "label": null,
         "status": "resolved",
         "deleted": false,
+        "reactions": {},
         "conflicts": {
           "body": [
             "01926d3a-0002-7000-8000-000000000000",
@@ -344,6 +346,7 @@
         "label": null,
         "status": "resolved",
         "deleted": false,
+        "reactions": {},
         "conflicts": {}
       }
     },
@@ -443,6 +446,7 @@
         "label": "important",
         "status": "open",
         "deleted": false,
+        "reactions": {},
         "conflicts": {}
       }
     },
@@ -543,7 +547,9 @@
           "replacement": "we show that"
         },
         "retargetedBy": null,
+        "approvals": [],
         "deleted": false,
+        "reactions": {},
         "conflicts": {
           "status": [
             "01926d3a-0002-7000-8000-000000000000",
@@ -647,6 +653,7 @@
         "label": null,
         "status": "open",
         "deleted": true,
+        "reactions": {},
         "conflicts": {
           "deleted": [
             "01926d3a-0002-7000-8000-000000000000",
@@ -750,6 +757,7 @@
         "label": null,
         "status": "open",
         "deleted": true,
+        "reactions": {},
         "conflicts": {}
       }
     },
@@ -854,6 +862,7 @@
         "label": null,
         "status": "open",
         "deleted": true,
+        "reactions": {},
         "conflicts": {
           "deleted": [
             "01926d3a-0003-7000-8000-000000000000",
@@ -965,6 +974,7 @@
         "label": null,
         "status": "open",
         "deleted": true,
+        "reactions": {},
         "conflicts": {}
       }
     },
@@ -1086,6 +1096,7 @@
         "label": null,
         "status": "open",
         "deleted": false,
+        "reactions": {},
         "conflicts": {}
       }
     },
@@ -1222,7 +1233,9 @@
           },
           "time": "2026-09-28T14:02:00Z"
         },
+        "approvals": [],
         "deleted": false,
+        "reactions": {},
         "conflicts": {}
       }
     },
@@ -1362,7 +1375,9 @@
           },
           "time": "2026-09-28T14:03:00Z"
         },
+        "approvals": [],
         "deleted": false,
+        "reactions": {},
         "conflicts": {
           "target": [
             "01926d3a-0002-7000-8000-000000000000",
@@ -1465,6 +1480,7 @@
         "label": null,
         "status": "open",
         "deleted": false,
+        "reactions": {},
         "conflicts": {}
       }
     },
@@ -1595,6 +1611,7 @@
         "label": null,
         "status": "open",
         "deleted": false,
+        "reactions": {},
         "conflicts": {}
       }
     },
@@ -1681,8 +1698,10 @@
           "replacement": "we show that"
         },
         "retargetedBy": null,
+        "approvals": [],
         "appliedVersion": "sha256:abababababababababababababababababababababababababababababababab",
         "deleted": false,
+        "reactions": {},
         "conflicts": {}
       }
     },
@@ -1770,8 +1789,10 @@
           "replacement": "we show that"
         },
         "retargetedBy": null,
+        "approvals": [],
         "appliedVersion": "sha256:abababababababababababababababababababababababababababababababab",
         "deleted": false,
+        "reactions": {},
         "conflicts": {},
         "reverts": "01926d3a-00ff-7000-8000-000000000000"
       }
@@ -1842,6 +1863,622 @@
           "time": "2026-09-28T14:02:00Z"
         },
         "deleted": false,
+        "reactions": {},
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "reactions",
+      "description": "Reactions per author and emoji: a removed reaction is gone, a repeated add takes the later time, and `removed: false` adds.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?"
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "reaction": "👍"
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0002-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:cy@example.org",
+            "name": "Cy"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "reaction": "👍"
+        },
+        {
+          "id": "01926d3a-0004-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0003-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:04:00Z",
+          "reaction": "🎉"
+        },
+        {
+          "id": "01926d3a-0005-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0004-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:05:00Z",
+          "reaction": "🎉",
+          "removed": true
+        },
+        {
+          "id": "01926d3a-0006-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0005-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:cy@example.org",
+            "name": "Cy"
+          },
+          "time": "2026-09-28T14:06:00Z",
+          "reaction": "👍"
+        },
+        {
+          "id": "01926d3a-0007-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0006-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:07:00Z",
+          "reaction": "👀",
+          "removed": false
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "comment",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "label": null,
+        "deleted": false,
+        "body": "Is this tight?",
+        "editedBy": null,
+        "status": "open",
+        "reactions": {
+          "👍": [
+            {
+              "author": {
+                "id": "mailto:bob@example.org",
+                "name": "Bob"
+              },
+              "time": "2026-09-28T14:02:00Z"
+            },
+            {
+              "author": {
+                "id": "mailto:cy@example.org",
+                "name": "Cy"
+              },
+              "time": "2026-09-28T14:06:00Z"
+            }
+          ],
+          "👀": [
+            {
+              "author": {
+                "id": "mailto:bob@example.org",
+                "name": "Bob"
+              },
+              "time": "2026-09-28T14:07:00Z"
+            }
+          ]
+        },
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "reaction-concurrent",
+      "description": "Concurrent writes to one author's reaction don't conflict (the greatest id wins), and a reaction concurrent with a delete is no delete conflict.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?"
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "reaction": "👀"
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "reaction": "👀",
+          "removed": true
+        },
+        {
+          "id": "01926d3a-0004-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "delete",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:04:00Z"
+        },
+        {
+          "id": "01926d3a-0005-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:cy@example.org",
+            "name": "Cy"
+          },
+          "time": "2026-09-28T14:05:00Z",
+          "reaction": "🎉"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "comment",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 32,
+              "end": 45
+            },
+            "quote": {
+              "exact": "we prove that",
+              "prefix": "\\section{Results}\nIn Section 3, ",
+              "suffix": " the bound is tight for all $n$."
+            }
+          }
+        },
+        "label": null,
+        "body": "Is this tight?",
+        "editedBy": null,
+        "status": "open",
+        "deleted": true,
+        "reactions": {
+          "🎉": [
+            {
+              "author": {
+                "id": "mailto:cy@example.org",
+                "name": "Cy"
+              },
+              "time": "2026-09-28T14:05:00Z"
+            }
+          ]
+        },
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "approvals",
+      "description": "A 👍 on a suggestion is an approval. Approvals given before or concurrently with a retarget are stale; a later body edit doesn't make them stale.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "suggestion",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": null,
+          "edit": {
+            "replacement": "we show that"
+          }
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "reaction": "👍"
+        },
+        {
+          "id": "01926d3a-0003-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0002-7000-8000-000000000000"
+          ],
+          "type": "retarget",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:03:00Z",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 46,
+                "end": 55
+              },
+              "quote": {
+                "exact": "the bound",
+                "prefix": "ts}\nIn Section 3, we prove that ",
+                "suffix": " is tight for all $n$.\n"
+              }
+            }
+          },
+          "edit": {
+            "replacement": "we show"
+          }
+        },
+        {
+          "id": "01926d3a-0004-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0003-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:cy@example.org",
+            "name": "Cy"
+          },
+          "time": "2026-09-28T14:04:00Z",
+          "reaction": "👍"
+        },
+        {
+          "id": "01926d3a-0005-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0004-7000-8000-000000000000"
+          ],
+          "type": "edit",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:05:00Z",
+          "body": "Simpler wording."
+        },
+        {
+          "id": "01926d3a-0006-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:dee@example.org",
+            "name": "Dee"
+          },
+          "time": "2026-09-28T14:06:00Z",
+          "reaction": "👍"
+        },
+        {
+          "id": "01926d3a-0007-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0005-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:cy@example.org",
+            "name": "Cy"
+          },
+          "time": "2026-09-28T14:07:00Z",
+          "reaction": "🎉"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "suggestion",
+        "author": {
+          "id": "mailto:ada@example.org",
+          "name": "Ada Lovelace"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "target": {
+          "path": "paper.tex",
+          "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+          "selectors": {
+            "position": {
+              "start": 46,
+              "end": 55
+            },
+            "quote": {
+              "exact": "the bound",
+              "prefix": "ts}\nIn Section 3, we prove that ",
+              "suffix": " is tight for all $n$.\n"
+            }
+          }
+        },
+        "label": null,
+        "status": "open",
+        "edit": {
+          "replacement": "we show"
+        },
+        "body": "Simpler wording.",
+        "editedBy": {
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:05:00Z"
+        },
+        "retargetedBy": {
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:03:00Z"
+        },
+        "approvals": [
+          {
+            "author": {
+              "id": "mailto:bob@example.org",
+              "name": "Bob"
+            },
+            "time": "2026-09-28T14:02:00Z",
+            "stale": true
+          },
+          {
+            "author": {
+              "id": "mailto:cy@example.org",
+              "name": "Cy"
+            },
+            "time": "2026-09-28T14:04:00Z",
+            "stale": false
+          },
+          {
+            "author": {
+              "id": "mailto:dee@example.org",
+              "name": "Dee"
+            },
+            "time": "2026-09-28T14:06:00Z",
+            "stale": true
+          }
+        ],
+        "deleted": false,
+        "reactions": {
+          "👍": [
+            {
+              "author": {
+                "id": "mailto:bob@example.org",
+                "name": "Bob"
+              },
+              "time": "2026-09-28T14:02:00Z"
+            },
+            {
+              "author": {
+                "id": "mailto:cy@example.org",
+                "name": "Cy"
+              },
+              "time": "2026-09-28T14:04:00Z"
+            },
+            {
+              "author": {
+                "id": "mailto:dee@example.org",
+                "name": "Dee"
+              },
+              "time": "2026-09-28T14:06:00Z"
+            }
+          ],
+          "🎉": [
+            {
+              "author": {
+                "id": "mailto:cy@example.org",
+                "name": "Cy"
+              },
+              "time": "2026-09-28T14:07:00Z"
+            }
+          ]
+        },
+        "conflicts": {}
+      }
+    },
+    {
+      "name": "reply-reaction",
+      "description": "A reply can have reactions. Only suggestions have approvals.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "reply",
+          "parent": "01926d3a-ffff-7000-8000-000000000000",
+          "body": "Yes, see Lemma 4."
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "react",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "reaction": "👍"
+        }
+      ],
+      "expected": {
+        "id": "01926d3a-0001-7000-8000-000000000000",
+        "kind": "reply",
+        "author": {
+          "id": "mailto:bob@example.org",
+          "name": "Bob"
+        },
+        "created": "2026-09-28T14:01:00Z",
+        "parent": "01926d3a-ffff-7000-8000-000000000000",
+        "body": "Yes, see Lemma 4.",
+        "editedBy": null,
+        "deleted": false,
+        "reactions": {
+          "👍": [
+            {
+              "author": {
+                "id": "mailto:ada@example.org",
+                "name": "Ada Lovelace"
+              },
+              "time": "2026-09-28T14:02:00Z"
+            }
+          ]
+        },
         "conflicts": {}
       }
     }

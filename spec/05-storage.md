@@ -197,7 +197,7 @@ Clients MAY track which changes a person hasn't seen yet, so they can point out 
 
 State is kept per **reader**, an author id (§2.7): the identity the tool writes events under. One copy of a workspace can have several readers, such as a person and the agents working for them, and each reader's state is separate.
 
-- An event of an annotation is **unread** by reader *r* if it is valid and not dangling (§2.5.1), its author isn't *r*, it isn't a `reanchor`, and it is neither in *r*'s seen set for the annotation nor an ancestor of an event in that set or of an event by *r*. Ancestry follows `after` links, not ids or times, so events that arrive late, for example from an old branch, are unread whatever their ids.
+- An event of an annotation is **unread** by reader *r* if it is valid and not dangling (§2.5.1), its author isn't *r*, it isn't a `reanchor` or a `react` (§2.5.7), and it is neither in *r*'s seen set for the annotation nor an ancestor of an event in that set or of an event by *r*. Ancestry follows `after` links, not ids or times, so events that arrive late, for example from an old branch, are unread whatever their ids.
 - An annotation is unread if it has an unread event. A thread is unread if its root or any of its replies is.
 - **Marking a thread read** adds the current heads of its root and of each reply to the reader's seen sets. Writing an event to a thread, other than a `reanchor`, marks the thread read for its author.
 - **Baseline.** A reader with no entry in the file starts by marking every annotation read, so that existing annotations aren't all unread at once. An entry for a reader with nothing seen is `{ "seen": {} }`.
