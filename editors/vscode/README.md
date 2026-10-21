@@ -111,6 +111,7 @@ When the workspace syncs through a hub, collaborators' cursors appear with their
 | `annox.presence`          | `true`  | Share your cursor with collaborators on a sync hub.                                                                                |
 | `annox.labels`            | `true`  | Show comment text and suggested replacements at the end of lines.                                                                 |
 | `annox.inlineSuggestions` | `false` | Always draw suggestions inline, not only in suggestion mode.                                                                       |
+| `annox.wordDiff`          | `true`  | Tint the words that changed within an inline suggestion, on both sides, diff-so-fancy style.                                       |
 | `annox.unread` | `true` | Mark threads others changed since you last read them. Off, it forgets what you've read, so turning it back on starts with nothing unread. Restarts the server. |
 | `annox.markReadOnOpen` | `true` | Mark a thread read when you open it from the annox view, the sidebar, a list, or *Show Thread*. |
 | `annox.suggestionDelay`   | `750`   | In suggestion mode, the pause in milliseconds after which your edits become suggestions.                                          |

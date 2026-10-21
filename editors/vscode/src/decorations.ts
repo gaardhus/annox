@@ -5,6 +5,7 @@
 import * as vscode from "vscode";
 import { type Store, approvalCount, firstLine, isConflicted, isOrphaned, isUnread, key, rangeOf, toRange } from "./store.ts";
 import type { AnnotationView } from "./types.ts";
+import { pieces, wordChanges } from "./worddiff.ts";
 
 const color = (id: string) => new vscode.ThemeColor(id);
 
@@ -52,13 +53,20 @@ export class Decorations implements vscode.Disposable {
     point: vscode.window.createTextEditorDecorationType({
       before: { contentText: "◆", color: color("annox.pointForeground"), margin: "0 1px" },
     }),
+    // Like the diff editor: a light tint on the whole change, and a stronger
+    // one on the words that changed.
     deletion: vscode.window.createTextEditorDecorationType({
       textDecoration: "line-through",
       color: color("annox.deletionForeground"),
+      backgroundColor: color("diffEditor.removedLineBackground"),
+    }),
+    wordDeletion: vscode.window.createTextEditorDecorationType({
       backgroundColor: color("diffEditor.removedTextBackground"),
     }),
+    // One per piece of the inserted text, so the words that changed can have
+    // their own tint; pieces at the same position are drawn in order.
     insertion: vscode.window.createTextEditorDecorationType({
-      after: { color: color("annox.insertionForeground"), backgroundColor: color("diffEditor.insertedTextBackground") },
+      after: { color: color("annox.insertionForeground"), backgroundColor: color("diffEditor.insertedLineBackground") },
       rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
     }),
     label: vscode.window.createTextEditorDecorationType({
@@ -139,6 +147,7 @@ export class Decorations implements vscode.Disposable {
     const config = vscode.workspace.getConfiguration("annox", doc.uri);
     const labels = config.get<boolean>("labels", true);
     const inline = this.inline(uri) || config.get<boolean>("inlineSuggestions", false);
+    const wordDiff = config.get<boolean>("wordDiff", true);
     const ranges: Record<keyof typeof this.types, vscode.DecorationOptions[]> = {
       comment: [],
       highlight: [],
@@ -149,6 +158,7 @@ export class Decorations implements vscode.Disposable {
       conflict: [],
       point: [],
       deletion: [],
+      wordDeletion: [],
       insertion: [],
       label: [],
       presenceRange: [],
@@ -172,14 +182,19 @@ export class Decorations implements vscode.Disposable {
       const range = doc.validateRange(r);
       let label = a.kind === "suggestion" ? `→ ${a.edit?.replacement ?? ""}` : (firstLine(a.body) ?? a.label);
       if (a.kind === "suggestion" && a.applicable && inline) {
-        // Deleted text struck through, followed by the inserted text.
+        // Deleted text struck through, followed by the inserted text, with
+        // the words that changed tinted more strongly on both sides.
         if (!range.isEmpty) ranges.deletion.push({ range });
-        const replacement = a.edit?.replacement ?? "";
-        if (replacement !== "") {
-          ranges.insertion.push({
-            range: new vscode.Range(range.end, range.end),
-            renderOptions: { after: { contentText: replacement.replace(/\r?\n/g, "↵") } },
-          });
+        const replacement = (a.edit?.replacement ?? "").replace(/\r\n/g, "\n");
+        const words = wordDiff ? wordChanges(doc.getText(range), replacement) : { deleted: [], inserted: [] };
+        const start = doc.offsetAt(range.start);
+        for (const [i, j] of words.deleted) {
+          ranges.wordDeletion.push({ range: new vscode.Range(doc.positionAt(start + i), doc.positionAt(start + j)) });
+        }
+        for (const piece of pieces(replacement, words.inserted)) {
+          const after: vscode.ThemableDecorationAttachmentRenderOptions = { contentText: piece.text.replace(/\n/g, "↵") };
+          if (piece.changed) after.backgroundColor = color("diffEditor.insertedTextBackground");
+          ranges.insertion.push({ range: new vscode.Range(range.end, range.end), renderOptions: { after } });
         }
         label = firstLine(a.body);
         if (isConflicted(a)) ranges.conflict.push({ range });

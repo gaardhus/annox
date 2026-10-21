@@ -772,6 +772,11 @@
           "default": false,
           "description": "Always draw suggestions inline, as struck-through and inserted text, not only in suggestion mode."
         },
+        "annox.wordDiff": {
+          "type": "boolean",
+          "default": true,
+          "description": "Tint the words that changed within a suggestion drawn inline, on both sides, diff-so-fancy style."
+        },
         "annox.unread": {
           "type": "boolean",
           "default": true,
