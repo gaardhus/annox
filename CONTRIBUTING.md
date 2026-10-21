@@ -50,7 +50,7 @@ A user-facing feature isn't done until everything that shows or explains it does
 - **The website**: [`site/index.html`](site/index.html), [`site/how-it-works.html`](site/how-it-works.html), and the live demo in [`site/annox-demo/`](site/annox-demo/annox-demo.js), which runs `annox-core` and can show the feature. Check them with `just serve-site`.
 - **The workflow diagram**, [`assets/annox-workflow.svg`](assets/annox-workflow.svg), shown in the README and on the site.
 - **The animated intro**, [`assets/intro/annox-intro.html`](assets/intro/annox-intro.html). `just site` copies it to the site; re-render the video with `just intro-video`.
-- **The example**, [`examples/`](examples/): add a few annotations that use the feature, written with the example's authors (`mailto:sam@example.com`, `urn:agent:claude`).
+- **The example**, [`examples/`](examples/): add a few annotations that use the feature, written with the example's authors (`mailto:sam@example.com`, `urn:agent:claude`). Then run `just example-pdf`, which rebuilds `proposal.pdf` and `proposal.annotated.pdf`. A test fails until you do.
 - **[`assets/nvim-demo.gif`](assets/nvim-demo.gif)**, recorded with `just nvim-demo`, if the feature changes what it shows.
 
 ## Commits and pull requests

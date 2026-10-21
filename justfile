@@ -64,6 +64,13 @@ nvim-demo:
     cargo build -p annox-lsp --locked
     ANNOX_BIN="$PWD/target/debug/annox" editors/nvim/demo/record.sh assets/nvim-demo.gif
 
+# Compile the example to examples/proposal.pdf, and export its threads into
+# examples/proposal.annotated.pdf. Needs pandoc and typst.
+example-pdf:
+    cargo build -p annox-lsp --locked
+    cd examples && pandoc proposal.md --pdf-engine=typst -o proposal.pdf
+    cd examples && annox export-pdf proposal.md proposal.pdf
+
 # Render the animated intro (assets/intro/annox-intro.html) to a video. The extension of
 # `out` picks the format: .mp4, .webm, or .gif. Needs uv, ffmpeg, and Chromium.
 intro-video out="target/annox-intro.mp4" theme="light" fps="30" width="1920":

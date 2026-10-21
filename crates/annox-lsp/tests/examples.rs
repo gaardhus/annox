@@ -62,3 +62,23 @@ fn the_example_still_reads_the_same() {
     let authors: std::collections::BTreeSet<_> = all.iter().map(|a| a["author"]["id"].as_str().unwrap()).collect();
     assert_eq!(authors.len(), 2, "{authors:?}");
 }
+
+#[test]
+fn the_example_pdf_is_up_to_date() {
+    let dir = tempfile::tempdir().unwrap();
+    let examples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
+    copy_dir(&examples, dir.path());
+
+    let out = annox(dir.path(), &["export-pdf", "proposal.md", "proposal.pdf", "-o", "fresh.pdf"]);
+    // Every open thread is placed, except the two on text the draft no longer has.
+    let open = annox(dir.path(), &["list"]);
+    let (orphaned, placed): (Vec<&Value>, Vec<&Value>) =
+        open.as_array().unwrap().iter().partition(|a| a["resolution"] == "orphaned");
+    let ids = |v: Vec<&Value>| Value::Array(v.into_iter().map(|a| a["id"].clone()).collect());
+    assert_eq!(out["placed"], ids(placed), "{out:#}");
+    assert_eq!(out["unplaced"], ids(orphaned), "{out:#}");
+
+    let fresh = std::fs::read(dir.path().join("fresh.pdf")).unwrap();
+    let committed = std::fs::read(examples.join("proposal.annotated.pdf")).unwrap();
+    assert!(fresh == committed, "examples/proposal.annotated.pdf is out of date; run `just example-pdf`");
+}

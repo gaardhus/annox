@@ -1,0 +1,2 @@
+# Compared byte for byte by tests; never convert line endings.
+*.pdf binary
