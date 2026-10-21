@@ -102,6 +102,7 @@ const GROUPS: &[(&str, &[&str])] = &[
     ("Annotate", &["comment", "highlight", "suggest", "reply", "edit"]),
     ("Review", &["status", "react", "accept", "revert", "retarget", "reattach", "delete", "restore", "read"]),
     ("Workspace", &["init", "commit"]),
+    ("Export", &["export-pdf"]),
     ("Servers", &["lsp", "hub", "mcp"]),
     ("Other", &["update"]),
 ];

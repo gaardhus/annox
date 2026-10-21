@@ -43,6 +43,7 @@ pub fn of(command: &Command) -> Render {
         Command::Report { .. } => Box::new(report),
         Command::History { .. } => Box::new(history),
         Command::Log { .. } => Box::new(log),
+        Command::ExportPdf { .. } => Box::new(exported),
         Command::Comment { .. } => Box::new(|v| created("Commented on", v)),
         Command::Highlight { .. } => Box::new(|v| created("Highlighted", v)),
         Command::Suggest { .. } => Box::new(|v| created("Suggested an edit to", v)),
@@ -288,6 +289,25 @@ fn committed(v: &Value) -> String {
         ),
         None => format!("Would commit {}\n{message}\n", plural(files, "file")),
     }
+}
+
+/// What `export-pdf` prints.
+fn exported(v: &Value) -> String {
+    wrote(str(&v["output"]), v)
+}
+
+/// Where `export-pdf` or `sync-pdf` wrote threads, and how many.
+fn wrote(pdf: &str, v: &Value) -> String {
+    let placed = v["placed"].as_array().map_or(0, Vec::len) as u64;
+    let unplaced = v["unplaced"].as_array().map_or(0, Vec::len) as u64;
+    let mut out = format!("Wrote {} into {}", plural(placed + unplaced, "thread"), paint(style::PATH, pdf));
+    if unplaced > 0 {
+        out.push_str(&format!(
+            "; {} on a page at the end, as their text isn't in the PDF",
+            paint(style::PROBLEM, unplaced)
+        ));
+    }
+    out + "\n"
 }
 
 /// `report`'s entries in display order, each with how deeply it's nested.

@@ -118,6 +118,7 @@ annox accept ID
 annox revert ID [--accept] [--body TEXT]
 annox read ID... | --all
 annox commit [-m TEXT] [--dry-run]
+annox export-pdf paper.typ paper.pdf [-o OUT.pdf] [--closed] [filters]
 ```
 
 `annox list --unread` lists the threads others changed since you last read them, and every entry says whether it's `unread`. `annox read` marks threads read, and writing to a thread does too. What each author id has read is kept in the git-ignored `.annox/local/read.json`, so an agent with its own id (below) has its own unread list, and its reading doesn't mark anything read for you. `list --as ID` reads as another id.
@@ -125,6 +126,10 @@ annox commit [-m TEXT] [--dry-run]
 Write commands use `--author`/`--name`, or `ANNOX_AUTHOR`/`ANNOX_AUTHOR_NAME`, and otherwise your [configured identity](#configuration). Give an agent its own id, for example `ANNOX_AUTHOR=urn:agent:claude`, so its annotations are distinguishable from yours. A running `annox lsp` picks up the changes, so they appear in the editor. Run `annox help` for every command.
 
 `annox init` creates `.annox/` at the project root, which is meant to be committed so collaborators see the annotations. Every change is a new file there, so they add up between commits. `annox report` counts them, and `annox commit` commits just those files, with a message summarizing them, and leaves anything else you've staged alone. It doesn't push. `--dry-run` prints what it would commit. The editor plugins have the same command, which lets you edit the message first. To keep them to yourself, use `annox init --local`. It adds `*` to `.annox/.gitignore`, so git ignores the whole folder. To share them later, delete that line.
+
+### Exporting to a PDF
+
+`annox export-pdf FILE PDF` copies the open threads of a document into a PDF compiled from it, as ordinary PDF comments, for reviewers who read the PDF in any viewer and never see the source. It finds each quote in the PDF's text, so it works with Markdown, LaTeX, Typst, or anything else that compiles to a PDF with a text layer. Markup in quotes is ignored (`\emph{...}`, `#emph[...]`, link targets), and so are line breaks, hyphenation and ligatures. A quote that appears more than once is placed by its surrounding text. Comments become highlights, and replies become replies. A suggestion strikes out its text in red and writes the replacement above it in green, like a proofreader, with the words that change tinted on both sides, as the editors draw suggestions inline. Its note is just the reason for it, as the page shows the change, unless the replacement was too long to fit and was cut short. Acrobat shows it as a "replace text" edit. Threads it can't find, such as a comment on a LaTeX preamble or on text that's changed since the PDF was compiled, are listed on a page added at the end. It writes `NAME.annotated.pdf` next to the PDF unless given `-o`, and takes the filters of `annox list`. Each PDF comment carries its annotation's id as its name (`/NM`).
 
 ### Agents
 

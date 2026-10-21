@@ -16,7 +16,7 @@ fn setup(doc: &str) -> tempfile::TempDir {
 
 fn try_annox(cwd: &Path, args: &[&str]) -> anyhow::Result<Value> {
     let mut args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    if !matches!(args[0].as_str(), "init" | "list" | "show" | "history" | "log" | "report" | "commit") {
+    if !matches!(args[0].as_str(), "init" | "list" | "show" | "history" | "log" | "report" | "commit" | "export-pdf") {
         args.extend(["--author".into(), "urn:test:agent".into(), "--name".into(), "Agent".into()]);
     }
     cli::run(&args, cwd)
@@ -790,4 +790,319 @@ fn prints_what_writes_did_as_text() {
     assert_eq!(text(d, &["react", &tight, "👍"]), format!("Reacted 👍 to {tight}\n"));
     assert_eq!(text(d, &["react", &tight, "👍"]), format!("{tight} already has your 👍\n"));
     assert_eq!(text(d, &["read", "--all"]), "Marked 1 thread read\n");
+}
+
+/// A PDF with a page per entry of `pages`, each showing its lines in
+/// Helvetica, one per line from the top.
+fn write_pdf(path: &Path, pages: &[&[&str]]) {
+    use lopdf::{dictionary, Document, Object, Stream};
+    let mut doc = Document::with_version("1.7");
+    let pages_id = doc.new_object_id();
+    let font = doc.add_object(dictionary! {
+        "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica", "Encoding" => "WinAnsiEncoding",
+    });
+    let mut kids = Vec::new();
+    for lines in pages {
+        let mut ops = String::new();
+        for (i, line) in lines.iter().enumerate() {
+            ops.push_str(&format!("BT /F1 12 Tf 72 {} Td ({line}) Tj ET\n", 700 - 20 * i));
+        }
+        let content = doc.add_object(Stream::new(dictionary! {}, ops.into_bytes()));
+        let page = doc.add_object(dictionary! {
+            "Type" => "Page", "Parent" => pages_id, "Contents" => content,
+            "Resources" => dictionary! { "Font" => dictionary! { "F1" => font } },
+        });
+        kids.push(page.into());
+    }
+    doc.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages", "Count" => kids.len() as i64, "Kids" => kids,
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        }),
+    );
+    let catalog = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+    doc.trailer.set("Root", catalog);
+    doc.save(path).unwrap();
+}
+
+/// The annotations of page `n` of the PDF at `path`, by `/NM`.
+fn pdf_annots(path: &Path, n: u32) -> Vec<(String, lopdf::Dictionary)> {
+    let doc = lopdf::Document::load(path).unwrap();
+    let page = doc.get_pages()[&n];
+    let annots = doc.get_dictionary(page).unwrap().get(b"Annots").map(|a| match a {
+        lopdf::Object::Reference(r) => doc.get_object(*r).unwrap().as_array().unwrap().clone(),
+        a => a.as_array().unwrap().clone(),
+    });
+    annots
+        .unwrap_or_default()
+        .iter()
+        .map(|a| {
+            let d = doc.get_dictionary(a.as_reference().unwrap()).unwrap().clone();
+            // Links have no name.
+            let nm = d.get(b"NM").map_or(String::new(), |n| String::from_utf8(n.as_str().unwrap().to_vec()).unwrap());
+            (nm, d)
+        })
+        .collect()
+}
+
+#[test]
+fn export_pdf_places_threads_on_their_text() {
+    let dir = setup("# Title\n\nThe bound is *tight*. The bound is loose.\n\nGone from the PDF.\n");
+    let d = dir.path();
+    write_pdf(&d.join("paper.pdf"), &[&["Title", "The bound is tight. The bound is", "loose."]]);
+    let tight = id(&annox(d, &["comment", "paper.md", "--quote", "bound is *tight*", "--body", "Prove it"]));
+    annox(d, &["reply", &tight, "--body", "Done"]);
+    let loose = id(&annox(d, &["suggest", "paper.md", "--quote", "bound is loose", "--replace", "bound is slack"]));
+    let gone = id(&annox(d, &["comment", "paper.md", "--quote", "Gone", "--body", "Where?"]));
+
+    let out = annox(d, &["export-pdf", "paper.md", "paper.pdf"]);
+    assert_eq!(out["placed"], serde_json::json!([tight, loose]));
+    assert_eq!(out["unplaced"], serde_json::json!([gone]));
+    let output = d.join("paper.annotated.pdf");
+    assert_eq!(Path::new(out["output"].as_str().unwrap()), output.canonicalize().unwrap());
+
+    let page = pdf_annots(&output, 1);
+    let get = |nm: &str| &page.iter().find(|(n, _)| n == nm).unwrap_or_else(|| panic!("no {nm}")).1;
+    let quads = |d: &lopdf::Dictionary| -> Vec<f32> {
+        d.get(b"QuadPoints").unwrap().as_array().unwrap().iter().map(|v| v.as_float().unwrap()).collect()
+    };
+    let highlight = get(&tight);
+    assert_eq!(highlight.get(b"Subtype").unwrap().as_name().unwrap(), b"Highlight");
+    // On the second line, starting after "The ".
+    let q = quads(highlight);
+    assert!(q.len() == 8 && q[0] > 95.0 && q[0] < 110.0 && q[5] > 675.0 && q[1] < 700.0, "{q:?}");
+    let reply = &page
+        .iter()
+        .find(|(_, d)| d.get(b"IRT").is_ok() && d.get(b"Subtype").unwrap().as_name().unwrap() == b"Text")
+        .unwrap()
+        .1;
+    assert_eq!(reply.get(b"Contents").unwrap().as_str().unwrap(), b"Done");
+    // A suggestion across a line break strikes its whole quote, a quad per
+    // line, and a caret grouped with it draws the replacement.
+    let strike = get(&loose);
+    assert_eq!(strike.get(b"Subtype").unwrap().as_name().unwrap(), b"StrikeOut");
+    // The page shows the whole change and there's no reason, so there's no note.
+    assert!(strike.get(b"Contents").is_err());
+    assert_eq!(quads(strike).len(), 16);
+    let caret = get(&format!("{loose}-caret"));
+    assert!(caret.get(b"IRT").is_ok());
+    // It draws the replacement itself, above the struck text.
+    assert!(caret.get(b"AP").unwrap().as_dict().unwrap().get(b"N").is_ok());
+    let rect: Vec<f32> =
+        caret.get(b"Rect").unwrap().as_array().unwrap().iter().map(|v| v.as_float().unwrap()).collect();
+    // Its replacement reaches above the first struck line.
+    assert!(rect[3] > quads(strike)[1], "{rect:?}");
+
+    // What can't be found goes on a page of its own, which links to annox.
+    let appendix = pdf_annots(&output, 2);
+    let names: Vec<&str> = appendix.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(names, ["", gone.as_str()]);
+    let uri = appendix[0].1.get(b"A").unwrap().as_dict().unwrap().get(b"URI").unwrap().as_str().unwrap();
+    assert_eq!(uri, b"https://gaardhus.github.io/annox/");
+    let doc = lopdf::Document::load(&output).unwrap();
+    let text = doc.extract_text(&[2]).unwrap();
+    assert!(text.contains("Review comments on paper.md, exported by annox"), "{text}");
+}
+
+/// The `/QuadPoints` of an annotation.
+fn quads(d: &lopdf::Dictionary) -> Vec<f32> {
+    d.get(b"QuadPoints").unwrap().as_array().unwrap().iter().map(|v| v.as_float().unwrap()).collect()
+}
+
+fn annot<'a>(annots: &'a [(String, lopdf::Dictionary)], nm: &str) -> &'a lopdf::Dictionary {
+    &annots.iter().find(|(n, _)| n == nm).unwrap_or_else(|| panic!("no annotation {nm}")).1
+}
+
+#[test]
+fn export_pdf_tells_repeated_quotes_apart_by_context() {
+    let dir = setup("First, the bound is tight here.\nSecond, the bound is tight there.\n");
+    let d = dir.path();
+    write_pdf(&d.join("paper.pdf"), &[&["First, the bound is tight here.", "Second, the bound is tight there."]]);
+    let second =
+        id(&annox(d, &["comment", "paper.md", "--quote", "bound is tight", "--occurrence", "2", "--body", "b"]));
+    annox(d, &["export-pdf", "paper.md", "paper.pdf"]);
+    let q = quads(annot(&pdf_annots(&d.join("paper.annotated.pdf"), 1), &second));
+    // The second line's baseline is at 680, the first's at 700.
+    assert!(q[5] < 680.0 && q[1] > 680.0 && q[1] < 700.0, "{q:?}");
+}
+
+#[test]
+fn export_pdf_continues_a_quote_onto_the_next_page() {
+    let dir = setup("The bound is\ntight.\n");
+    let d = dir.path();
+    write_pdf(&d.join("paper.pdf"), &[&["The bound is"], &["tight."]]);
+    let c = id(&annox(d, &["comment", "paper.md", "--quote", "bound is\ntight", "--body", "b"]));
+    annox(d, &["export-pdf", "paper.md", "paper.pdf"]);
+    let output = d.join("paper.annotated.pdf");
+    let first = annot(&pdf_annots(&output, 1), &c).clone();
+    assert_eq!(first.get(b"Contents").unwrap().as_str().unwrap(), b"b");
+    let rest = annot(&pdf_annots(&output, 2), &format!("{c}-1")).clone();
+    assert_eq!(rest.get(b"Subtype").unwrap().as_name().unwrap(), b"Highlight");
+    assert!(rest.get(b"Contents").is_err());
+}
+
+#[test]
+fn export_pdf_places_threads_on_text_gone_from_the_source() {
+    // The PDF was compiled before the paragraph was deleted.
+    let dir = setup("Keep this.\n\nThis paragraph goes away later.\n");
+    let d = dir.path();
+    write_pdf(&d.join("paper.pdf"), &[&["Keep this.", "This paragraph goes away later."]]);
+    let c = id(&annox(d, &["comment", "paper.md", "--quote", "goes away", "--body", "b"]));
+    std::fs::write(d.join("paper.md"), "Keep this.\n").unwrap();
+    assert_eq!(annox(d, &["show", &c])["resolution"], "orphaned");
+    let out = annox(d, &["export-pdf", "paper.md", "paper.pdf"]);
+    assert_eq!(out["placed"], serde_json::json!([c]));
+}
+
+#[test]
+fn export_pdf_takes_list_filters() {
+    let dir = setup(DOC);
+    let d = dir.path();
+    write_pdf(&d.join("paper.pdf"), &[&["In Section 3, we prove that teh bound is tight.", "The bound is tight."]]);
+    let typo = id(&annox(d, &["suggest", "paper.md", "--quote", "teh", "--replace", "the"]));
+    let done = id(&annox(d, &["comment", "paper.md", "--quote", "Section 3", "--body", "b"]));
+    annox(d, &["status", &done, "resolved"]);
+    let ids = |args: &[&str]| annox(d, &[&["export-pdf", "paper.md", "paper.pdf"], args].concat())["placed"].clone();
+    assert_eq!(ids(&[]), serde_json::json!([typo]));
+    assert_eq!(ids(&["--closed"]), serde_json::json!([typo, done]));
+    assert_eq!(ids(&["--closed", "--kind", "comment"]), serde_json::json!([done]));
+}
+
+#[test]
+fn export_pdf_writes_to_output_and_keeps_existing_annotations() {
+    let dir = setup(DOC);
+    let d = dir.path();
+    let input = d.join("paper.pdf");
+    write_pdf(&input, &[&["In Section 3, we prove that teh bound is tight."]]);
+    // An annotation already in the PDF, in an indirect /Annots array.
+    use lopdf::dictionary;
+    let mut doc = lopdf::Document::load(&input).unwrap();
+    let link = doc.add_object(dictionary! {
+        "Type" => "Annot", "Subtype" => "Link", "NM" => lopdf::Object::string_literal("link"),
+        "Rect" => vec![0.into(), 0.into(), 10.into(), 10.into()],
+    });
+    let array = doc.add_object(vec![lopdf::Object::Reference(link)]);
+    let page = doc.get_pages()[&1];
+    doc.get_object_mut(page).unwrap().as_dict_mut().unwrap().set("Annots", array);
+    doc.save(&input).unwrap();
+    let before = std::fs::read(&input).unwrap();
+
+    let c = id(&annox(d, &["comment", "paper.md", "--quote", "teh", "--body", "typo"]));
+    let out = annox(d, &["export-pdf", "paper.md", "paper.pdf", "-o", "review.pdf"]);
+    assert_eq!(Path::new(out["output"].as_str().unwrap()), d.canonicalize().unwrap().join("review.pdf"));
+    let annots = pdf_annots(&d.join("review.pdf"), 1);
+    let names: Vec<&str> = annots.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(names, ["link", c.as_str()]);
+    assert_eq!(std::fs::read(&input).unwrap(), before, "the input PDF is left alone");
+}
+
+#[test]
+fn export_pdf_fails_on_what_isnt_a_pdf() {
+    let dir = setup(DOC);
+    let d = dir.path();
+    assert!(error(d, &["export-pdf", "paper.md", "missing.pdf"]).contains("can't read"));
+    std::fs::write(d.join("junk.pdf"), "not a pdf").unwrap();
+    assert!(error(d, &["export-pdf", "paper.md", "junk.pdf"]).contains("can't read"));
+}
+
+/// Compiles real documents with typst and pdflatex, when they're installed.
+#[test]
+fn export_pdf_handles_typst_and_latex_output() {
+    let have =
+        |tool: &str| std::process::Command::new(tool).arg("--version").output().is_ok_and(|o| o.status.success());
+    let body = "We prove that the BOUND is tight for all inputs, a substantially stronger statement than the \
+                previous characterisation of incomprehensibilities in the literature.\n\n\
+                The bound is tight. Again: the bound is tight.\n";
+    let cases = [
+        ("typst", "paper.typ", "#set page(width: 12cm, height: auto)\n= Intro\n", "#emph[bound]", ""),
+        (
+            "pdflatex",
+            "paper.tex",
+            "\\documentclass{article}\\usepackage[a6paper]{geometry}\\begin{document}\n",
+            "\\emph{bound}",
+            "\\end{document}\n",
+        ),
+    ];
+    for (tool, file, head, bound, tail) in cases {
+        if !have(tool) {
+            eprintln!("skipping {file}: {tool} isn't installed");
+            continue;
+        }
+        let dir = setup("");
+        let d = dir.path();
+        std::fs::write(d.join(file), format!("{head}{}{tail}", body.replace("BOUND", bound))).unwrap();
+        let status = std::process::Command::new(tool)
+            .args(if tool == "typst" {
+                vec!["compile", file, "paper.pdf"]
+            } else {
+                vec!["-interaction=batchmode", file]
+            })
+            .current_dir(d)
+            .output()
+            .unwrap()
+            .status;
+        assert!(status.success(), "{tool} failed");
+        let marked = id(&annox(d, &["comment", file, "--quote", &format!("{bound} is tight"), "--body", "markup"]));
+        let broken =
+            id(&annox(d, &["comment", file, "--quote", "characterisation of incomprehensibilities", "--body", "b"]));
+        let last = id(&annox(d, &["suggest", file, "--quote", "the bound is tight", "--replace", "it is"]));
+        let out = annox(d, &["export-pdf", file, "paper.pdf"]);
+        assert_eq!(out["placed"], serde_json::json!([marked, broken, last]), "{file}");
+        let annots = pdf_annots(&d.join("paper.annotated.pdf"), 1);
+        // The last of four "the bound is tight"s, by its context: right of the
+        // first on its line, which is the same line.
+        let first = quads(annot(&annots, &marked));
+        let q = quads(annot(&annots, &last));
+        assert!(q[5] < first[5] && q[0] > 100.0, "{file}: {q:?}");
+    }
+}
+
+#[test]
+fn export_pdf_tints_the_words_a_suggestion_changes() {
+    let dir = setup("We prove the old bound holds here.\n");
+    let d = dir.path();
+    write_pdf(&d.join("paper.pdf"), &[&["We prove the old bound holds here."]]);
+    let s = id(&annox(
+        d,
+        &["suggest", "paper.md", "--quote", "prove the old bound holds", "--replace", "prove that the new bound holds"],
+    ));
+    annox(d, &["export-pdf", "paper.md", "paper.pdf"]);
+    let annots = pdf_annots(&d.join("paper.annotated.pdf"), 1);
+    // The whole quote is struck, as one quad.
+    assert_eq!(quads(annot(&annots, &s)).len(), 8);
+    let caret = annot(&annots, &format!("{s}-caret"));
+    let doc = lopdf::Document::load(d.join("paper.annotated.pdf")).unwrap();
+    let form = doc.get_object(caret.get(b"AP").unwrap().as_dict().unwrap().get(b"N").unwrap().as_reference().unwrap());
+    let ops = String::from_utf8(form.unwrap().as_stream().unwrap().content.clone()).unwrap();
+    // The whole replacement is written above it. "old" is tinted, and so are
+    // "that" and "new" in the replacement: three boxes, multiplied over the text.
+    assert!(ops.contains("(prove that the new bound holds) Tj"), "{ops}");
+    assert_eq!(ops.matches(" re f").count(), 3, "{ops}");
+    assert!(ops.contains("/Multiply gs"), "{ops}");
+}
+
+#[test]
+fn export_pdf_notes_a_replacement_only_when_it_was_cut_short() {
+    let dir = setup("Short text here. And more.\n");
+    let d = dir.path();
+    write_pdf(&d.join("paper.pdf"), &[&["Short text here. And more."]]);
+    let long = "a much longer replacement ".repeat(12);
+    let cut = id(&annox(d, &["suggest", "paper.md", "--quote", "here", "--replace", long.trim(), "--body", "Why"]));
+    let full = id(&annox(d, &["suggest", "paper.md", "--quote", "more", "--replace", "less", "--body", "Why"]));
+    annox(d, &["export-pdf", "paper.md", "paper.pdf"]);
+    let annots = pdf_annots(&d.join("paper.annotated.pdf"), 1);
+    // A PDF text string: UTF-16BE after a byte order mark, or else ASCII here.
+    let note = |id: &str| {
+        let bytes = annot(&annots, id).get(b"Contents").unwrap().as_str().unwrap().to_vec();
+        match bytes.strip_prefix(&[0xFE, 0xFF]) {
+            Some(utf16) => {
+                String::from_utf16(&utf16.chunks(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect::<Vec<_>>())
+                    .unwrap()
+            }
+            None => String::from_utf8(bytes).unwrap(),
+        }
+    };
+    assert_eq!(note(&full), "Why");
+    assert!(note(&cut).contains("a much longer replacement") && note(&cut).ends_with("Why"), "{}", note(&cut));
 }

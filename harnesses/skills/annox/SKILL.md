@@ -33,6 +33,8 @@ annox report --by author    # who wrote what: suggestions, comments and replies 
 annox list --unread         # threads others changed since you marked them read, closed ones too
 ```
 
+To hand the review to someone who reads the compiled PDF instead of the source, `annox export-pdf paper.tex paper.pdf` writes `paper.annotated.pdf` with the open threads as PDF comments.
+
 Filter instead of reading everything. Filters combine:
 
 ```sh

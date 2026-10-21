@@ -63,6 +63,28 @@ pub enum Command {
         /// The annotation's id, as printed by `annox list`; a reply's shows its thread
         id: String,
     },
+    /// Add the open threads of FILE to PDF, a PDF compiled from FILE, as PDF comments
+    ///
+    /// Each thread is placed where its quote shows up in the PDF's text, so it works with Markdown,
+    /// LaTeX, Typst, or anything else that compiles to a PDF with a text layer. Comments become
+    /// highlights, suggestions become strikeouts with the replacement on a caret, and replies are
+    /// replies. Threads it can't find go on a page added at the end. Prints where it wrote the PDF,
+    /// and which threads it placed.
+    #[command(name = "export-pdf")]
+    ExportPdf {
+        /// The document the PDF was compiled from
+        file: String,
+        /// The compiled PDF
+        pdf: PathBuf,
+        /// Where to write the annotated PDF [default: next to PDF, as NAME.annotated.pdf]
+        #[arg(short, long, value_name = "PATH")]
+        output: Option<PathBuf>,
+        /// Also export resolved, accepted, rejected and withdrawn annotations
+        #[arg(long)]
+        closed: bool,
+        #[command(flatten)]
+        filter: Filter,
+    },
     /// Print who did what to a thread (the annotation and its replies), and when, oldest first
     History {
         /// The annotation's id, as printed by `annox list`; a reply's shows its thread

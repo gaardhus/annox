@@ -7,6 +7,7 @@ mod features;
 mod markdown;
 pub mod mcp;
 mod methods;
+pub mod pdf;
 pub mod position;
 pub mod render;
 pub mod style;

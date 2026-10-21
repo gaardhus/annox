@@ -19,6 +19,7 @@ use serde_json::{json, Map, Value};
 
 mod args;
 mod commit;
+mod pdf;
 mod report;
 mod watch;
 
@@ -26,6 +27,7 @@ use args::Cli;
 pub use args::{Author, Command, Filter, Meta, MoveTo, Quote, Watch};
 use commit::commit;
 pub use commit::commit_workspace;
+use pdf::export_pdf;
 use report::report;
 pub use watch::{follow_log, watch, Watcher};
 use watch::{log_events, log_scope};
@@ -65,6 +67,9 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
         }
         Command::Show { id } => show(&id, &cwd),
         Command::History { id } => history(&id, &cwd),
+        Command::ExportPdf { file, pdf, output, closed, filter } => {
+            export_pdf(&file, &pdf, output.as_deref(), closed, filter, &cwd)
+        }
         Command::Comment { file, at, body, meta, author } => {
             create(&file, &at, None, Some(&body), &meta, &author, &cwd)
         }
