@@ -205,10 +205,9 @@ pub(crate) fn read_index(ws: &Workspace) -> Index {
         eprintln!("annox: {repaired}");
     }
     let index = Index::read(ws);
-    if let Some(first) = index.unreadable.first() {
+    if let Some(warning) = annox_core::storage::unreadable_warning(&index.unreadable) {
         if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
-            let n = index.unreadable.len();
-            eprintln!("annox: ignoring {n} event file(s) that aren't valid events, such as {first}");
+            eprintln!("annox: {warning}");
         }
     }
     index

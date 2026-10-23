@@ -706,9 +706,8 @@ impl Server<'_> {
             let index = Rc::new(Index::read(ws));
             let mut cache = self.cache.borrow_mut();
             let new: Vec<&String> = index.unreadable.iter().filter(|p| cache.unreadable.insert((*p).clone())).collect();
-            if !new.is_empty() {
-                let list = new.iter().map(|p| p.as_str()).collect::<Vec<_>>().join(", ");
-                self.warn(format!("annox: ignoring event files that aren't valid events: {list}"));
+            if let Some(warning) = annox_core::storage::unreadable_warning(&new) {
+                self.warn(format!("annox: {warning}"));
             }
             cache.indexes.insert(ws.root.clone(), index.clone());
             index

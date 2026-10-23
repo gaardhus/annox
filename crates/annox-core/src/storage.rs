@@ -150,6 +150,22 @@ impl Workspace {
     }
 }
 
+/// The warning about skipped event files `paths`, naming the first few, or
+/// `None` if there are none.
+pub fn unreadable_warning<S: AsRef<str>>(paths: &[S]) -> Option<String> {
+    const NAMED: usize = 3;
+    let mut names: Vec<&str> = paths.iter().take(NAMED).map(AsRef::as_ref).collect();
+    let what = match paths.len() {
+        0 => return None,
+        1 => "event file that isn't a valid event",
+        _ => "event files that aren't valid events",
+    };
+    if paths.len() > NAMED {
+        names.push("…");
+    }
+    Some(format!("ignoring {} {what}: {}", paths.len(), names.join(", ")))
+}
+
 fn unsupported(message: String) -> io::Error {
     io::Error::new(io::ErrorKind::Unsupported, message)
 }
@@ -389,6 +405,16 @@ impl Loaded {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn warns_about_unreadable_files() {
+        assert_eq!(unreadable_warning::<&str>(&[]), None);
+        assert_eq!(unreadable_warning(&["a"]).unwrap(), "ignoring 1 event file that isn't a valid event: a");
+        assert_eq!(
+            unreadable_warning(&["a", "b", "c", "d"]).unwrap(),
+            "ignoring 4 event files that aren't valid events: a, b, c, …"
+        );
+    }
 
     #[test]
     fn notes_unreadable_event_files() {
