@@ -3,11 +3,14 @@
 //! (§6.6).
 
 pub mod cli;
+mod features;
+mod markdown;
 pub mod mcp;
 mod methods;
 pub mod position;
 pub mod render;
 pub mod style;
+mod sync;
 mod views;
 
 use std::cell::RefCell;
@@ -20,26 +23,23 @@ use annox_core::anchor::{self, Anchor, Resolution, State, Suggested};
 use annox_core::event::Event;
 use annox_core::ops;
 use annox_core::read::{self, ReadState};
-use annox_core::replay;
 use annox_core::storage::{Area, Index, Loaded, Workspace};
 use annox_core::suggestion;
 use annox_core::text::Text;
-use annox_sync::replica::{self, FromReplica, ReplicaConfig, ToReplica};
+use annox_sync::replica::{FromReplica, ToReplica};
 use crossbeam_channel::{Receiver, Sender};
 use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
 use lsp_types::notification::{
     DidChangeTextDocument, DidChangeWatchedFiles, DidCloseTextDocument, DidOpenTextDocument, DidRenameFiles,
-    DidSaveTextDocument, Notification as _, PublishDiagnostics,
+    DidSaveTextDocument, Notification as _,
 };
 use lsp_types::request::{ApplyWorkspaceEdit, CodeActionRequest, ExecuteCommand, HoverRequest, Request as _};
 use lsp_types::{
-    ApplyWorkspaceEditParams, ApplyWorkspaceEditResponse, CodeAction, CodeActionOrCommand, CodeActionParams,
-    CodeActionProviderCapability, Command, Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
-    DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams, ExecuteCommandOptions,
-    ExecuteCommandParams, Hover, HoverContents, HoverParams, HoverProviderCapability, InitializeParams, MarkupContent,
-    MarkupKind, NumberOrString, PublishDiagnosticsParams, RenameFilesParams, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, TextEdit,
-    Url, WorkspaceEdit,
+    ApplyWorkspaceEditParams, ApplyWorkspaceEditResponse, CodeActionParams, CodeActionProviderCapability,
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams,
+    ExecuteCommandOptions, ExecuteCommandParams, HoverParams, HoverProviderCapability, InitializeParams,
+    RenameFilesParams, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
+    TextDocumentSyncSaveOptions, TextEdit, Url, WorkspaceEdit,
 };
 use serde_json::{json, Map, Value};
 
@@ -818,118 +818,6 @@ impl Server<'_> {
         }
     }
 
-    // Sync (§7).
-
-    /// Starts a replica for the workspace of `uri` if it names a hub and the
-    /// user has credentials for it (§6.4, §7.2).
-    pub(crate) fn ensure_replica(&mut self, uri: &Url) {
-        let Some(ws) = uri.to_file_path().ok().and_then(|p| Workspace::find(&p)) else { return };
-        if self.replicas.contains_key(&ws.root) {
-            return;
-        }
-        let marker = std::fs::read_to_string(ws.root.join(".annox/annox.json")).unwrap_or_default();
-        let url =
-            serde_json::from_str::<Value>(&marker).ok().and_then(|m| m["sync"]["url"].as_str().map(str::to_owned));
-        let replica = url.and_then(|url| {
-            let Some(credential) = annox_sync::credentials::lookup(&url) else {
-                self.warn(format!("annox: {url} has no entry in the credentials file; not syncing"));
-                return None;
-            };
-            let config =
-                ReplicaConfig { root: ws.root.clone(), url, token: credential.token, author: self.author(&ws) };
-            Some(replica::spawn(config, self.sync_tx.clone()))
-        });
-        self.replicas.insert(ws.root, replica);
-    }
-
-    fn log(&self, message: String) {
-        self.send(Notification::new("window/logMessage".into(), json!({ "type": 3, "message": message })));
-    }
-
-    fn warn(&self, message: String) {
-        self.send(Notification::new("window/logMessage".into(), json!({ "type": 2, "message": message })));
-    }
-
-    fn on_sync(&mut self, event: FromReplica) {
-        match event {
-            FromReplica::Changed { .. } => {
-                self.invalidate();
-                self.refresh_all();
-            }
-            FromReplica::Status { message, .. } => self.log(format!("annox sync: {message}")),
-            FromReplica::Presence { root, peers } => {
-                if !self.annox_client {
-                    return;
-                }
-                let ws = Workspace { root };
-                let index = Index::read(&ws);
-                let peers: Vec<Value> = peers.iter().map(|p| self.presence_view(&ws, &index, p)).collect();
-                self.send(Notification::new("annox/didChangePresence".into(), json!({ "peers": peers })));
-            }
-        }
-    }
-
-    /// A hub peer (§7.8.1) with its document as a URI and its range as an LSP
-    /// `Range`, mapped onto this copy of the document (§7.8.2).
-    fn presence_view(&self, ws: &Workspace, index: &Index, peer: &Value) -> Value {
-        let mut view = json!({ "author": peer["author"] });
-        let Some(doc) = peer["document"].as_str() else { return view };
-        let Some(path) = index.documents.get(index.canonical(doc)).and_then(|d| d.path.clone()) else { return view };
-        let Ok(uri) = Url::from_file_path(ws.root.join(&path)) else { return view };
-        view["textDocument"] = json!({ "uri": uri });
-        let text = match self.open.get(&uri) {
-            Some(d) => d.text.clone(),
-            None => Text::from_raw(&std::fs::read_to_string(ws.root.join(&path)).unwrap_or_default()),
-        };
-        let (Some(start), Some(end)) = (peer["range"]["start"].as_u64(), peer["range"]["end"].as_u64()) else {
-            return view;
-        };
-        let (start, end) = (start as usize, end as usize);
-        let range = match serde_json::from_value(peer["quote"].clone()) {
-            // Resolve the cursor as an anchor, so it stays on the same text
-            // when the peer's copy differs from this one.
-            Ok(quote) => {
-                let target = Anchor {
-                    path: path.clone(),
-                    version: peer["version"].as_str().unwrap_or_default().to_owned(),
-                    selectors: anchor::Selectors { position: anchor::PositionSelector { start, end }, quote },
-                };
-                anchor::resolve(&text, &target).range
-            }
-            // A peer without a quote: clamp its offsets to this copy.
-            Err(_) => Some((start.min(end).min(text.len()), end.min(text.len()))),
-        };
-        if let Some((start, end)) = range {
-            view["range"] = json!(LineIndex::new(&text, self.encoding).range(start, end));
-        }
-        view
-    }
-
-    /// Forwards the user's document and cursor to the hub (§7.8).
-    fn set_presence(&self, params: &Value) {
-        let uri = params["textDocument"]["uri"].as_str().and_then(|u| Url::parse(u).ok());
-        let Some(a) = uri.as_ref().and_then(|u| self.analyze(u)) else {
-            for tx in self.replicas.values().flatten() {
-                let _ = tx.send(ToReplica::Presence(json!({})));
-            }
-            return;
-        };
-        let mut presence = json!({ "version": a.text.version });
-        if let Some(doc) = a.loaded.at.first() {
-            presence["document"] = json!(doc);
-        }
-        if let Ok(range) = serde_json::from_value::<lsp_types::Range>(params["selection"].clone()) {
-            let lines = LineIndex::new(&a.text, self.encoding);
-            let (from, to) = (lines.offset(range.start), lines.offset(range.end));
-            let (start, end) = (from.min(to), from.max(to));
-            presence["range"] = json!({ "start": start, "end": end });
-            presence["quote"] = json!(anchor::create(&a.text, start, end, "").selectors.quote);
-        }
-        if let Some(Some(tx)) = self.replicas.get(&a.ws.root) {
-            let _ = tx.send(ToReplica::Presence(presence));
-        }
-    }
-
     fn refresh(&self, uri: &Url) {
         if !self.diagnostics && !self.annox_client {
             return;
@@ -951,166 +839,12 @@ impl Server<'_> {
         }
     }
 
-    fn send_diagnostics(&self, uri: Url, diagnostics: Vec<Diagnostic>) {
-        let params = PublishDiagnosticsParams { uri, diagnostics, version: None };
-        self.send(Notification::new(PublishDiagnostics::METHOD.into(), params));
+    fn log(&self, message: String) {
+        self.send(Notification::new("window/logMessage".into(), json!({ "type": 3, "message": message })));
     }
 
-    fn diagnostics_for(&self, a: &Analysis) -> Vec<Diagnostic> {
-        let lines = LineIndex::new(&a.text, self.encoding);
-        let mut out = Vec::new();
-        let mut orphaned = 0;
-        for item in a.items.iter().filter(|i| i.is_open()) {
-            let Some((start, end)) = item.resolution.range else {
-                orphaned += 1;
-                if let Some(s) = item.suggested {
-                    out.push(Diagnostic {
-                        range: lines.range(s.range.0, s.range.1),
-                        severity: Some(DiagnosticSeverity::HINT),
-                        code: Some(NumberOrString::String(item.kind().to_owned())),
-                        source: Some("annox".into()),
-                        message: format!("Orphaned {} may belong here: {}", item.kind(), summary(item)),
-                        data: Some(json!({ "annotation": item.id, "suggested": true })),
-                        ..Default::default()
-                    });
-                }
-                continue;
-            };
-            let (mut severity, mut message) = if item.kind() == "suggestion" {
-                let q = &item.target.selectors.quote.exact;
-                let r = item.state["edit"]["replacement"].as_str().unwrap_or_default();
-                let text = format!("Suggestion: \"{q}\" → \"{r}\"");
-                let text = if item.applicable() { text } else { format!("Stale {text}") };
-                (DiagnosticSeverity::INFORMATION, text)
-            } else {
-                (DiagnosticSeverity::HINT, summary(item))
-            };
-            if item.conflicted() {
-                severity = DiagnosticSeverity::WARNING;
-                message = format!("Conflict: {message}");
-            }
-            out.push(Diagnostic {
-                range: lines.range(start, end),
-                severity: Some(severity),
-                code: Some(NumberOrString::String(item.kind().to_owned())),
-                source: Some("annox".into()),
-                message,
-                data: Some(json!({ "annotation": item.id })),
-                ..Default::default()
-            });
-        }
-        if orphaned > 0 {
-            out.push(Diagnostic {
-                range: lines.range(0, 0),
-                severity: Some(DiagnosticSeverity::WARNING),
-                source: Some("annox".into()),
-                message: format!("{orphaned} annotation{} could not be located", if orphaned == 1 { "" } else { "s" }),
-                ..Default::default()
-            });
-        }
-        out
-    }
-
-    // Hover (§6.5.2).
-
-    fn hover(&self, p: HoverParams) -> Option<Hover> {
-        let doc = &p.text_document_position_params;
-        let a = self.analyze(&doc.text_document.uri)?;
-        let lines = LineIndex::new(&a.text, self.encoding);
-        let offset = lines.offset(doc.position);
-        // Orphans are shown at their suggested location (§3.7.4).
-        let at = |i: &Item| i.resolution.range.or(i.suggested.map(|s| s.range));
-        let hits: Vec<&Item> = a
-            .items
-            .iter()
-            .filter(|i| i.is_open())
-            .filter(|i| at(i).is_some_and(|(s, e)| s <= offset && offset <= e))
-            .collect();
-        let first = at(hits.first()?)?;
-        let sections: Vec<String> = hits.iter().map(|i| thread_markdown(i, a.replies.get(&i.id))).collect();
-        Some(Hover {
-            contents: HoverContents::Markup(MarkupContent {
-                kind: MarkupKind::Markdown,
-                value: sections.join("\n\n---\n\n"),
-            }),
-            range: Some(lines.range(first.0, first.1)),
-        })
-    }
-
-    // Code actions and commands (§6.5.3).
-
-    fn code_actions(&self, p: CodeActionParams) -> Vec<CodeActionOrCommand> {
-        let Some(a) = self.analyze(&p.text_document.uri) else { return vec![] };
-        let lines = LineIndex::new(&a.text, self.encoding);
-        let (from, to) = (lines.offset(p.range.start), lines.offset(p.range.end));
-        let mut actions = Vec::new();
-        for item in &a.items {
-            let Some((s, e)) = item.resolution.range.or(item.suggested.map(|s| s.range)) else { continue };
-            if s > to || e < from || item.deleted() {
-                continue;
-            }
-            for (command, title) in offered_commands(item) {
-                actions.push(CodeActionOrCommand::CodeAction(CodeAction {
-                    title: title.into(),
-                    command: Some(Command {
-                        title: title.into(),
-                        command: command.into(),
-                        arguments: Some(vec![json!({ "annotation": item.id })]),
-                    }),
-                    ..Default::default()
-                }));
-            }
-        }
-        actions
-    }
-
-    fn execute(&mut self, id: RequestId, p: ExecuteCommandParams) {
-        let annotation = p.arguments.first().and_then(|a| a.get("annotation")).and_then(Value::as_str);
-        let Some(annotation) = annotation.map(str::to_owned) else {
-            return self.reply(id, fail(INVALID_PARAMS, "missing annotation argument"));
-        };
-        let Some((uri, a)) = self.find(&annotation) else {
-            return self.reply(id, fail(UNKNOWN_ANNOTATION, format!("unknown annotation {annotation}")));
-        };
-        let Some(item) = a.item(&annotation) else {
-            return self.reply(id, fail(INVALID_OPERATION, "commands apply to comments and suggestions"));
-        };
-        if !offered_commands(item).iter().any(|(c, _)| *c == p.command) {
-            return self.reply(id, fail(INVALID_OPERATION, format!("{} does not apply to this annotation", p.command)));
-        }
-        let status = match p.command.as_str() {
-            "annox.accept" => return self.accept(id, uri, &a, &annotation, false),
-            "annox.reattachSuggested" => {
-                let (start, end) = item.suggested.map(|s| s.range).unwrap_or_default();
-                let target = anchor::create(&a.text, start, end, &a.rel);
-                let fields = Map::from_iter([("target".into(), json!(target))]);
-                let result = self.write_event(&a, &annotation, "reanchor", fields);
-                self.reply(id, result.map(|_| Value::Null));
-                return self.refresh_all();
-            }
-            "annox.reject" => "rejected",
-            "annox.resolve" => "resolved",
-            _ => "open",
-        };
-        let result = self.write_event(&a, &annotation, "status", Map::from_iter([("status".into(), json!(status))]));
-        self.reply(id, result.map(|_| Value::Null));
-        self.refresh_all();
-    }
-
-    /// Applies a suggestion through `workspace/applyEdit`; the status event
-    /// is written when the client confirms (§6.6.2).
-    fn accept(&mut self, command: RequestId, uri: Url, a: &Analysis, annotation: &str, respond_view: bool) {
-        let Some(item) = a.item(annotation).filter(|i| i.kind() == "suggestion" && i.is_open()) else {
-            return self.reply(command, fail(INVALID_OPERATION, "only open suggestions can be accepted"));
-        };
-        let replacement = item.state["edit"]["replacement"].as_str().unwrap_or_default().to_owned();
-        match suggestion::apply(&a.text, &item.target, &replacement) {
-            Ok(applied) => {
-                let work = Work::Accept { annotation: annotation.to_owned() };
-                self.apply_edit(command, uri, vec![(applied.start, applied.end, replacement)], work, respond_view);
-            }
-            Err(_) => self.reply(command, fail(STALE_SUGGESTION, "the suggestion is stale")),
-        }
+    fn warn(&self, message: String) {
+        self.send(Notification::new("window/logMessage".into(), json!({ "type": 2, "message": message })));
     }
 
     fn on_rename(&self, p: RenameFilesParams) {
@@ -1153,213 +887,4 @@ pub(crate) fn fingerprint(root: &Path) -> Vec<(String, u64, std::time::SystemTim
 
 fn parse<T: serde::de::DeserializeOwned>(params: Value) -> Result<T, Failure> {
     serde_json::from_value(params).map_err(|e| (INVALID_PARAMS, e.to_string()))
-}
-
-/// The commands offered for an annotation (§6.5.3).
-fn offered_commands(item: &Item) -> Vec<(&'static str, &'static str)> {
-    match (item.kind(), item.status()) {
-        ("suggestion", "open") if item.applicable() => {
-            vec![("annox.accept", "Accept suggestion"), ("annox.reject", "Reject suggestion")]
-        }
-        ("suggestion", "open") => vec![("annox.reject", "Reject suggestion")],
-        ("suggestion", "rejected" | "withdrawn") => vec![("annox.reopen", "Reopen suggestion")],
-        ("comment", "open") if item.suggested.is_some() => {
-            vec![("annox.reattachSuggested", "Re-attach orphaned comment here"), ("annox.resolve", "Resolve thread")]
-        }
-        ("comment", "open") => vec![("annox.resolve", "Resolve thread")],
-        ("comment", "resolved") => vec![("annox.reopen", "Reopen thread")],
-        _ => vec![],
-    }
-}
-
-/// A comment's first line of body, or its label, for diagnostics.
-fn summary(item: &Item) -> String {
-    if item.kind() == "suggestion" {
-        let q = &item.target.selectors.quote.exact;
-        let r = item.state["edit"]["replacement"].as_str().unwrap_or_default();
-        return format!("\"{q}\" → \"{r}\"");
-    }
-    let body = item.state["body"].as_str().and_then(|b| b.lines().next()).filter(|l| !l.is_empty());
-    body.or(item.state["label"].as_str()).unwrap_or("Highlight").to_owned()
-}
-
-fn author_line(state: &Value) -> String {
-    let name = |a: &Value| a["name"].as_str().or(a["id"].as_str()).unwrap_or("unknown").to_owned();
-    let mut line = format!("**{}** · {}", name(&state["author"]), state["created"].as_str().unwrap_or_default());
-    // Edits are marked, with the editor named if it isn't the author (§2.4).
-    let editor = &state["editedBy"]["author"];
-    if editor.is_object() {
-        if editor["id"] == state["author"]["id"] {
-            line.push_str(" · edited");
-        } else {
-            line.push_str(&format!(" · edited by {}", name(editor)));
-        }
-    }
-    line
-}
-
-/// The names of the people in `entries` (each with an `author`), as in "Ada,
-/// Bob and Cy".
-fn names<'a>(entries: impl IntoIterator<Item = &'a Value>) -> String {
-    let names: Vec<&str> = entries
-        .into_iter()
-        .map(|e| e["author"]["name"].as_str().or(e["author"]["id"].as_str()).unwrap_or("unknown"))
-        .collect();
-    match names.split_last() {
-        Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
-        Some((last, _)) => (*last).to_owned(),
-        None => String::new(),
-    }
-}
-
-/// A message's reactions on one line, such as "👀 Bob · 🎉 Ada and Cy",
-/// leaving out `skip` (§2.5.7).
-fn reactions_line(state: &Value, skip: Option<&str>) -> Option<String> {
-    let parts: Vec<String> = state["reactions"]
-        .as_object()
-        .into_iter()
-        .flatten()
-        .filter(|(r, by)| Some(r.as_str()) != skip && by.as_array().is_some_and(|b| !b.is_empty()))
-        .map(|(r, by)| format!("{r} {}", names(by.as_array().into_iter().flatten())))
-        .collect();
-    (!parts.is_empty()).then(|| parts.join(" · "))
-}
-
-/// Who approved a suggestion (§4.4.2): current approvals, then those of an
-/// earlier version.
-fn approval_lines(state: &Value) -> Vec<String> {
-    let approvals = state["approvals"].as_array().map_or(&[][..], Vec::as_slice);
-    let (stale, current): (Vec<&Value>, Vec<&Value>) = approvals.iter().partition(|a| a["stale"] == json!(true));
-    let mut lines = Vec::new();
-    if !current.is_empty() {
-        lines.push(format!("👍 _approved by {}_", names(current)));
-    }
-    if !stale.is_empty() {
-        lines.push(format!("_{} approved an earlier version_", names(stale)));
-    }
-    lines
-}
-
-/// A change as a fenced `diff` block, so editors color the old text red and
-/// the new text green.
-fn diff_block(old: &str, new: &str) -> String {
-    let longest = [old, new].iter().flat_map(|t| t.split(|c| c != '`')).map(str::len).max().unwrap_or(0);
-    let fence = "`".repeat(longest.max(2) + 1);
-    let mut out = format!("{fence}diff\n");
-    for (sign, text) in [('-', old), ('+', new)] {
-        if !text.is_empty() {
-            for line in text.split('\n') {
-                out.push_str(&format!("{sign} {line}\n"));
-            }
-        }
-    }
-    out + &fence
-}
-
-/// `md` with each lone `~` escaped, outside code: GFM reads a pair of them as
-/// strikethrough, but authors mostly mean "approximately". `~~` is kept.
-fn escape_tildes(md: &str) -> String {
-    let mut out = Vec::new();
-    let mut fenced = false;
-    for line in md.split('\n') {
-        let t = line.trim_start();
-        if t.starts_with("```") || t.starts_with("~~~") {
-            fenced = !fenced;
-            out.push(line.to_string());
-            continue;
-        }
-        if fenced {
-            out.push(line.to_string());
-            continue;
-        }
-        let b = line.as_bytes();
-        let (mut escaped, mut start, mut code, mut j) = (String::new(), 0, 0, 0);
-        while j < b.len() {
-            if b[j] == b'`' {
-                let n = b[j..].iter().take_while(|&&c| c == b'`').count();
-                code = if code == 0 {
-                    n
-                } else if code == n {
-                    0
-                } else {
-                    code
-                };
-                j += n;
-                continue;
-            }
-            let prev = j.checked_sub(1).map(|i| b[i]);
-            if b[j] == b'~' && code == 0 && !matches!(prev, Some(b'~' | b'\\')) && b.get(j + 1) != Some(&b'~') {
-                escaped.push_str(&line[start..j]);
-                escaped.push('\\');
-                start = j;
-            }
-            j += 1;
-        }
-        escaped.push_str(&line[start..]);
-        out.push(escaped);
-    }
-    out.join("\n")
-}
-
-/// A thread as Markdown (§6.5.2): the proposed change first for suggestions,
-/// then the root and its replies.
-fn thread_markdown(item: &Item, replies: Option<&Vec<Value>>) -> String {
-    let mut parts = Vec::new();
-    if let (None, Some(s)) = (item.resolution.range, item.suggested) {
-        let mut note =
-            format!("⚠ **Orphaned {}, may belong here** ({:.0}% of its words).", item.kind(), s.score * 100.0);
-        if item.kind() == "comment" {
-            let quote: Vec<String> = item.target.selectors.quote.exact.lines().map(|l| format!("> {l}")).collect();
-            note.push_str(&format!(" It was on:\n\n{}", quote.join("\n")));
-        }
-        parts.push(note);
-    }
-    if item.kind() == "suggestion" {
-        let r = item.state["edit"]["replacement"].as_str().unwrap_or_default();
-        let stale = if item.applicable() { "" } else { " (stale)" };
-        let mut change = format!("**Suggestion{stale}:**\n{}", diff_block(&item.target.selectors.quote.exact, r));
-        for line in approval_lines(&item.state) {
-            change.push_str(&format!("\n\n{line}"));
-        }
-        parts.push(change);
-    }
-    if item.conflicted() {
-        parts.push("⚠ **This annotation has conflicting changes.**".into());
-    }
-    let mut header = author_line(&item.state);
-    if item.resolution.state == State::Relocated {
-        header.push_str(" · relocated");
-    }
-    let mut root = match item.state["body"].as_str() {
-        Some(body) => format!("{header}\n\n{}", escape_tildes(body)),
-        None => header,
-    };
-    // A suggestion's 👍 is shown as its approval, above.
-    let skip = (item.kind() == "suggestion").then_some(replay::APPROVAL);
-    if let Some(line) = reactions_line(&item.state, skip) {
-        root.push_str(&format!("\n\n{line}"));
-    }
-    parts.push(root);
-    for reply in replies.into_iter().flatten().filter(|r| r["deleted"] == json!(false)) {
-        // A thematic break renders as a full-width rule between messages.
-        let body = escape_tildes(reply["body"].as_str().unwrap_or_default());
-        let mut message = format!("---\n\n{}\n\n{body}", author_line(reply));
-        if let Some(line) = reactions_line(reply, None) {
-            message.push_str(&format!("\n\n{line}"));
-        }
-        parts.push(message);
-    }
-    parts.join("\n\n")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::escape_tildes;
-
-    #[test]
-    fn lone_tildes_are_escaped_outside_code() {
-        let body = "less than ~0.1. With ~all, ~~struck~~, `a ~b~`, \\~ kept\n```\nx ~ y\n```";
-        let want = "less than \\~0.1. With \\~all, ~~struck~~, `a ~b~`, \\~ kept\n```\nx ~ y\n```";
-        assert_eq!(escape_tildes(body), want);
-    }
 }
