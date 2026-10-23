@@ -6,11 +6,6 @@ use clap::{Parser, Subcommand};
 use lsp_server::Connection;
 
 /// Review comments and suggested edits, stored next to your files in `.annox/`.
-///
-/// The commands print text, or JSON with --json, or when ANNOX_OUTPUT=json or
-/// "output": "json" in ~/.config/annox/config.json. The write commands take
-/// --author and --name, or read ANNOX_AUTHOR and ANNOX_AUTHOR_NAME, then the
-/// author in that file, and otherwise use git's identity.
 #[derive(Parser)]
 #[command(
     name = "annox",
