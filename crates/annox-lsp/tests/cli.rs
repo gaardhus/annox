@@ -152,6 +152,31 @@ fn unsupported_formats_are_not_written() {
         assert!(error(dir.path(), &["accept", &s]).contains("format"));
         assert_eq!(std::fs::read_to_string(dir.path().join("paper.md")).unwrap(), DOC, "the file is untouched");
         assert_eq!(events(), before);
+        assert_eq!(annox(dir.path(), &["list", "paper.md"]).as_array().unwrap().len(), 1, "reading still works");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn lists_a_read_only_checkout() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = setup(DOC);
+    annox(dir.path(), &["suggest", "paper.md", "--quote", "teh", "--replace", "the"]);
+    let annox_dir = dir.path().join(".annox");
+    let set_mode = |mode| {
+        for path in walkdir(&annox_dir).iter().map(|p| p.parent().unwrap()).chain([annox_dir.as_path()]) {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+        }
+    };
+    set_mode(0o555);
+    // Root may write anyway, and then there's nothing to test.
+    if std::fs::File::create(annox_dir.join("probe")).is_err() {
+        // A reader with no read state yet, whose baseline can't be saved.
+        let list = try_annox(dir.path(), &["list", "paper.md", "--unread", "--author", "urn:test:new"]);
+        set_mode(0o755);
+        assert_eq!(list.unwrap().as_array().unwrap().len(), 0, "a new reader has nothing unread");
+    } else {
+        set_mode(0o755);
     }
 }
 

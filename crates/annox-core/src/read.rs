@@ -162,7 +162,9 @@ pub fn mark(ws: &Workspace, reader: &str, heads: BTreeMap<String, Vec<String>>) 
 }
 
 /// Marks everything in `index` read for `reader` if they have no read state
-/// yet, so that a new reader starts with nothing unread (§5.13).
+/// yet, so that a new reader starts with nothing unread (§5.13). If the
+/// workspace can't be written to, such as a read-only checkout, the baseline
+/// is returned without being saved, so that reading still works.
 pub fn ensure_reader(ws: &Workspace, index: &Index, reader: &str) -> io::Result<ReadState> {
     let state = ReadState::load(ws);
     if state.knows(reader) {
@@ -175,8 +177,16 @@ pub fn ensure_reader(ws: &Workspace, index: &Index, reader: &str) -> io::Result<
     state.add(reader, heads(&events, &ids));
     let mut merged = ReadState::load(ws);
     merged.merge(state);
-    save(ws, &merged)?;
-    Ok(merged)
+    match save(ws, &merged) {
+        Err(e) if !read_only(&e) => Err(e),
+        _ => Ok(merged),
+    }
+}
+
+/// Whether `e` says the workspace can't be written to at all, rather than
+/// that writing failed.
+fn read_only(e: &io::Error) -> bool {
+    matches!(e.kind(), io::ErrorKind::PermissionDenied | io::ErrorKind::ReadOnlyFilesystem | io::ErrorKind::Unsupported)
 }
 
 /// Marks the thread of annotation `id` read for `reader`, as of `index`:
