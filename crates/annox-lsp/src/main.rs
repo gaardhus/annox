@@ -98,11 +98,11 @@ enum Command {
 
 /// The subcommands under each heading of `annox --help`, in order.
 const GROUPS: &[(&str, &[&str])] = &[
-    ("Read", &["list", "show", "report", "history", "log", "watch"]),
+    ("Read", &["list", "show", "report", "history", "log", "watch", "text"]),
     ("Annotate", &["comment", "highlight", "suggest", "reply", "edit"]),
     ("Review", &["status", "react", "accept", "revert", "retarget", "reattach", "delete", "restore", "read"]),
     ("Workspace", &["init", "commit"]),
-    ("Export", &["export-pdf"]),
+    ("PDF", &["export-pdf", "import-pdf"]),
     ("Servers", &["lsp", "hub", "mcp"]),
     ("Other", &["update"]),
 ];

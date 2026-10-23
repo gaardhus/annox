@@ -642,7 +642,7 @@ impl Server<'_> {
         let rel = ws.relative(&path)?;
         let text = match self.open.get(uri) {
             Some(doc) => doc.text.clone(),
-            None => Text::from_raw(&std::fs::read_to_string(&path).unwrap_or_default()),
+            None => Text::from_raw(&crate::pdf::read_document(&path).unwrap_or_default()),
         };
         let generation = self.cache.borrow().generation;
         if let Some((g, version, a)) = self.cache.borrow().analyses.get(uri) {

@@ -119,6 +119,8 @@ annox revert ID [--accept] [--body TEXT]
 annox read ID... | --all
 annox commit [-m TEXT] [--dry-run]
 annox export-pdf paper.typ paper.pdf [-o OUT.pdf] [--closed] [filters]
+annox import-pdf paper.typ reviewed.pdf [--dry-run] # comments made in a PDF viewer, back into annox
+annox text paper.pdf                                # a file's text as annox reads it; for a PDF, its text layer
 ```
 
 `annox list --unread` lists the threads others changed since you last read them, and every entry says whether it's `unread`. `annox read` marks threads read, and writing to a thread does too. What each author id has read is kept in the git-ignored `.annox/local/read.json`, so an agent with its own id (below) has its own unread list, and its reading doesn't mark anything read for you. `list --as ID` reads as another id.
@@ -130,6 +132,14 @@ Write commands use `--author`/`--name`, or `ANNOX_AUTHOR`/`ANNOX_AUTHOR_NAME`, a
 ### Exporting to a PDF
 
 `annox export-pdf FILE PDF` copies the open threads of a document into a PDF compiled from it, as ordinary PDF comments, for reviewers who read the PDF in any viewer and never see the source. It finds each quote in the PDF's text, so it works with Markdown, LaTeX, Typst, or anything else that compiles to a PDF with a text layer. Markup in quotes is ignored (`\emph{...}`, `#emph[...]`, link targets), and so are line breaks, hyphenation and ligatures. A quote that appears more than once is placed by its surrounding text. Comments become highlights, and replies become replies. A suggestion strikes out its text in red and writes the replacement above it in green, like a proofreader, with the words that change tinted on both sides, as the editors draw suggestions inline. Its note is just the reason for it, as the page shows the change, unless the replacement was too long to fit and was cut short. Acrobat shows it as a "replace text" edit. Threads it can't find, such as a comment on a LaTeX preamble or on text that's changed since the PDF was compiled, are listed on a page added at the end. It writes `NAME.annotated.pdf` next to the PDF unless given `-o`, and takes the filters of `annox list`. Each PDF comment carries its annotation's id as its name (`/NM`).
+
+### Importing from a PDF
+
+`annox import-pdf FILE PDF` goes the other way: it adds the comments reviewers made on a PDF in their viewer to the annotations of the document it was compiled from. Each mark is placed in the source by finding the PDF text it covers, as `export-pdf` finds quotes in the PDF. A highlight, underline or squiggly becomes a comment, with the note as its body. Struck text becomes a suggestion to delete it, or with a caret grouped with it (Acrobat's "replace text") a suggestion to replace it with the caret's text. A caret alone is a suggestion to insert its text, a sticky note a comment on the word nearest to it, and a reply a reply, including replies to the comments `export-pdf` put there. Each keeps its author's name and its time. An author whose name is already in the workspace gets their id, and anyone else an id made from their name, as in `urn:annox:pdf:Jane%20Doe`. Comments that came from annox, and ones imported before, are left out, so you can import the same PDF again after the reviewer adds more. It prints what it added, and what it couldn't place, such as a comment on a page number. `--dry-run` only prints.
+
+### Annotating a PDF
+
+A PDF can be annotated as it is, with no source. Its text is the text of its text layer, a line per line of text with a blank line between pages, which `annox text paper.pdf` prints: line numbers in `annox list` refer to it. Quotes match on letters and digits alone, so text copied from a PDF viewer is found whatever its line breaks and hyphens. Comments, suggestions and replies work as they do on any document, except that a suggestion can't be accepted, since annox doesn't change PDFs. `annox export-pdf paper.pdf` writes the threads into `paper.annotated.pdf`, and `annox import-pdf paper.pdf reviewed.pdf` reads a reviewer's comments back. Editors can't open a PDF as text, so you annotate one from the command line or through an agent.
 
 ### Agents
 

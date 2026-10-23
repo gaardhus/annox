@@ -22,6 +22,19 @@ No other normalization is applied. In particular, there is no Unicode normalizat
 
 The rest of this section uses *text* to mean normalized text and *D* to mean the normalized text of the current document.
 
+### 3.2.1 PDF documents
+
+A document whose path ends in `.pdf`, in any case, is a **PDF document**. Its file isn't text, so step 1 decodes it differently: the document's text is the text of the PDF's text layer, laid out by the client. Steps 2 and 3 then apply as usual. A client SHOULD lay the text out as follows:
+
+1. Take the glyphs page by page, in the order the page's content draws them. Leave out control characters, and treat any whitespace character as a space.
+2. Put a line feed between two glyphs on different lines of the same page, and two between glyphs on different pages.
+3. Put a space between two glyphs on the same line that are further apart than about an eighth of the line's height, unless a space is already there.
+4. Leave out spaces at the end of a line.
+
+A document is laid out once, when it's read, and PDFs don't change, so offsets into one are stable. Layouts can differ between clients, though, in where they break lines and put spaces. Anchors made by a client that lays a PDF out differently then resolve by quote (§3.7), and may be orphaned if whitespace in the quote differs. A client that can't read a PDF's text treats the document as one it can't read.
+
+Hyphens at the ends of lines stay, so a word broken across lines is two pieces of text. Clients SHOULD let people target text in a PDF without matching its line breaks, hyphens and spaces, for example by comparing only letters and digits, as text copied from a PDF viewer seldom matches them.
+
 ## 3.3 Offsets
 
 An **offset** is a count of Unicode code points from the start of the text, beginning at 0. A **range** is a pair `start ≤ end` of offsets that covers the code points at indices `start` through `end − 1`. A range where `start == end` is a **point range**. It marks the position between two code points.

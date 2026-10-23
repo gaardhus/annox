@@ -69,13 +69,13 @@ pub enum Command {
     /// LaTeX, Typst, or anything else that compiles to a PDF with a text layer. Comments become
     /// highlights, suggestions become strikeouts with the replacement on a caret, and replies are
     /// replies. Threads it can't find go on a page added at the end. Prints where it wrote the PDF,
-    /// and which threads it placed.
+    /// and which threads it placed. When FILE is itself a PDF, PDF defaults to FILE.
     #[command(name = "export-pdf")]
     ExportPdf {
-        /// The document the PDF was compiled from
+        /// The document the PDF was compiled from, or a PDF annotated as it is
         file: String,
-        /// The compiled PDF
-        pdf: PathBuf,
+        /// The compiled PDF [default: FILE, when it's a PDF]
+        pdf: Option<PathBuf>,
         /// Where to write the annotated PDF [default: next to PDF, as NAME.annotated.pdf]
         #[arg(short, long, value_name = "PATH")]
         output: Option<PathBuf>,
@@ -84,6 +84,40 @@ pub enum Command {
         closed: bool,
         #[command(flatten)]
         filter: Filter,
+    },
+    /// Add the comments made on PDF, a PDF compiled from FILE, to FILE's annotations
+    ///
+    /// The other way round from `export-pdf`, for reviewers who commented in a PDF viewer. Each
+    /// highlight, underline or squiggly becomes a comment on the text it marks, found in FILE the way
+    /// `export-pdf` finds quotes in the PDF; struck text a suggestion to delete it, or to replace it with
+    /// the text of a caret grouped with it; a caret alone a suggestion to insert its text; a note a
+    /// comment on the word nearest to it; and a reply a reply. Comments that came from annox, and ones
+    /// imported before, are left out, so importing again only adds what's new. Each keeps its author's
+    /// name and its time; an author whose name is already in the workspace gets their id. Prints what
+    /// it added, and what it couldn't place. When FILE is itself a PDF, PDF defaults to FILE.
+    #[command(name = "import-pdf")]
+    ImportPdf {
+        /// The document the PDF was compiled from, or the PDF itself
+        file: String,
+        /// The PDF with the comments [default: FILE, when it's a PDF]
+        pdf: Option<PathBuf>,
+        /// Print what would be added without adding it
+        #[arg(long)]
+        dry_run: bool,
+        /// Keep what's added in the local area, which isn't shared
+        #[arg(long)]
+        local: bool,
+        /// Who to add comments without an author name as
+        #[command(flatten)]
+        author: Author,
+    },
+    /// Print FILE's text as annox reads it: for a PDF, the text of its text layer
+    ///
+    /// Quotes and line numbers in a PDF refer to this text: a line per line of text, and a blank line
+    /// between pages.
+    Text {
+        /// A document in the workspace
+        file: String,
     },
     /// Print who did what to a thread (the annotation and its replies), and when, oldest first
     History {

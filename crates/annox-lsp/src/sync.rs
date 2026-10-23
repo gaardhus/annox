@@ -63,7 +63,7 @@ impl Server<'_> {
         view["textDocument"] = json!({ "uri": uri });
         let text = match self.open.get(&uri) {
             Some(d) => d.text.clone(),
-            None => Text::from_raw(&std::fs::read_to_string(ws.root.join(&path)).unwrap_or_default()),
+            None => Text::from_raw(&crate::pdf::read_document(&ws.root.join(&path)).unwrap_or_default()),
         };
         let (Some(start), Some(end)) = (peer["range"]["start"].as_u64(), peer["range"]["end"].as_u64()) else {
             return view;

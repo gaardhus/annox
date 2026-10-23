@@ -133,6 +133,27 @@ const TOOLS: &[Tool] = &[
         read_only: true,
     },
     Tool {
+        name: "read_text",
+        command: "text",
+        description: "Print a file's text as annox reads it. For a PDF, that's the text of its text layer, a line per line of text and a blank line between pages: quote from it, and its lines are the ones list_annotations gives. Quotes in a PDF match on letters and digits alone, so line breaks and hyphens in them don't matter.",
+        positional: &["file"],
+        params: &[FILE],
+        read_only: true,
+    },
+    Tool {
+        name: "import_pdf",
+        command: "import-pdf",
+        description: "Add the comments reviewers made in a PDF viewer to a file's annotations: highlights become comments, struck text and carets suggestions, notes comments on the nearest word, and replies replies, each with its author's name and time. `file` is the document the PDF was compiled from, or the PDF itself. Comments exported by annox, and ones imported before, are skipped, so it's safe to run again. Lists what it added and what it couldn't place.",
+        positional: &["file", "pdf"],
+        params: &[
+            ("file", "string", true, "The document the PDF was compiled from, or the PDF itself."),
+            ("pdf", "string", false, "The PDF with the comments. Defaults to `file` when it's a PDF."),
+            ("dry_run", "boolean", false, "List what would be added without adding it."),
+            LOCAL,
+        ],
+        read_only: false,
+    },
+    Tool {
         name: "comment",
         command: "comment",
         description: "Comment on a passage of a file.",
@@ -273,6 +294,7 @@ fn option_name(param: &str) -> &str {
     match param {
         "replacement" => "replace",
         "not_author" => "not-author",
+        "dry_run" => "dry-run",
         other => other,
     }
 }
@@ -357,6 +379,8 @@ fn call_tool(params: &Value, config: &Config) -> Result<Value, (i64, String)> {
     let result = command_line(tool, &arguments, config)
         .and_then(|args| crate::cli::run(&args, &config.root).map_err(|e| format!("{e:#}")));
     Ok(match result {
+        // Text, such as a document's, goes back as it is rather than as a JSON string.
+        Ok(Value::String(text)) => json!({ "content": [{ "type": "text", "text": text }], "isError": false }),
         Ok(output) => json!({
             "content": [{ "type": "text", "text": serde_json::to_string_pretty(&output).unwrap_or_default() }],
             "isError": false,

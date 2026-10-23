@@ -77,6 +77,8 @@ Any user MAY re-target a suggestion, not only its author. That way a stale sugge
 
 **Accepting** a suggestion applies it to the document and records the acceptance in a single user action. There is no accepted-but-not-applied state.
 
+A suggestion on a PDF document (§3.2.1) can't be applied, since its text is read from the PDF, not written to it. Clients MUST NOT accept one. It proposes a change for someone to make in the document the PDF was made from, and is then rejected or withdrawn like any other suggestion not taken as it is.
+
 To accept an open suggestion, a client MUST:
 
 1. Resolve the anchor against *D*. If the suggestion is stale, stop. It MUST NOT be applied.

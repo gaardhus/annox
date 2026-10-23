@@ -33,7 +33,9 @@ annox report --by author    # who wrote what: suggestions, comments and replies 
 annox list --unread         # threads others changed since you marked them read, closed ones too
 ```
 
-To hand the review to someone who reads the compiled PDF instead of the source, `annox export-pdf paper.tex paper.pdf` writes `paper.annotated.pdf` with the open threads as PDF comments.
+To hand the review to someone who reads the compiled PDF instead of the source, `annox export-pdf paper.tex paper.pdf` writes `paper.annotated.pdf` with the open threads as PDF comments. When they send it back with comments of their own, `annox import-pdf paper.tex reviewed.pdf` adds those to the source's threads; check its `skipped` list for comments it couldn't place.
+
+A PDF with no source can be annotated directly: `annox comment paper.pdf --quote ...`. Its text is its text layer, which `annox text paper.pdf` prints; quote from that, and line numbers refer to it. Quotes in a PDF match on letters and digits alone, so line breaks and hyphens don't matter. Suggestions on a PDF can't be accepted: they're proposals for whoever edits its source.
 
 Filter instead of reading everything. Filters combine:
 

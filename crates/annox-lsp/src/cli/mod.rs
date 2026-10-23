@@ -27,7 +27,7 @@ use args::Cli;
 pub use args::{Author, Command, Filter, Meta, MoveTo, Quote, Watch};
 use commit::commit;
 pub use commit::commit_workspace;
-use pdf::export_pdf;
+use pdf::{export_pdf, import_pdf};
 use report::report;
 pub use watch::{follow_log, watch, Watcher};
 use watch::{log_events, log_scope};
@@ -68,7 +68,15 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
         Command::Show { id } => show(&id, &cwd),
         Command::History { id } => history(&id, &cwd),
         Command::ExportPdf { file, pdf, output, closed, filter } => {
-            export_pdf(&file, &pdf, output.as_deref(), closed, filter, &cwd)
+            export_pdf(&file, pdf.as_deref(), output.as_deref(), closed, filter, &cwd)
+        }
+        Command::ImportPdf { file, pdf, dry_run, local, author } => {
+            import_pdf(&file, pdf.as_deref(), dry_run, local, &author, &cwd)
+        }
+        Command::Text { file } => {
+            let (_, rel, abs) = open_file(&cwd, &file)?;
+            let raw = crate::pdf::read_document(&abs).with_context(|| format!("can't read {rel}"))?;
+            Ok(Value::String(Text::from_raw(&raw).to_string()))
         }
         Command::Comment { file, at, body, meta, author } => {
             create(&file, &at, None, Some(&body), &meta, &author, &cwd)
@@ -227,32 +235,39 @@ fn derived(index: &Index, id: &str) -> anyhow::Result<Value> {
 }
 
 /// Finds `quote` in `text`: its only occurrence, or the `occurrence`-th
-/// (1-based) when given. Returns the code-point range.
-fn find_quote(text: &Text, at: &Quote) -> anyhow::Result<(usize, usize)> {
+/// (1-based) when given. Returns the code-point range. When `loose`, as in
+/// a PDF's text, a quote that isn't there exactly is matched on its letters
+/// and digits alone, so line breaks, hyphens and spacing don't matter.
+fn find_quote(text: &Text, at: &Quote, loose: bool) -> anyhow::Result<(usize, usize)> {
     let Quote { quote, occurrence } = at;
     if quote.is_empty() {
         bail!("--quote can't be empty");
     }
     let normalized = annox_core::text::normalize(quote);
     let needle: Vec<char> = normalized.chars().collect();
-    let starts: Vec<usize> =
-        (0..=text.len().saturating_sub(needle.len())).filter(|&i| text.chars[i..].starts_with(&needle)).collect();
-    let start = match (starts.as_slice(), occurrence) {
+    let mut found: Vec<(usize, usize)> = (0..=text.len().saturating_sub(needle.len()))
+        .filter(|&i| text.chars[i..].starts_with(&needle))
+        .map(|i| (i, i + needle.len()))
+        .collect();
+    if found.is_empty() && loose {
+        found = crate::pdf::find_loose(&text.chars, &normalized);
+    }
+    match (found.as_slice(), occurrence) {
         ([], _) => bail!("the quote was not found in the file; quote the text exactly as it appears"),
-        (_, &Some(n)) => *starts
+        (_, &Some(n)) => found
             .get(n.wrapping_sub(1))
-            .ok_or_else(|| anyhow!("--occurrence {n} is out of range: the quote occurs {} times", starts.len()))?,
-        ([only], None) => *only,
+            .copied()
+            .ok_or_else(|| anyhow!("--occurrence {n} is out of range: the quote occurs {} times", found.len())),
+        ([only], None) => Ok(*only),
         (many, None) => {
-            let lines: Vec<String> = many.iter().map(|&s| line_of(text, s).to_string()).collect();
+            let lines: Vec<String> = many.iter().map(|&(s, _)| line_of(text, s).to_string()).collect();
             bail!(
                 "the quote occurs {} times (lines {}); quote more text, or pass --occurrence N",
                 many.len(),
                 lines.join(", ")
             )
         }
-    };
-    Ok((start, start + needle.len()))
+    }
 }
 
 /// The 1-based line of code-point offset `at`.
@@ -271,8 +286,8 @@ fn create(
     cwd: &Path,
 ) -> anyhow::Result<Value> {
     let (ws, rel, abs) = open_file(cwd, file)?;
-    let text = Text::from_raw(&std::fs::read_to_string(&abs)?);
-    let (start, end) = find_quote(&text, at)?;
+    let text = Text::from_raw(&crate::pdf::read_document(&abs)?);
+    let (start, end) = find_quote(&text, at, crate::pdf::is_pdf(&rel))?;
     let replacement = replacement.map(annox_core::text::normalize);
     let new = NewAnnotation {
         kind: if replacement.is_some() { "suggestion" } else { "comment" },
@@ -319,11 +334,11 @@ fn list(
     let unread = read::ensure_reader(&ws, &index, &me)?.unread(&me, &events);
     let mut out = Vec::new();
     for path in paths {
-        let text = std::fs::read_to_string(ws.root.join(&path)).ok().map(|raw| Text::from_raw(&raw));
+        let text = crate::pdf::read_document(&ws.root.join(&path)).ok().map(|raw| Text::from_raw(&raw));
         let quoted = match (&filter.quote, &text) {
             (Some(quote), Some(text)) => {
                 let at = Quote { quote: quote.clone(), occurrence: filter.occurrence };
-                Some((text, find_quote(text, &at)?))
+                Some((text, find_quote(text, &at, crate::pdf::is_pdf(&path))?))
             }
             (Some(_), None) => bail!("can't read {path}"),
             (None, _) => None,
@@ -410,7 +425,7 @@ fn show(id: &str, cwd: &Path) -> anyhow::Result<Value> {
         _ => id.to_owned(),
     };
     let path = document_path(&index, &id)?;
-    let text = std::fs::read_to_string(ws.root.join(&path)).ok().map(|raw| Text::from_raw(&raw));
+    let text = crate::pdf::read_document(&ws.root.join(&path)).ok().map(|raw| Text::from_raw(&raw));
     let states = index.load(&path).derive();
     let state = states.get(&id).ok_or_else(|| anyhow!("unknown annotation {id}"))?;
     Ok(item(&id, state, &path, text.as_ref(), &states, &index, true))
@@ -536,10 +551,12 @@ fn move_target(id: &str, at: &MoveTo, replace: Option<&str>, who: &Author, cwd: 
         bail!("{id} is {}; only open annotations can be moved", state["status"].as_str().unwrap_or_default());
     }
     let path = document_path(&index, id)?;
-    let raw = std::fs::read_to_string(ws.root.join(&path)).with_context(|| format!("can't read {path}"))?;
+    let raw = crate::pdf::read_document(&ws.root.join(&path)).with_context(|| format!("can't read {path}"))?;
     let text = Text::from_raw(&raw);
     let (start, end) = match &at.quote {
-        Some(quote) => find_quote(&text, &Quote { quote: quote.clone(), occurrence: at.occurrence })?,
+        Some(quote) => {
+            find_quote(&text, &Quote { quote: quote.clone(), occurrence: at.occurrence }, crate::pdf::is_pdf(&path))?
+        }
         None => {
             let target: Anchor = serde_json::from_value(state["target"].clone())?;
             if anchor::resolve(&text, &target).state != State::Orphaned {
@@ -616,6 +633,9 @@ fn accept(id: &str, confirmed: bool, who: &Author, cwd: &Path) -> anyhow::Result
         bail!("only open suggestions can be accepted");
     }
     let path = document_path(&index, id)?;
+    if crate::pdf::is_pdf(&path) {
+        bail!("{path} is a PDF, which annox can't change; make the change in the document it was made from instead");
+    }
     let file = ws.root.join(&path);
     let raw = std::fs::read_to_string(&file).with_context(|| format!("can't read {path}"))?;
     let target: Anchor = serde_json::from_value(state["target"].clone())?;

@@ -40,7 +40,7 @@ impl Event {
 }
 
 /// Formats seconds since the Unix epoch as `YYYY-MM-DDTHH:MM:SSZ`.
-fn rfc3339(secs: i64) -> String {
+pub fn rfc3339(secs: i64) -> String {
     let days = secs.div_euclid(86_400);
     let rem = secs.rem_euclid(86_400);
     // Civil-from-days (Howard Hinnant's algorithm).

@@ -32,6 +32,14 @@ pub struct NewAnnotation<'a> {
     pub reverts: Option<&'a str>,
 }
 
+/// Where an imported event came from: when it was made, if not now, and
+/// extension fields that record its source (§2.9).
+#[derive(Debug, Default)]
+pub struct Origin {
+    pub time: Option<String>,
+    pub ext: Option<Value>,
+}
+
 /// Creates a comment or suggestion on the document at `path` with content
 /// `text`, creating a document record first if needed (§5.7.2, §5.11).
 /// Returns the `create` event.
@@ -42,6 +50,19 @@ pub fn create_annotation(
     text: &Text,
     new: &NewAnnotation,
     author: &Value,
+) -> io::Result<Event> {
+    create_annotation_from(ws, index, path, text, new, author, &Origin::default())
+}
+
+/// [`create_annotation`], for an annotation imported from `origin`.
+pub fn create_annotation_from(
+    ws: &Workspace,
+    index: &Index,
+    path: &str,
+    text: &Text,
+    new: &NewAnnotation,
+    author: &Value,
+    origin: &Origin,
 ) -> io::Result<Event> {
     let at = index.documents_at(path);
     let area_of = |id: &str| {
@@ -92,6 +113,9 @@ pub fn create_annotation(
             fields.insert("reverts".into(), json!(reverts));
         }
     }
+    if let Some(ext) = &origin.ext {
+        fields.insert("ext".into(), ext.clone());
+    }
     let event = Event {
         id: id.clone(),
         annotation: Some(id),
@@ -99,7 +123,7 @@ pub fn create_annotation(
         after: vec![],
         kind: "create".into(),
         author: author.clone(),
-        time: Event::now(),
+        time: origin.time.clone().unwrap_or_else(Event::now),
         fields,
     };
     ws.write_event(&format!("{}{path}~{doc}", area_prefix(area)), &event)?;
@@ -130,6 +154,20 @@ pub fn create_reply(
     local: bool,
     author: &Value,
 ) -> io::Result<Event> {
+    create_reply_from(ws, index, parent, body, local, author, &Origin::default())
+}
+
+/// [`create_reply`], for a reply imported from `origin`. Importing doesn't
+/// mark the thread read: the author didn't read it here.
+pub fn create_reply_from(
+    ws: &Workspace,
+    index: &Index,
+    parent: &str,
+    body: &str,
+    local: bool,
+    author: &Value,
+    origin: &Origin,
+) -> io::Result<Event> {
     let (_, parent_loc) = index.events.get(parent).ok_or_else(|| not_found("annotation"))?;
     let area = if local || parent_loc.area == Area::Local { Area::Local } else { Area::Shared };
     let doc = index.canonical(&parent_loc.document);
@@ -141,15 +179,17 @@ pub fn create_reply(
         after: vec![],
         kind: "create".into(),
         author: author.clone(),
-        time: Event::now(),
-        fields: Map::from_iter([
-            ("kind".into(), json!("reply")),
-            ("parent".into(), json!(parent)),
-            ("body".into(), json!(body)),
-        ]),
+        time: origin.time.clone().unwrap_or_else(Event::now),
+        fields: Map::from_iter(
+            [("kind".into(), json!("reply")), ("parent".into(), json!(parent)), ("body".into(), json!(body))]
+                .into_iter()
+                .chain(origin.ext.clone().map(|ext| ("ext".into(), ext))),
+        ),
     };
     ws.write_event(&folder_for(index, doc, area, &parent_loc.folder), &event)?;
-    mark_read(ws, index, parent, author);
+    if origin.time.is_none() && origin.ext.is_none() {
+        mark_read(ws, index, parent, author);
+    }
     Ok(event)
 }
 

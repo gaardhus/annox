@@ -44,6 +44,8 @@ pub fn of(command: &Command) -> Render {
         Command::History { .. } => Box::new(history),
         Command::Log { .. } => Box::new(log),
         Command::ExportPdf { .. } => Box::new(exported),
+        Command::Text { .. } => Box::new(|v| str(v).to_owned()),
+        Command::ImportPdf { .. } => Box::new(imported),
         Command::Comment { .. } => Box::new(|v| created("Commented on", v)),
         Command::Highlight { .. } => Box::new(|v| created("Highlighted", v)),
         Command::Suggest { .. } => Box::new(|v| created("Suggested an edit to", v)),
@@ -81,9 +83,10 @@ fn str(v: &Value) -> &str {
     v.as_str().unwrap_or_default()
 }
 
-/// The display name of the author `author`, or its id.
+/// The display name of the author `author`, or its id; `import-pdf` gives
+/// just the name.
 fn name(author: &Value) -> &str {
-    author["name"].as_str().or(author["id"].as_str()).unwrap_or("unknown")
+    author.as_str().or(author["name"].as_str()).or(author["id"].as_str()).unwrap_or("unknown")
 }
 
 /// The annotation id of a command's output, muted.
@@ -308,6 +311,43 @@ fn wrote(pdf: &str, v: &Value) -> String {
         ));
     }
     out + "\n"
+}
+
+/// What `import-pdf` prints: what it added, one line each, and what it
+/// skipped, and why.
+fn imported(v: &Value) -> String {
+    let dry = v["dryRun"] == json!(true);
+    let added = v["added"].as_array().map_or(&[][..], Vec::as_slice);
+    let pdf = paint(style::PATH, str(&v["pdf"]));
+    let mut out = match (added.is_empty(), dry) {
+        (true, _) => format!("Nothing new in {pdf}\n"),
+        (false, false) => format!("Imported from {pdf}:\n"),
+        (false, true) => format!("Would import from {pdf}:\n"),
+    };
+    for a in added {
+        let line = a["line"].as_u64().unwrap_or_default();
+        let what = match (a["kind"].as_str(), a["replacement"].as_str()) {
+            (Some("reply"), _) => format!("replied to {}", paint(style::MUTED, str(&a["parent"]))),
+            (_, Some(r)) => format!("suggested on line {line}: {} → {}", quoted(str(&a["quote"])), quoted(r)),
+            _ => format!("commented on line {line}: {}", quoted(str(&a["quote"]))),
+        };
+        out.push_str(&format!(
+            "  {} {what}  {}\n",
+            paint(style::AUTHOR, name(&a["author"])),
+            paint(style::MUTED, str(&a["id"]))
+        ));
+    }
+    for s in v["skipped"].as_array().into_iter().flatten() {
+        let quote = s["quote"].as_str().map_or(String::new(), |q| format!(" {}", quoted(q)));
+        out.push_str(&format!(
+            "  {} {}{quote} on page {}: {}\n",
+            paint(style::PROBLEM, "skipped"),
+            s["author"].as_str().unwrap_or("a comment"),
+            s["page"].as_u64().unwrap_or_default(),
+            str(&s["reason"])
+        ));
+    }
+    out
 }
 
 /// `report`'s entries in display order, each with how deeply it's nested.

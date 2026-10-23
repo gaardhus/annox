@@ -16,7 +16,10 @@ fn setup(doc: &str) -> tempfile::TempDir {
 
 fn try_annox(cwd: &Path, args: &[&str]) -> anyhow::Result<Value> {
     let mut args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    if !matches!(args[0].as_str(), "init" | "list" | "show" | "history" | "log" | "report" | "commit" | "export-pdf") {
+    if !matches!(
+        args[0].as_str(),
+        "init" | "list" | "show" | "history" | "log" | "report" | "commit" | "export-pdf" | "text"
+    ) {
         args.extend(["--author".into(), "urn:test:agent".into(), "--name".into(), "Agent".into()]);
     }
     cli::run(&args, cwd)
@@ -795,11 +798,17 @@ fn prints_what_writes_did_as_text() {
 /// A PDF with a page per entry of `pages`, each showing its lines in
 /// Helvetica, one per line from the top.
 fn write_pdf(path: &Path, pages: &[&[&str]]) {
+    write_pdf_in(path, pages, "Helvetica");
+}
+
+/// [`write_pdf`] in `font`. In Courier, each character of line `i` is
+/// [`COURIER`] wide, from x = 72, with its baseline at y = 700 − 20i.
+fn write_pdf_in(path: &Path, pages: &[&[&str]], font: &str) {
     use lopdf::{dictionary, Document, Object, Stream};
     let mut doc = Document::with_version("1.7");
     let pages_id = doc.new_object_id();
     let font = doc.add_object(dictionary! {
-        "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica", "Encoding" => "WinAnsiEncoding",
+        "Type" => "Font", "Subtype" => "Type1", "BaseFont" => font, "Encoding" => "WinAnsiEncoding",
     });
     let mut kids = Vec::new();
     for lines in pages {
@@ -1105,4 +1114,154 @@ fn export_pdf_notes_a_replacement_only_when_it_was_cut_short() {
     };
     assert_eq!(note(&full), "Why");
     assert!(note(&cut).contains("a much longer replacement") && note(&cut).ends_with("Why"), "{}", note(&cut));
+}
+
+/// The width of a character of 12 pt Courier.
+const COURIER: f32 = 7.2;
+
+/// The box around characters `from..to` of line `line` of a page that
+/// [`write_pdf_in`] wrote in Courier, as `[x0, y0, x1, y1]`.
+fn courier_box(line: usize, from: usize, to: usize) -> [f32; 4] {
+    let y = 700.0 - 20.0 * line as f32;
+    [72.0 + COURIER * from as f32, y - 3.0, 72.0 + COURIER * to as f32, y + 10.0]
+}
+
+/// Adds the annotation `annot` to page 1 of the PDF at `path`, as a viewer
+/// would, and returns its object id.
+fn add_annot(path: &Path, mut annot: lopdf::Dictionary) -> lopdf::ObjectId {
+    use lopdf::Object;
+    let mut doc = lopdf::Document::load(path).unwrap();
+    let page = doc.get_pages()[&1];
+    annot.set("Type", Object::Name(b"Annot".to_vec()));
+    annot.set("P", page);
+    let id = doc.add_object(annot);
+    let page = doc.get_object_mut(page).unwrap().as_dict_mut().unwrap();
+    let mut annots = page.get(b"Annots").ok().and_then(|a| a.as_array().ok().cloned()).unwrap_or_default();
+    annots.push(id.into());
+    page.set("Annots", annots);
+    doc.save(path).unwrap();
+    id
+}
+
+/// A viewer's markup annotation over `boxes`, by Jane at `date`.
+fn markup(subtype: &str, nm: &str, contents: &str, boxes: &[[f32; 4]]) -> lopdf::Dictionary {
+    use lopdf::Object;
+    let quads: Vec<Object> =
+        boxes.iter().flat_map(|[x0, y0, x1, y1]| [*x0, *y1, *x1, *y1, *x0, *y0, *x1, *y0]).map(Object::Real).collect();
+    let mut d = note("Text", nm, contents);
+    d.set("Subtype", Object::Name(subtype.as_bytes().to_vec()));
+    d.set("Rect", boxes[0].iter().map(|&v| Object::Real(v)).collect::<Vec<_>>());
+    d.set("QuadPoints", quads);
+    d
+}
+
+/// A viewer's annotation of `subtype` with no markup, by Jane.
+fn note(subtype: &str, nm: &str, contents: &str) -> lopdf::Dictionary {
+    use lopdf::{Object, StringFormat};
+    let s = |v: &str| Object::String(v.as_bytes().to_vec(), StringFormat::Literal);
+    let mut d = lopdf::Dictionary::new();
+    d.set("Subtype", Object::Name(subtype.as_bytes().to_vec()));
+    d.set("NM", s(nm));
+    d.set("T", s("Jane Doe"));
+    d.set("Contents", s(contents));
+    d.set("CreationDate", s("D:20261020120000+02'00'"));
+    d.set("Rect", vec![Object::Real(0.0), Object::Real(0.0), Object::Real(0.0), Object::Real(0.0)]);
+    d
+}
+
+#[test]
+fn annotates_a_pdf_as_it_is() {
+    let dir = setup("");
+    let d = dir.path();
+    write_pdf(&d.join("paper.pdf"), &[&["The bound is tight. The bound is", "loose."], &["Appendix"]]);
+    // A line per line of text, and a blank line between pages.
+    assert_eq!(annox(d, &["text", "paper.pdf"]), "The bound is tight. The bound is\nloose.\n\nAppendix\n");
+    // Quotes match across line breaks, as copied from a viewer.
+    let loose = annox(d, &["suggest", "paper.pdf", "--quote", "bound is loose.", "--replace", "bound is slack."]);
+    assert_eq!(loose["line"], 1);
+    let tight = annox(d, &["comment", "paper.pdf", "--quote", "tight", "--body", "Prove it"]);
+    let list = annox(d, &["list", "paper.pdf"]);
+    assert_eq!(list[0]["quote"], "bound is\nloose.");
+    assert_eq!(list[1]["resolution"], "exact");
+    assert!(error(d, &["accept", &id(&loose)]).contains("is a PDF"));
+
+    // It exports into itself.
+    let out = annox(d, &["export-pdf", "paper.pdf"]);
+    assert_eq!(out["placed"], serde_json::json!([id(&loose), id(&tight)]));
+    assert!(d.join("paper.annotated.pdf").exists());
+    assert!(error(d, &["export-pdf", "paper.md"]).contains("pass the PDF"));
+}
+
+#[test]
+fn import_pdf_adds_what_reviewers_wrote_in_a_viewer() {
+    use lopdf::Object;
+    let dir = setup("# Title\n\nThe bound is *tight*, and\nthe proof is short.\n\nIt holds for all n.\n");
+    let d = dir.path();
+    let pdf = d.join("paper.pdf");
+    let lines: &[&str] =
+        &["Title", "The bound is tight, and the", "proof is short.", "It holds for all n.", "Page 1 of 1"];
+    write_pdf_in(&pdf, &[lines], "Courier");
+    let mine = id(&annox(d, &["comment", "paper.md", "--quote", "It holds", "--body", "For all?"]));
+    annox(d, &["export-pdf", "paper.md", "paper.pdf", "-o", "paper.pdf"]);
+
+    // A highlight across two lines, with a reply to it.
+    let highlight = add_annot(&pdf, markup("Highlight", "h1", "Why?", &[courier_box(1, 20, 27), courier_box(2, 0, 5)]));
+    let mut reply = note("Text", "r1", "Because.");
+    reply.set("IRT", highlight);
+    add_annot(&pdf, reply);
+    // "Replace text": struck text, and a caret grouped with it.
+    let struck = add_annot(&pdf, markup("StrikeOut", "s1", "Too strong", &[courier_box(1, 13, 18)]));
+    let mut caret = markup("Caret", "c1", "close", &[courier_box(1, 18, 18)]);
+    caret.set("IRT", struck);
+    caret.set("RT", Object::Name(b"Group".to_vec()));
+    add_annot(&pdf, caret);
+    // A reply to the comment annox exported, and a review state, left out.
+    let doc = lopdf::Document::load(&pdf).unwrap();
+    let annots = doc.get_dictionary(doc.get_pages()[&1]).unwrap().get(b"Annots").unwrap().as_array().unwrap().clone();
+    let exported = pdf_annots(&pdf, 1).iter().position(|(nm, _)| *nm == mine).unwrap();
+    let exported = annots[exported].as_reference().unwrap();
+    let mut answer = note("Text", "r2", "Yes, all.");
+    answer.set("IRT", exported);
+    add_annot(&pdf, answer);
+    let mut state = note("Text", "st", "Accepted");
+    state.set("IRT", exported);
+    state.set("State", lopdf::Object::String(b"Accepted".to_vec(), lopdf::StringFormat::Literal));
+    add_annot(&pdf, state);
+    // A highlight on text that isn't in the source.
+    add_annot(&pdf, markup("Highlight", "h2", "Footer?", &[courier_box(4, 0, 4)]));
+
+    let dry = annox(d, &["import-pdf", "paper.md", "paper.pdf", "--dry-run"]);
+    assert_eq!(dry["dryRun"], true);
+    assert_eq!(annox(d, &["list", "paper.md"]).as_array().unwrap().len(), 1);
+
+    let out = annox(d, &["import-pdf", "paper.md", "paper.pdf"]);
+    assert_eq!(out["unchanged"], 1, "{out:#}");
+    let added = out["added"].as_array().unwrap();
+    let kinds: Vec<&str> = added.iter().map(|a| a["kind"].as_str().unwrap()).collect();
+    assert_eq!(kinds, ["comment", "suggestion", "reply", "reply"], "{out:#}");
+    assert_eq!(added[0]["quote"], "and\nthe proof");
+    // Struck text is placed on the source's words, inside their markup.
+    assert_eq!(added[1]["quote"], "tight");
+    assert_eq!(added[1]["replacement"], "close");
+    assert_eq!(added[3]["parent"], mine.as_str());
+    assert_eq!(out["skipped"][0]["quote"], "Page");
+    assert_eq!(out["skipped"][0]["reason"], "its text isn't in paper.md");
+
+    let list = annox(d, &["list", "paper.md"]);
+    let why = list.as_array().unwrap().iter().find(|a| a["body"] == "Why?").unwrap();
+    assert_eq!(why["author"], serde_json::json!({ "id": "urn:annox:pdf:Jane%20Doe", "name": "Jane Doe" }));
+    assert_eq!(why["created"], "2026-10-20T10:00:00Z");
+    assert_eq!(why["replies"][0]["body"], "Because.");
+
+    // Importing again adds nothing.
+    let again = annox(d, &["import-pdf", "paper.md", "paper.pdf"]);
+    assert_eq!(again["added"], serde_json::json!([]));
+
+    // Importing into the PDF itself adds the PDF's own comments there too,
+    // but not the reply already added to the source's thread.
+    let into_pdf = annox(d, &["import-pdf", "paper.pdf"]);
+    let kinds: Vec<&str> = into_pdf["added"].as_array().unwrap().iter().map(|a| a["kind"].as_str().unwrap()).collect();
+    assert_eq!(kinds, ["comment", "suggestion", "comment", "reply"], "{into_pdf:#}");
+    assert_eq!(into_pdf["unchanged"], 2, "{into_pdf:#}");
+    assert_eq!(annox(d, &["import-pdf", "paper.pdf"])["added"], serde_json::json!([]));
 }
