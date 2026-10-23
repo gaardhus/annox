@@ -64,6 +64,13 @@ nvim-demo:
     cargo build -p annox-lsp --locked
     ANNOX_BIN="$PWD/target/debug/annox" editors/nvim/demo/record.sh assets/nvim-demo.gif
 
+# Build a playground for trying PDF sync by hand in `dir`, with the debug build, replacing an
+# earlier one: a hub, two copies that sync through it, and one on its own. What to try is in
+# docs/testing/pdf-sync.md. Needs jq.
+pdf-playground dir="/tmp/annox-pdf-playground":
+    cargo build -p annox-lsp --locked
+    ANNOX="$PWD/target/debug/annox" scripts/pdf-playground.sh "{{ dir }}"
+
 # Compile the example to examples/proposal.pdf, and export its threads into
 # examples/proposal.annotated.pdf. Needs pandoc and typst.
 example-pdf:

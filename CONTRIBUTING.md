@@ -9,6 +9,7 @@ Bug reports, fixes, and ideas are welcome. For anything bigger than a small fix,
 - **`editors/`** has the [Neovim plugin](editors/nvim/README.md) and the [VS Code extension](editors/vscode/README.md).
 - **`harnesses/`** is for agent harnesses: [`skills/annox/`](harnesses/skills/annox/SKILL.md) is the agent skill, and [`pi/`](harnesses/pi/README.md) the pi extension.
 - **`site/`** is the website, built with `just site`.
+- **`docs/testing/`** has guides for what can only be tested by hand, and **`scripts/`** the scripts that set them up.
 
 ## Building and testing
 
@@ -39,6 +40,10 @@ The spec and the reference implementation change together. A change to the spec 
 5. The implementation, in the crates and, if the protocol changed, the editor plugins.
 
 The spec is versioned separately from the code. It's still a draft, so incompatible changes are fine when the better design needs them.
+
+## Testing PDF sync by hand
+
+What PDF viewers make of `export-pdf`, `import-pdf` and `sync-pdf` can only be checked by hand. `just pdf-playground` sets up a hub and copies of the example PDF to try them on, and [`docs/testing/pdf-sync.md`](docs/testing/pdf-sync.md) says what to try.
 
 ## Keeping the docs and site up to date
 
