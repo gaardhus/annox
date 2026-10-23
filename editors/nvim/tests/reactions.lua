@@ -38,7 +38,7 @@ end)
 -- Bob suggests and comments from a shell, as if pulled from git.
 local function bob(args)
   vim.list_extend(args, { "--author", "mailto:bob@example.org", "--name", "Bob" })
-  local r = vim.system(vim.list_extend({ bin }, args), { cwd = root }):wait()
+  local r = vim.system(vim.list_extend({ bin, "--json" }, args), { cwd = root }):wait()
   check(r.code == 0, "bob: " .. (r.stderr or ""))
   return vim.json.decode(r.stdout)
 end

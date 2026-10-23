@@ -521,7 +521,7 @@ export async function run(): Promise<void> {
     // Bob comments from a shell, as if pulled from git.
     const bob = (file: string, quote: string, body: string) =>
       JSON.parse(
-        execFileSync(bin, ["comment", file, "--quote", quote, "--body", body, "--author", "mailto:bob@example.org"], {
+        execFileSync(bin, ["--json", "comment", file, "--quote", quote, "--body", body, "--author", "mailto:bob@example.org"], {
           cwd: root,
           encoding: "utf8",
         }),
@@ -567,7 +567,7 @@ export async function run(): Promise<void> {
     const s = JSON.parse(
       execFileSync(
         bin,
-        ["suggest", "paper.tex", "--quote", "conclude", "--replace", "close", "--author", "mailto:bob@example.org"],
+        ["--json", "suggest", "paper.tex", "--quote", "conclude", "--replace", "close", "--author", "mailto:bob@example.org"],
         { cwd: root, encoding: "utf8" },
       ),
     ).id as string;
