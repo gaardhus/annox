@@ -16,6 +16,9 @@ use crate::storage::{Index, Workspace};
 /// Where read state lives, relative to the workspace root.
 pub const READ_FILE: &str = ".annox/local/read.json";
 
+/// Held while read state is loaded, changed and saved.
+const LOCK_FILE: &str = ".annox/local/read.json.lock";
+
 /// The annotations each reader has seen: per reader id, per annotation id,
 /// the heads they had seen (§5.13).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -152,13 +155,30 @@ pub fn heads(events: &[Event], ids: &BTreeSet<String>) -> BTreeMap<String, Vec<S
 /// so that concurrent writers, such as an editor and an agent's CLI, don't
 /// lose each other's marks. Returns the merged state.
 pub fn mark(ws: &Workspace, reader: &str, heads: BTreeMap<String, Vec<String>>) -> io::Result<ReadState> {
-    let mut state = ReadState::load(ws);
-    let before = state.clone();
-    state.add(reader, heads);
-    if state != before {
-        save(ws, &state)?;
-    }
-    Ok(state)
+    locked(ws, || {
+        let mut state = ReadState::load(ws);
+        let before = state.clone();
+        state.add(reader, heads);
+        if state != before {
+            save(ws, &state)?;
+        }
+        Ok(state)
+    })
+}
+
+/// Runs `f`, which loads, changes and saves the read state, holding a lock,
+/// so that no other writer replaces the file between its load and its save,
+/// losing what that writer added. Where there can be no lock, as in a
+/// workspace that can't be written to, `f` runs without one.
+fn locked<T>(ws: &Workspace, f: impl FnOnce() -> io::Result<T>) -> io::Result<T> {
+    let path = ws.root.join(LOCK_FILE);
+    let file = ws.check_format().and_then(|()| {
+        fs::create_dir_all(path.parent().expect("LOCK_FILE has a parent"))?;
+        fs::OpenOptions::new().create(true).write(true).truncate(false).open(&path)
+    });
+    // Released when the file is closed.
+    let _lock = file.ok().filter(|f| f.lock().is_ok());
+    f()
 }
 
 /// Marks everything in `index` read for `reader` if they have no read state
@@ -175,12 +195,14 @@ pub fn ensure_reader(ws: &Workspace, index: &Index, reader: &str) -> io::Result<
     let mut state = state;
     state.readers.entry(reader.to_owned()).or_default();
     state.add(reader, heads(&events, &ids));
-    let mut merged = ReadState::load(ws);
-    merged.merge(state);
-    match save(ws, &merged) {
-        Err(e) if !read_only(&e) => Err(e),
-        _ => Ok(merged),
-    }
+    locked(ws, || {
+        let mut merged = ReadState::load(ws);
+        merged.merge(state);
+        match save(ws, &merged) {
+            Err(e) if !read_only(&e) => Err(e),
+            _ => Ok(merged),
+        }
+    })
 }
 
 /// Whether `e` says the workspace can't be written to at all, rather than
@@ -201,11 +223,13 @@ pub fn mark_thread(ws: &Workspace, index: &Index, id: &str, reader: &str) -> io:
 /// Drops `reader`'s read state, so that if they turn unread tracking back on
 /// they start with a new baseline (§5.13).
 pub fn forget(ws: &Workspace, reader: &str) -> io::Result<()> {
-    let mut state = ReadState::load(ws);
-    if state.readers.remove(reader).is_some() {
-        save(ws, &state)?;
-    }
-    Ok(())
+    locked(ws, || {
+        let mut state = ReadState::load(ws);
+        if state.readers.remove(reader).is_some() {
+            save(ws, &state)?;
+        }
+        Ok(())
+    })
 }
 
 /// Writes `state` atomically (§5.4).
@@ -295,6 +319,30 @@ mod tests {
         t.add(BOB, BTreeMap::new());
         t.merge(s.clone());
         assert!(t.knows(ADA) && t.knows(BOB));
+    }
+
+    #[test]
+    fn concurrent_marks_are_all_kept() {
+        let root = std::env::temp_dir().join(format!("annox-read-{}", crate::new_id()));
+        let ws = Workspace::init(&root).unwrap();
+        std::thread::scope(|scope| {
+            for t in 0..8 {
+                let ws = &ws;
+                scope.spawn(move || {
+                    for i in 0..20 {
+                        let id = format!("{t}-{i}");
+                        mark(ws, ADA, BTreeMap::from([(id.clone(), vec![id])])).unwrap();
+                    }
+                });
+            }
+        });
+        let state = ReadState::load(&ws);
+        let missing: Vec<String> = (0..8)
+            .flat_map(|t| (0..20).map(move |i| format!("{t}-{i}")))
+            .filter(|id| state.seen(ADA, id).is_none())
+            .collect();
+        assert!(missing.is_empty(), "lost {missing:?}");
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
