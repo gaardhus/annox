@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.1](https://github.com/gaardhus/annox/compare/v0.17.0...v0.17.1) - 2026-10-23
+
+### Documentation
+
+- *(cli)* Drop the output and author paragraph from annox --help
+
 ## [0.17.0](https://github.com/gaardhus/annox/compare/v0.16.0...v0.17.0) - 2026-10-23
 
 ### Breaking changes
