@@ -139,6 +139,38 @@ fn revert_undoes_an_accepted_suggestion() {
 }
 
 #[test]
+fn unsupported_formats_are_not_written() {
+    let dir = setup(DOC);
+    let s = id(&annox(dir.path(), &["suggest", "paper.md", "--quote", "teh", "--replace", "the"]));
+    let marker = dir.path().join(".annox/annox.json");
+    let events = || walkdir(&dir.path().join(".annox/docs"));
+    let before = events();
+    for format in ["{ \"format\": 2 }\n", "not json\n"] {
+        std::fs::write(&marker, format).unwrap();
+        let err = error(dir.path(), &["comment", "paper.md", "--quote", "bound", "--occurrence", "1", "--body", "x"]);
+        assert!(err.contains("format"), "{err}");
+        assert!(error(dir.path(), &["accept", &s]).contains("format"));
+        assert_eq!(std::fs::read_to_string(dir.path().join("paper.md")).unwrap(), DOC, "the file is untouched");
+        assert_eq!(events(), before);
+    }
+}
+
+/// Every file under `dir`, recursively.
+fn walkdir(dir: &Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            out.extend(walkdir(&path));
+        } else {
+            out.push(path);
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
 fn accept_keeps_bom_and_line_endings() {
     let dir = setup("\u{feff}we prove that teh bound\r\nis tight.\r\n");
     let s = id(&annox(dir.path(), &["suggest", "paper.md", "--quote", "teh", "--replace", "the\nnew"]));

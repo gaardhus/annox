@@ -157,6 +157,8 @@ impl Replica {
 
     fn session(&mut self, commands: &Receiver<ToReplica>, events: &Sender<FromReplica>) -> Result<(), Error> {
         let root = self.config.root.clone();
+        // Syncing writes to the workspace (§5.3).
+        self.ws().check_format().map_err(|e| Error::Io(e.to_string()))?;
         let mut conn = self.connect()?;
         let hello = Self::call(&mut conn, "annoxSync/hello", json!({ "format": FORMAT, "subscribe": true }))?;
         let hub_id = hello["hubId"].as_str().unwrap_or_default().to_owned();

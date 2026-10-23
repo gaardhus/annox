@@ -200,6 +200,7 @@ pub fn forget(ws: &Workspace, reader: &str) -> io::Result<()> {
 
 /// Writes `state` atomically (§5.4).
 fn save(ws: &Workspace, state: &ReadState) -> io::Result<()> {
+    ws.check_format()?;
     let path = ws.root.join(READ_FILE);
     let dir = path.parent().expect("READ_FILE has a parent");
     fs::create_dir_all(dir)?;

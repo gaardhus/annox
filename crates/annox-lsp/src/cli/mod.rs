@@ -639,6 +639,9 @@ fn accept(id: &str, confirmed: bool, who: &Author, cwd: &Path) -> anyhow::Result
     } else {
         out.push_str(&new_text);
     }
+    // Refuse before changing the file, not when the status event can't be
+    // written (§5.3).
+    ws.check_format()?;
     std::fs::write(&file, out)?;
     let fields =
         Map::from_iter([("status".into(), json!("accepted")), ("appliedVersion".into(), json!(applied.text.version))]);

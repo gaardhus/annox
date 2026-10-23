@@ -36,6 +36,9 @@ impl FileSource for BTreeMap<String, String> {
 /// several, the first copy is used (§5.4).
 const TREES: [&str; 3] = ["docs/", "local/docs/", "synced/docs/"];
 
+/// The storage format this implementation reads and writes (§5.3).
+pub const FORMAT: u64 = 1;
+
 /// Lines `.annox/.gitignore` must contain (§5.9).
 const IGNORED: [&str; 3] = ["cache/", "local/", "synced/"];
 
@@ -81,6 +84,26 @@ impl Workspace {
         self.add_ignored(&["*"])
     }
 
+    /// The workspace's storage format: `format` in `.annox/annox.json`, or
+    /// `None` if the file is missing, isn't JSON, or has no integer `format`
+    /// (§5.3).
+    pub fn format(&self) -> Option<u64> {
+        let marker = fs::read_to_string(self.root.join(".annox").join("annox.json")).ok()?;
+        serde_json::from_str::<Value>(&marker).ok()?["format"].as_u64()
+    }
+
+    /// Fails with [`io::ErrorKind::Unsupported`] unless the workspace's
+    /// format is [`FORMAT`]: a Client must not write to a workspace whose
+    /// format it doesn't support (§5.3). An unreadable marker counts as
+    /// unsupported, since its format can't be known.
+    pub fn check_format(&self) -> io::Result<()> {
+        match self.format() {
+            Some(FORMAT) => Ok(()),
+            Some(f) => Err(unsupported(format!("this workspace has storage format {f}, but annox supports {FORMAT}"))),
+            None => Err(unsupported("this workspace's .annox/annox.json has no valid format".into())),
+        }
+    }
+
     /// Adds any of `lines` missing from `.annox/.gitignore`.
     fn add_ignored(&self, lines: &[&str]) -> io::Result<()> {
         let ignore = self.root.join(".annox").join(".gitignore");
@@ -89,6 +112,7 @@ impl Workspace {
         if missing.is_empty() {
             return Ok(());
         }
+        self.check_format()?;
         let mut text = existing;
         if !text.is_empty() && !text.ends_with('\n') {
             text.push('\n');
@@ -111,6 +135,7 @@ impl Workspace {
     /// `docs/paper.tex~<id>` or `docs/paper.tex~<id>/document`), atomically
     /// (§5.4).
     pub fn write_event(&self, folder: &str, event: &Event) -> io::Result<()> {
+        self.check_format()?;
         let dir = self.root.join(".annox").join(folder);
         fs::create_dir_all(&dir)?;
         let tmp = dir.join(format!(".{}.json.tmp", event.id));
@@ -123,6 +148,10 @@ impl Workspace {
         }
         fs::rename(&tmp, dir.join(format!("{}.json", event.id)))
     }
+}
+
+fn unsupported(message: String) -> io::Error {
+    io::Error::new(io::ErrorKind::Unsupported, message)
 }
 
 impl FileSource for Workspace {

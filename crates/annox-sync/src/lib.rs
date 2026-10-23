@@ -7,7 +7,7 @@ pub mod replica;
 mod rpc;
 
 /// Storage format spoken (§5.3).
-pub const FORMAT: u64 = 1;
+pub use annox_core::storage::FORMAT;
 
 /// WebSocket subprotocol (§7.3).
 pub const SUBPROTOCOL: &str = "annox-sync";

@@ -19,6 +19,12 @@ impl Server<'_> {
         if self.replicas.contains_key(&ws.root) {
             return;
         }
+        if let Err(e) = ws.check_format() {
+            // A Viewer may still read it (§5.3), but syncing would write.
+            self.warn(format!("annox: {e}; annotations are read-only and not synced"));
+            self.replicas.insert(ws.root, None);
+            return;
+        }
         let marker = std::fs::read_to_string(ws.root.join(".annox/annox.json")).unwrap_or_default();
         let url =
             serde_json::from_str::<Value>(&marker).ok().and_then(|m| m["sync"]["url"].as_str().map(str::to_owned));

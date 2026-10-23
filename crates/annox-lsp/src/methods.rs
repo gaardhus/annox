@@ -13,7 +13,7 @@ use serde_json::{json, Map, Value};
 
 use crate::position::LineIndex;
 use crate::{
-    fail, views, Analysis, Failure, PendingInit, Server, Work, CREATE_WORKSPACE, INTERNAL_ERROR, INVALID_OPERATION,
+    fail, io_failure, views, Analysis, Failure, PendingInit, Server, Work, CREATE_WORKSPACE, INVALID_OPERATION,
     INVALID_PARAMS, NEEDS_REVIEW, NOT_CONFLICTED, NO_WORKSPACE, OVERLAP, STALE_SUGGESTION, UNKNOWN_ANNOTATION,
 };
 
@@ -27,10 +27,6 @@ fn uri_param(params: &Value, name: &str) -> Result<Url, Failure> {
 
 fn range_param(params: &Value) -> Result<Range, Failure> {
     serde_json::from_value(params["range"].clone()).map_err(|e| (INVALID_PARAMS, format!("range: {e}")))
-}
-
-fn io_failure(e: std::io::Error) -> Failure {
-    (INTERNAL_ERROR, e.to_string())
 }
 
 impl Server<'_> {

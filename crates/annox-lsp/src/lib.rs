@@ -57,6 +57,7 @@ const STALE_SUGGESTION: i32 = 1002;
 const INVALID_OPERATION: i32 = 1003;
 const NOT_CONFLICTED: i32 = 1004;
 const NO_WORKSPACE: i32 = 1005;
+const UNSUPPORTED_FORMAT: i32 = 1006;
 const EDIT_NOT_APPLIED: i32 = 1007;
 const NEEDS_REVIEW: i32 = 1008;
 const OVERLAP: i32 = 1009;
@@ -108,6 +109,13 @@ pub fn git_author(root: &Path) -> Value {
         (None, Some(name)) => json!({ "id": "urn:annox:anonymous", "name": name }),
         (None, None) => json!({ "id": "urn:annox:anonymous" }),
     }
+}
+
+/// A failed storage operation, as UnsupportedFormat if the workspace's
+/// format is the reason (§5.3).
+fn io_failure(e: std::io::Error) -> Failure {
+    let code = if e.kind() == std::io::ErrorKind::Unsupported { UNSUPPORTED_FORMAT } else { INTERNAL_ERROR };
+    (code, e.to_string())
 }
 
 fn fail<T>(code: i32, message: impl Into<String>) -> Result<T, Failure> {
@@ -749,7 +757,7 @@ impl Server<'_> {
     ) -> Result<(), Failure> {
         let result = ops::append_event(&a.ws, &a.index, annotation, kind, fields, &self.author(&a.ws));
         self.invalidate();
-        result.map(|_| ()).map_err(|e| (INTERNAL_ERROR, e.to_string()))
+        result.map(|_| ()).map_err(io_failure)
     }
 
     /// The AnnotationView of `id` after reloading `uri` (§6.6.1).
@@ -771,6 +779,11 @@ impl Server<'_> {
         let Some(a) = self.analyze(&uri) else {
             return self.reply(command, fail(NO_WORKSPACE, "no annox workspace"));
         };
+        // Refuse before the client edits the file, not when the event that
+        // records the edit can't be written.
+        if let Err(e) = a.ws.check_format() {
+            return self.reply(command, Err(io_failure(e)));
+        }
         let crlf = self.open.get(&uri).is_some_and(|d| d.crlf);
         let lines = LineIndex::new(&a.text, self.encoding);
         // Apply back to front to compute the resulting version.

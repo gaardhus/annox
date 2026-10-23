@@ -154,6 +154,7 @@ pub fn create_reply(
 }
 
 fn move_file(ws: &Workspace, from: &str, to_folder: &str) -> io::Result<()> {
+    ws.check_format()?;
     let annox = ws.root.join(".annox");
     let file = std::path::Path::new(from).file_name().ok_or_else(|| not_found("file"))?;
     let dir = annox.join(to_folder);
