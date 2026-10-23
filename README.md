@@ -164,11 +164,11 @@ To answer a review, take the ids from `annox list`:
 
 ```sh
 annox list --unread                       # the threads others changed since you last read them
-annox reply ID --body "Fixed."
-annox status ID resolved
-annox react ID 👍                         # 👍 on a suggestion approves it
-annox accept ID
-annox revert ID                           # changed your mind: suggests the original text back
+annox reply COMMENT_ID --body "Fixed."
+annox status COMMENT_ID resolved
+annox react SUGGESTION_ID 👍              # 👍 on a suggestion approves it
+annox accept SUGGESTION_ID
+annox revert SUGGESTION_ID                # changed your mind: suggests the original text back
 ```
 
 To keep track of a workspace:

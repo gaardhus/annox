@@ -28,6 +28,7 @@ dependencies = [
  "lsp-types",
  "serde",
  "serde_json",
+ "shlex",
  "tempfile",
 ]
 
