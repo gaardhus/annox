@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.2](https://github.com/gaardhus/annox/compare/v0.17.1...v0.17.2) - 2026-10-23
+
+### Added
+
+- Warn about event files that aren't valid events
+
+### Fixed
+
+- Reject invalid create events instead of deriving null fields
+- Refuse to write to a workspace whose format isn't supported
+- List annotations in a workspace that can't be written to
+- *(sync)* Keep received events that couldn't be written
+- *(core)* Lock read state while merging, so concurrent marks are kept
+- *(sync)* Compare the hub's token in constant time
+- Salvage damaged read state instead of replacing it
+
+### Performance
+
+- *(core)* Replay a log in linear time
+
+### Changed
+
+- Define the read state repair message once, in core
+- Word the invalid event files warning once, in core
+
 ## [0.17.1](https://github.com/gaardhus/annox/compare/v0.17.0...v0.17.1) - 2026-10-23
 
 ### Documentation
