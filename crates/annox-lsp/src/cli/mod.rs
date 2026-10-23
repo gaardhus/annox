@@ -577,7 +577,7 @@ fn revert(id: &str, then_accept: bool, body: Option<&str>, who: &Author, cwd: &P
     let raw = std::fs::read_to_string(ws.root.join(&path)).with_context(|| format!("can't read {path}"))?;
     let text = Text::from_raw(&raw);
     let target: Anchor = serde_json::from_value(state["target"].clone())?;
-    let replacement = state["edit"]["replacement"].as_str().unwrap_or_default();
+    let replacement = state["edit"]["replacement"].as_str().context("the suggestion has no replacement")?;
     let (start, end) = suggestion::applied_text_search(&text, &target, replacement)
         .ok_or_else(|| anyhow!("the accepted text was changed since, so it can't be reverted automatically"))?;
     let revert_id = match reverts.iter().find(|s| s["status"] == "open") {
@@ -617,7 +617,7 @@ fn accept(id: &str, confirmed: bool, who: &Author, cwd: &Path) -> anyhow::Result
     let file = ws.root.join(&path);
     let raw = std::fs::read_to_string(&file).with_context(|| format!("can't read {path}"))?;
     let target: Anchor = serde_json::from_value(state["target"].clone())?;
-    let replacement = state["edit"]["replacement"].as_str().unwrap_or_default();
+    let replacement = state["edit"]["replacement"].as_str().context("the suggestion has no replacement")?;
     let applied = suggestion::apply(&Text::from_raw(&raw), &target, replacement)
         .map_err(|_| anyhow!("the suggestion is stale: its text is no longer in {path}"))?;
     // Relocation by quote or partial context may have picked another spot.

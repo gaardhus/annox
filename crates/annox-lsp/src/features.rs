@@ -170,7 +170,9 @@ impl Server<'_> {
         let Some(item) = a.item(annotation).filter(|i| i.kind() == "suggestion" && i.is_open()) else {
             return self.reply(command, fail(INVALID_OPERATION, "only open suggestions can be accepted"));
         };
-        let replacement = item.state["edit"]["replacement"].as_str().unwrap_or_default().to_owned();
+        let Some(replacement) = item.state["edit"]["replacement"].as_str().map(str::to_owned) else {
+            return self.reply(command, fail(INVALID_OPERATION, "the suggestion has no replacement"));
+        };
         match suggestion::apply(&a.text, &item.target, &replacement) {
             Ok(applied) => {
                 let work = Work::Accept { annotation: annotation.to_owned() };

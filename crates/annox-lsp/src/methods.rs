@@ -473,7 +473,9 @@ impl Server<'_> {
                 let by = done["id"].as_str().unwrap_or_default();
                 return fail(INVALID_OPERATION, format!("it was already reverted by {by}"));
             }
-            let replacement = item.state["edit"]["replacement"].as_str().unwrap_or_default();
+            let Some(replacement) = item.state["edit"]["replacement"].as_str() else {
+                return fail(INVALID_OPERATION, "the suggestion has no replacement");
+            };
             let Some((start, end)) = suggestion::applied_text_search(&a.text, &item.target, replacement) else {
                 return fail(
                     STALE_SUGGESTION,
@@ -540,7 +542,10 @@ impl Server<'_> {
                 results.push(views::result_error(id, INVALID_OPERATION, "not an open suggestion"));
                 continue;
             };
-            let replacement = item.state["edit"]["replacement"].as_str().unwrap_or_default().to_owned();
+            let Some(replacement) = item.state["edit"]["replacement"].as_str().map(str::to_owned) else {
+                results.push(views::result_error(id, INVALID_OPERATION, "the suggestion has no replacement"));
+                continue;
+            };
             let error = match suggestion::apply(&a.text, &item.target, &replacement) {
                 Err(_) => Some((STALE_SUGGESTION, "the suggestion is stale")),
                 Ok(applied) if applied.resolution.step >= 3 && !confirmed => {
@@ -633,7 +638,9 @@ impl Server<'_> {
                 } else if accepted.is_some() && params["revert"].as_bool().unwrap_or(false) {
                     // Revert the applied edit first (§4.3.3).
                     let item = a.item(&id)?;
-                    let replacement = item.state["edit"]["replacement"].as_str().unwrap_or_default();
+                    let Some(replacement) = item.state["edit"]["replacement"].as_str() else {
+                        return Some(fail(INVALID_OPERATION, "the suggestion has no replacement"));
+                    };
                     if let Some((c, d)) = suggestion::applied_text_search(&a.text, &item.target, replacement) {
                         let original = item.target.selectors.quote.exact.clone();
                         let work = Work::Revert { annotation: id.clone(), status: status.to_owned() };

@@ -132,6 +132,36 @@ fn str_field<'e>(e: &'e Event, name: &str) -> Option<&'e str> {
     e.field(name).and_then(Value::as_str)
 }
 
+/// Whether `e` has the fields a `create` of `kind` requires and none it
+/// mustn't have (§2.4). Anything else is invalid, and with an invalid
+/// `create` there is no annotation: a suggestion without a replacement must
+/// not derive one that accepting would turn into a deletion.
+fn valid_create(kind: &str, e: &Event) -> bool {
+    let absent = |name: &str| !e.has(name);
+    let optional_str = |name: &str| e.field(name).is_none_or(|v| v.is_null() || v.is_string());
+    match kind {
+        "comment" | "suggestion" => {
+            let edit = if kind == "suggestion" {
+                e.field("edit").and_then(|v| v.get("replacement")).is_some_and(Value::is_string)
+                    && e.field("reverts").is_none_or(Value::is_string)
+            } else {
+                absent("edit") && absent("reverts")
+            };
+            e.field("target").is_some_and(Value::is_object)
+                && absent("parent")
+                && optional_str("body")
+                && optional_str("label")
+                && edit
+        }
+        "reply" => {
+            e.field("parent").is_some_and(Value::is_string)
+                && str_field(e, "body").is_some_and(|b| !b.is_empty())
+                && ["target", "label", "edit", "reverts"].into_iter().all(absent)
+        }
+        _ => false,
+    }
+}
+
 /// The fields an annotation event writes, or none if it is invalid or
 /// unknown (§2.4, §2.5.2).
 fn annotation_writes(kind: &str, root_id: &str, e: &Event) -> Writes {
@@ -264,10 +294,8 @@ pub fn derive_annotation(events: &[Event], id: &str) -> Option<Value> {
         return None;
     }
     let kind = str_field(create, "kind")?;
-    match kind {
-        "comment" | "suggestion" if create.has("target") && !create.has("parent") => {}
-        "reply" if create.has("parent") && !create.has("target") => {}
-        _ => return None,
+    if !valid_create(kind, create) {
+        return None;
     }
     let fields = derive_fields(&log, |e| annotation_writes(kind, id, e));
     let mut conflicts = fields.conflicts.clone();

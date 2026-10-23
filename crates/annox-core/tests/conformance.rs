@@ -85,11 +85,11 @@ fn replay() {
     check_all("replay", |c| {
         let events: Vec<Event> = serde_json::from_value(c["events"].clone()).unwrap();
         let id = c["annotation"].as_str().unwrap();
-        let got = replay::derive_annotation(&events, id).ok_or("no annotation derived")?;
+        let got = json!(replay::derive_annotation(&events, id));
         expect_eq("state", got.clone(), &c["expected"])?;
         let mut reversed = events.clone();
         reversed.reverse();
-        expect_eq("state with reversed events", replay::derive_annotation(&reversed, id).unwrap(), &got)
+        expect_eq("state with reversed events", json!(replay::derive_annotation(&reversed, id)), &got)
     });
 }
 

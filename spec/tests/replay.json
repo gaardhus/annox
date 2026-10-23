@@ -1,5 +1,5 @@
 {
-  "description": "Event replay test vectors for annox spec §2.5. For each case, derive the state of annotation `annotation` from `events` and compare with `expected` (§2.5.6). Event order in `events` is arbitrary and must not affect the result.",
+  "description": "Event replay test vectors for annox spec §2.5. For each case, derive the state of annotation `annotation` from `events` and compare with `expected` (§2.5.6), where `null` means there is no annotation because its `create` is invalid (§2.4). Event order in `events` is arbitrary and must not affect the result.",
   "specVersion": "0.1",
   "cases": [
     {
@@ -1614,6 +1614,155 @@
         "reactions": {},
         "conflicts": {}
       }
+    },
+    {
+      "name": "invalid-create-no-replacement",
+      "description": "A suggestion created without `edit.replacement` is invalid (§2.4), so there is no annotation, rather than one that accepting would turn into a deletion.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "suggestion",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": null
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "invalid-create-replacement-type",
+      "description": "A replacement that isn't a string makes the create invalid (§2.4).",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "suggestion",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": null,
+          "edit": {
+            "replacement": 42
+          }
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "invalid-create-reply-without-body",
+      "description": "A reply requires a non-empty body (§2.4); without one there is no reply.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "reply",
+          "parent": "01926d3a-ffff-7000-8000-000000000000"
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "invalid-create-comment-with-edit",
+      "description": "A comment MUST NOT have `edit` (§2.4), and later events don't make its create valid.",
+      "annotation": "01926d3a-0001-7000-8000-000000000000",
+      "events": [
+        {
+          "id": "01926d3a-0001-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [],
+          "type": "create",
+          "author": {
+            "id": "mailto:ada@example.org",
+            "name": "Ada Lovelace"
+          },
+          "time": "2026-09-28T14:01:00Z",
+          "kind": "comment",
+          "target": {
+            "path": "paper.tex",
+            "version": "sha256:8f0e25291b407e4278747066161c0ea35b1ad97cef708b1c9bf8c6c116c7743c",
+            "selectors": {
+              "position": {
+                "start": 32,
+                "end": 45
+              },
+              "quote": {
+                "exact": "we prove that",
+                "prefix": "\\section{Results}\nIn Section 3, ",
+                "suffix": " the bound is tight for all $n$."
+              }
+            }
+          },
+          "body": "Is this tight?",
+          "edit": {
+            "replacement": "x"
+          }
+        },
+        {
+          "id": "01926d3a-0002-7000-8000-000000000000",
+          "annotation": "01926d3a-0001-7000-8000-000000000000",
+          "after": [
+            "01926d3a-0001-7000-8000-000000000000"
+          ],
+          "type": "status",
+          "author": {
+            "id": "mailto:bob@example.org",
+            "name": "Bob"
+          },
+          "time": "2026-09-28T14:02:00Z",
+          "status": "resolved"
+        }
+      ],
+      "expected": null
     },
     {
       "name": "accepted",
