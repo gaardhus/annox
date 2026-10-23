@@ -3,8 +3,10 @@
 //! never committed or synced.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 use std::fs;
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -200,14 +202,28 @@ pub fn mark(ws: &Workspace, reader: &str, heads: BTreeMap<String, Vec<String>>) 
     })
 }
 
+/// A damaged `read.json` that [`repair`] set aside. Displays as the message
+/// that tells the user so.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Repaired {
+    /// Where the damaged file went.
+    pub backup: PathBuf,
+}
+
+impl fmt::Display for Repaired {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "read state was damaged; kept what could be read, and the file as {}", self.backup.display())
+    }
+}
+
 /// If `read.json` is damaged, moves it to `read.json.damaged-<id>` and
 /// writes what could be salvaged in its place, so that nothing in it is
-/// lost to the next save. Returns where the damaged file went.
-pub fn repair(ws: &Workspace) -> io::Result<Option<std::path::PathBuf>> {
+/// lost to the next save.
+pub fn repair(ws: &Workspace) -> io::Result<Option<Repaired>> {
     locked(ws, || repair_unlocked(ws))
 }
 
-fn repair_unlocked(ws: &Workspace) -> io::Result<Option<std::path::PathBuf>> {
+fn repair_unlocked(ws: &Workspace) -> io::Result<Option<Repaired>> {
     let path = ws.root.join(READ_FILE);
     let Ok(text) = fs::read_to_string(&path) else { return Ok(None) };
     let (state, damaged) = ReadState::salvage(&text);
@@ -218,7 +234,7 @@ fn repair_unlocked(ws: &Workspace) -> io::Result<Option<std::path::PathBuf>> {
     let backup = path.with_file_name(format!("read.json.damaged-{}", crate::new_id()));
     fs::rename(&path, &backup)?;
     save(ws, &state)?;
-    Ok(Some(backup))
+    Ok(Some(Repaired { backup }))
 }
 
 /// Runs `f`, which loads, changes and saves the read state, holding a lock,

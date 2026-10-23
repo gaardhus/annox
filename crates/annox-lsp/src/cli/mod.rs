@@ -201,8 +201,8 @@ fn no_workspace(from: &Path) -> anyhow::Error {
 /// and about read state that had to be repaired.
 pub(crate) fn read_index(ws: &Workspace) -> Index {
     static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    if let Ok(Some(backup)) = read::repair(ws) {
-        eprintln!("annox: read state was damaged; kept what could be read, and the file as {}", backup.display());
+    if let Ok(Some(repaired)) = read::repair(ws) {
+        eprintln!("annox: {repaired}");
     }
     let index = Index::read(ws);
     if let Some(first) = index.unreadable.first() {
