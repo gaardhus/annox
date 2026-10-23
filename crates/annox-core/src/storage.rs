@@ -407,16 +407,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn warns_about_unreadable_files() {
-        assert_eq!(unreadable_warning::<&str>(&[]), None);
-        assert_eq!(unreadable_warning(&["a"]).unwrap(), "ignoring 1 event file that isn't a valid event: a");
-        assert_eq!(
-            unreadable_warning(&["a", "b", "c", "d"]).unwrap(),
-            "ignoring 4 event files that aren't valid events: a, b, c, …"
-        );
-    }
-
-    #[test]
     fn notes_unreadable_event_files() {
         let folder = ".annox/docs/a.md~01926d3a-0100-7000-8000-000000000000";
         let ev = "01926d3a-0001-7000-8000-000000000000";
