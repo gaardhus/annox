@@ -5,6 +5,10 @@
 //! Workspaces are addressed as `ws://host/w/<name>`. Each is persisted as
 //! `<data>/<name>.jsonl`: a header line with the hub id, then one item per
 //! line.
+//!
+//! It prints connections, and refused or failed requests, to stderr, and
+//! with `verbose`, the events it accepts and hands out. Never what events
+//! say: hub logs tend to end up in system logs.
 
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
@@ -32,6 +36,17 @@ pub struct HubConfig {
     pub data: PathBuf,
     /// If set, connections must send `Authorization: Bearer <token>` (§7.2).
     pub token: Option<String>,
+    /// Also print the events each connection pushes and pulls.
+    pub verbose: bool,
+}
+
+/// Prints a line of what the hub is doing, with the time.
+fn say(message: impl std::fmt::Display) {
+    eprintln!("{} annox hub: {message}", annox_core::event::Event::now());
+}
+
+fn plural(n: usize, what: &str) -> String {
+    format!("{n} {what}{}", if n == 1 { "" } else { "s" })
 }
 
 struct Log {
@@ -42,6 +57,8 @@ struct Log {
     file: File,
     subscribers: HashMap<u64, Sender<Value>>,
     presence: HashMap<u64, Value>,
+    /// How many connections are open to this workspace.
+    connections: usize,
 }
 
 impl Log {
@@ -72,7 +89,7 @@ impl Log {
             .enumerate()
             .filter_map(|(i, item)| Some((item["event"]["id"].as_str()?.to_owned(), i as u64 + 1)))
             .collect();
-        Ok(Log { hub_id, items, by_id, file, subscribers: HashMap::new(), presence: HashMap::new() })
+        Ok(Log { hub_id, items, by_id, file, subscribers: HashMap::new(), presence: HashMap::new(), connections: 0 })
     }
 
     fn cursor(&self) -> u64 {
@@ -161,16 +178,21 @@ fn reject(status: u16, message: &str) -> ErrorResponse {
 fn handle(stream: TcpStream, shared: &Shared) -> Result<(), Error> {
     let mut workspace = None;
     let token = shared.config.token.clone();
+    let from = stream.peer_addr().map_or_else(|_| "an unknown address".to_owned(), |a| a.to_string());
     let callback = |req: &Request, mut resp: Response| -> Result<Response, ErrorResponse> {
         if let Some(expected) = &token {
             let auth = req.headers().get("authorization").and_then(|v| v.to_str().ok());
             if auth != Some(format!("Bearer {expected}").as_str()) {
+                say(format!("refused {from} at {}: no valid token", req.uri().path()));
                 return Err(reject(401, "unauthorized"));
             }
         }
         match req.uri().path().strip_prefix("/w/") {
             Some(name) if valid_workspace_name(name) => workspace = Some(name.to_owned()),
-            _ => return Err(reject(404, "no such workspace; use /w/<name>")),
+            _ => {
+                say(format!("refused {from}: {} isn't /w/<name>", req.uri().path()));
+                return Err(reject(404, "no such workspace; use /w/<name>"));
+            }
         }
         let wants_protocol = req
             .headers()
@@ -184,25 +206,53 @@ fn handle(stream: TcpStream, shared: &Shared) -> Result<(), Error> {
     };
     let ws = tungstenite::accept_hdr(stream, callback).map_err(|e| Error::Io(e.to_string()))?;
     ws.get_ref().set_timeout(Some(Duration::from_millis(25))).map_err(|e| Error::Io(e.to_string()))?;
-    let log = shared.log(&workspace.unwrap_or_default()).map_err(|e| Error::Io(e.to_string()))?;
+    let name = workspace.unwrap_or_default();
+    let log = match shared.log(&name) {
+        Ok(log) => log,
+        Err(e) => {
+            say(format!("w/{name}: can't open its log in {}: {e}", shared.config.data.display()));
+            return Err(Error::Io(e.to_string()));
+        }
+    };
     let connection = shared.next_connection.fetch_add(1, Ordering::Relaxed);
+    let open = {
+        let mut log = log.lock().unwrap();
+        log.connections += 1;
+        log.connections
+    };
+    say(format!("w/{name}: connection {connection} from {from} opened ({open} open)"));
     let (tx, rx) = unbounded();
-    let result = session(Peer::new(ws), &log, connection, tx, rx);
+    let context = Context { workspace: &name, connection, verbose: shared.config.verbose };
+    let result = session(Peer::new(ws), &log, &context, tx, rx);
     let mut log = log.lock().unwrap();
+    log.connections -= 1;
     log.subscribers.remove(&connection);
     if log.presence.remove(&connection).is_some() {
         log.broadcast_presence();
     }
+    let why = match &result {
+        Ok(()) | Err(Error::Closed) => String::new(),
+        Err(e) => format!(": {e}"),
+    };
+    say(format!("w/{name}: connection {connection} closed{why} ({} open)", log.connections));
     result
+}
+
+/// Which connection a session is, for what the hub prints.
+struct Context<'a> {
+    workspace: &'a str,
+    connection: u64,
+    verbose: bool,
 }
 
 fn session(
     mut peer: Peer<TcpStream>,
     log: &Mutex<Log>,
-    connection: u64,
+    context: &Context,
     tx: Sender<Value>,
     rx: Receiver<Value>,
 ) -> Result<(), Error> {
+    let connection = context.connection;
     let mut greeted = false;
     loop {
         while let Ok(msg) = rx.try_recv() {
@@ -239,9 +289,20 @@ fn session(
             }
             _ if !greeted => Err((-32002, "annoxSync/hello must come first".into())),
             "annoxSync/pull" => pull(&log.lock().unwrap(), params),
-            "annoxSync/push" => push(&mut log.lock().unwrap(), connection, params),
+            "annoxSync/push" => push(&mut log.lock().unwrap(), context, params),
             _ => Err((-32601, format!("unknown method {method}"))),
         };
+        let (workspace, connection) = (context.workspace, context.connection);
+        match &result {
+            Err((_, message)) => say(format!("w/{workspace}: connection {connection}: {method} failed: {message}")),
+            Ok(pulled) if context.verbose && method == "annoxSync/pull" => {
+                let n = pulled["items"].as_array().map_or(0, Vec::len);
+                if n > 0 {
+                    say(format!("w/{workspace}: connection {connection} pulled {}", plural(n, "event")));
+                }
+            }
+            Ok(_) => {}
+        }
         peer.respond(&id, result)?;
     }
 }
@@ -257,7 +318,8 @@ fn pull(log: &Log, params: &Value) -> Result<Value, RpcError> {
     Ok(json!({ "items": items, "cursor": cursor, "more": cursor < log.items.len() }))
 }
 
-fn push(log: &mut Log, connection: u64, params: &Value) -> Result<Value, RpcError> {
+fn push(log: &mut Log, context: &Context, params: &Value) -> Result<Value, RpcError> {
+    let Context { workspace, connection, verbose } = *context;
     let items = params["items"].as_array().ok_or((-32602, "items must be an array".to_owned()))?;
     let mut results = Vec::with_capacity(items.len());
     let mut fresh = Vec::new();
@@ -269,15 +331,33 @@ fn push(log: &mut Log, connection: u64, params: &Value) -> Result<Value, RpcErro
                 }
                 json!({ "seq": seq })
             }
-            Err((code, message)) => json!({ "error": { "code": code, "message": message } }),
+            Err((code, message)) => {
+                let id = item["event"]["id"].as_str().unwrap_or("without an id");
+                say(format!("w/{workspace}: connection {connection}: refused event {id}: {message}"));
+                json!({ "error": { "code": code, "message": message } })
+            }
         });
     }
     if !fresh.is_empty() {
         let params = json!({ "hubId": log.hub_id, "items": fresh, "cursor": log.cursor() });
+        let mut relayed = 0;
         for (&conn, tx) in &log.subscribers {
             if conn != connection {
                 let _ = tx.send(notification("annoxSync/didReceive", params.clone()));
+                relayed += 1;
             }
+        }
+        if verbose {
+            let mut authors: Vec<&str> =
+                fresh.iter().filter_map(|item| item["event"]["author"]["id"].as_str()).collect();
+            authors.sort_unstable();
+            authors.dedup();
+            say(format!(
+                "w/{workspace}: connection {connection} pushed {} by {}, relayed to {}",
+                plural(fresh.len(), "new event"),
+                authors.join(", "),
+                plural(relayed, "other connection"),
+            ));
         }
     }
     Ok(json!({ "results": results }))

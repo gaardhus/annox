@@ -40,6 +40,10 @@ enum Command {
         /// A file holding the token clients must present
         #[arg(long, value_name = "FILE")]
         token_file: Option<PathBuf>,
+        /// Also print the events each connection pushes and pulls; connections, and what's refused,
+        /// are always printed
+        #[arg(short, long)]
+        verbose: bool,
     },
     /// Run an MCP server over stdio, for agents
     Mcp {
@@ -138,12 +142,12 @@ fn main() -> anyhow::Result<()> {
             io_threads.join()?;
             Ok(())
         }
-        Command::Hub { data, listen, token_file } => {
+        Command::Hub { data, listen, token_file, verbose } => {
             // A file, not a flag value, so the token doesn't show up in `ps`.
             let token = token_file.map(std::fs::read_to_string).transpose()?.map(|t| t.trim().to_owned());
             let listener = TcpListener::bind(&listen)?;
             eprintln!("annox hub listening on ws://{} (workspaces at /w/<name>)", listener.local_addr()?);
-            serve(listener, HubConfig { data, token })?;
+            serve(listener, HubConfig { data, token, verbose })?;
             Ok(())
         }
         Command::Mcp { root, author, name, channel, mention, settle } => {

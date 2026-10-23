@@ -70,7 +70,7 @@ fn annotations_and_presence_sync_between_servers() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("ws://{}/w/notes", listener.local_addr().unwrap());
     std::thread::spawn(move || {
-        serve(listener, HubConfig { data: hub_data.path().to_path_buf(), token: Some("tok".into()) })
+        serve(listener, HubConfig { data: hub_data.path().to_path_buf(), token: Some("tok".into()), verbose: false })
     });
 
     // Per-user credentials, outside both workspaces (§7.2).

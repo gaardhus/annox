@@ -13,7 +13,7 @@ fn start(token: Option<&str>) -> (String, tempfile::TempDir) {
     let data = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
-    let config = HubConfig { data: data.path().to_path_buf(), token: token.map(str::to_owned) };
+    let config = HubConfig { data: data.path().to_path_buf(), token: token.map(str::to_owned), verbose: true };
     std::thread::spawn(move || serve(listener, config));
     (format!("ws://{addr}"), data)
 }
@@ -133,7 +133,7 @@ fn log_survives_restart() {
     // A second hub process on the same data directory.
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url2 = format!("ws://{}/w/paper", listener.local_addr().unwrap());
-    let config = HubConfig { data: data.path().to_path_buf(), token: None };
+    let config = HubConfig { data: data.path().to_path_buf(), token: None, verbose: true };
     std::thread::spawn(move || serve(listener, config));
     let mut c = Client::connect(&url2, None).unwrap();
     let hello = c.call("annoxSync/hello", json!({ "format": 1 }))["result"].clone();
