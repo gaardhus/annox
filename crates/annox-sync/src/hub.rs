@@ -173,6 +173,13 @@ fn reject(status: u16, message: &str) -> ErrorResponse {
     http::Response::builder().status(status).body(Some(message.to_owned())).unwrap()
 }
 
+/// Whether `a` and `b` are equal, taking the same time wherever they differ,
+/// so that timing a refusal says nothing about how much of a guessed token
+/// was right.
+fn same_secret(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).fold(0, |diff, (x, y)| diff | (x ^ y)) == 0
+}
+
 // The handshake callback's error type is dictated by tungstenite.
 #[allow(clippy::result_large_err)]
 fn handle(stream: TcpStream, shared: &Shared) -> Result<(), Error> {
@@ -182,7 +189,7 @@ fn handle(stream: TcpStream, shared: &Shared) -> Result<(), Error> {
     let callback = |req: &Request, mut resp: Response| -> Result<Response, ErrorResponse> {
         if let Some(expected) = &token {
             let auth = req.headers().get("authorization").and_then(|v| v.to_str().ok());
-            if auth != Some(format!("Bearer {expected}").as_str()) {
+            if !auth.is_some_and(|a| same_secret(a.as_bytes(), format!("Bearer {expected}").as_bytes())) {
                 say(format!("refused {from} at {}: no valid token", req.uri().path()));
                 return Err(reject(401, "unauthorized"));
             }
