@@ -398,7 +398,8 @@ mod tests {
         const START: &str = "<!-- annox -h -->\n```text\n";
         const END: &str = "```\n<!-- /annox -h -->";
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../README.md");
-        let readme = std::fs::read_to_string(&path).unwrap();
+        // Windows checkouts may have CRLF line endings.
+        let readme = std::fs::read_to_string(&path).unwrap().replace("\r\n", "\n");
         let help = super::cli().render_help().to_string();
         let help: String = help.lines().map(|l| l.trim_end().to_owned() + "\n").collect();
         let start = readme.find(START).expect("README has no `<!-- annox -h -->` block") + START.len();
