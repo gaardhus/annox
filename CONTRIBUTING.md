@@ -43,7 +43,7 @@ The spec is versioned separately from the code. It's still a draft, so incompati
 
 ## Testing PDF sync by hand
 
-What PDF viewers make of `export-pdf`, `import-pdf` and `sync-pdf` can only be checked by hand. `just pdf-playground` sets up a hub and copies of the example PDF to try them on, and [`docs/testing/pdf-sync.md`](docs/testing/pdf-sync.md) says what to try.
+What PDF viewers make of `export-pdf`, `import-pdf` and `sync-pdf` can only be checked by hand. `just pdf-playground` sets up a hub and copies of the example PDF to try them on, and [`docs/testing/pdf-sync.md`](docs/testing/pdf-sync.md) says what to try. [`docs/pdf-viewers.md`](docs/pdf-viewers.md) lists what viewers do with PDF comments that the specification doesn't lead you to expect, and how annox works around it; read it before changing how annox writes or reads them.
 
 ## Keeping the docs and site up to date
 

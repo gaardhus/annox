@@ -6,6 +6,9 @@
 //! hyphenation and punctuation, after the source's markup is stripped. Text
 //! that occurs more than once is told apart by its context, and then by how
 //! far into the document it is.
+//!
+//! Much of what's written, and how, works around what PDF viewers do with
+//! comments; `docs/pdf-viewers.md` lists each quirk and where it's handled.
 
 mod appendix;
 mod export;

@@ -3,7 +3,8 @@
 What to try after changing `export-pdf`, `import-pdf` or `sync-pdf`. The automated tests
 check what annox writes; these steps check what PDF viewers make of it, which only a
 person can. They need Okular, which saves comments into the file and reloads it when it
-changes, and Firefox, whose viewer saves a copy.
+changes, and Firefox, whose viewer saves a copy. [`../pdf-viewers.md`](../pdf-viewers.md)
+lists the quirks most of these steps check for.
 
 ## Setup
 
