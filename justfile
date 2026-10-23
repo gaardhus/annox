@@ -45,6 +45,10 @@ fmt:
     cargo fmt --all
     prek run --all-files stylua-github rumdl-check end-of-file-fixer trailing-whitespace
 
+# Rewrite the README's command listing from `annox -h`.
+readme:
+    UPDATE_README=1 cargo test -q -p annox-lsp --bin annox readme
+
 # Run every check CI runs, except the other operating systems.
 check: lint test test-nvim test-vscode
 

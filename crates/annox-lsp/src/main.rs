@@ -390,4 +390,26 @@ mod tests {
             assert!(shown.contains(name), "`{name}` in GROUPS isn't a subcommand");
         }
     }
+
+    /// The README's command listing is `annox -h`, between these markers. `just readme` (which
+    /// sets `UPDATE_README`) rewrites it rather than editing it by hand.
+    #[test]
+    fn readme_lists_the_commands_of_annox_help() {
+        const START: &str = "<!-- annox -h -->\n```text\n";
+        const END: &str = "```\n<!-- /annox -h -->";
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../README.md");
+        let readme = std::fs::read_to_string(&path).unwrap();
+        let help = super::cli().render_help().to_string();
+        let help: String = help.lines().map(|l| l.trim_end().to_owned() + "\n").collect();
+        let start = readme.find(START).expect("README has no `<!-- annox -h -->` block") + START.len();
+        let end = start + readme[start..].find(END).expect("the `annox -h` block in README isn't closed");
+        if readme[start..end] == help {
+            return;
+        }
+        if std::env::var_os("UPDATE_README").is_some() {
+            std::fs::write(&path, format!("{}{help}{}", &readme[..start], &readme[end..])).unwrap();
+        } else {
+            panic!("README's `annox -h` block is out of date; run `just readme`");
+        }
+    }
 }

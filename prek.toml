@@ -60,6 +60,15 @@ language = "system"
 types = ["rust"]
 pass_filenames = false
 
+# Rewrites the README's command listing when the commands change, like `just readme`.
+[[repos.hooks]]
+id = "readme-help"
+name = "README lists annox -h"
+entry = "env UPDATE_README=1 cargo test -q -p annox-lsp --bin annox readme"
+language = "system"
+files = "^(README\\.md|crates/annox-lsp/src/(main\\.rs|cli/args\\.rs))$"
+pass_filenames = false
+
 [[repos.hooks]]
 id = "cargo-clippy"
 name = "cargo clippy"

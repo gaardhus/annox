@@ -100,30 +100,89 @@ Edits always go through `workspace/applyEdit`, and the status event is written o
 
 The `annox` binary also reads and writes annotations directly. Text is targeted by quoting it, not by offsets, and an ambiguous quote is an error that lists where it occurs. Commands print text for people: `annox list` the threads under each document, with their ids, `annox report` a line per document (per author with `--by author`, broken down by status with `--verbose`), `annox history` a line per event, and the write commands what they did. With `--json`, every command prints JSON instead, for scripts and agents; set `ANNOX_OUTPUT=json`, or `"output": "json"` in [`config.json`](#configuration), to make that the default.
 
+<!-- annox -h -->
+```text
+Review comments and suggested edits, stored next to your files in `.annox/`
+
+Usage: annox [OPTIONS] [COMMAND]
+
+Read:
+  list       Print the threads on FILE, or on every document
+  show       Print one annotation and its thread
+  report     Summarize the annotations of FILE, or of every document, one line per document or author
+  history    Print who did what to a thread (the annotation and its replies), and when, oldest first
+  log        Print what everyone did to the annotations of FILE, or of every document, oldest first
+  watch      Print threads others changed for you as they change, until stopped
+
+Annotate:
+  comment    Comment on a quote in FILE
+  highlight  Highlight a quote in FILE: a comment with no body
+  suggest    Suggest a replacement for a quote in FILE
+  reply      Reply to a comment or suggestion
+  edit       Change the body or label of an annotation
+
+Review:
+  status     Set a status: open or resolved (comments), open, rejected or withdrawn (suggestions)
+  react      React to an annotation or reply with an emoji; 👍 on a suggestion approves it
+  accept     Apply a suggestion to its file and mark it accepted
+  revert     Undo an accepted suggestion with a new suggestion that restores the original text, or the open one that already does
+  retarget   Move an open suggestion to new text, with a reviewed replacement
+  reattach   Move an open comment to new text
+  delete     Hide an annotation (its events are kept)
+  restore    Undo a delete
+  read       Mark threads read, so `annox list --unread` stops listing them until someone changes them again
+
+Workspace:
+  init       Create a workspace in DIR (default: the current directory)
+  commit     Commit the uncommitted annotation events to git, and nothing else
+
+Servers:
+  lsp        Run the language server over stdio (spec §6)
+  hub        Run a sync hub for sharing workspaces (spec §7)
+  mcp        Run an MCP server over stdio, for agents
+
+Other:
+  config     Print the settings in effect here, such as who write commands write as, and where each comes from
+  update     Install the latest release over this binary, and the agent skill wherever it's installed
+
+Options:
+      --json     Print JSON instead of text [default: text, unless ANNOX_OUTPUT or the config file say json]
+  -h, --help     Print help (see more with '--help')
+  -V, --version  Print version
+```
+<!-- /annox -h -->
+
+Run `annox help COMMAND` for a command's options. To review a draft, quote the text each annotation is on:
+
 ```sh
-annox init [--local]
-annox list [FILE] [--all | --closed] [--kind K] [--status S] [--mine | --others] [--broken] [--unread]
-annox list paper.md --quote "the bound is tight"   # everything on that text, closed annotations too
-annox show ID
-annox history ID
-annox log [FILE] [--follow]                         # every event, by anyone; -f prints new ones as they're written
-annox report [FILE] [--verbose] [--by author,document] [--mine | --others] [--unread] ...
 annox comment paper.md --quote "the bound is tight" --body "Cite Lemma 4?"
-annox highlight paper.md --quote "the bound is tight"
 annox suggest paper.md --quote "teh" --replace "the" --body "typo"
+annox list paper.md
+```
+
+To answer a review, take the ids from `annox list`:
+
+```sh
+annox list --unread                       # the threads others changed since you last read them
 annox reply ID --body "Fixed."
 annox status ID resolved
-annox react ID 👍 [--remove]                        # 👍 on a suggestion approves it
+annox react ID 👍                         # 👍 on a suggestion approves it
 annox accept ID
-annox revert ID [--accept] [--body TEXT]
-annox read ID... | --all
-annox commit [-m TEXT] [--dry-run]
-annox config                                        # the settings in effect here, and where each comes from
+annox revert ID                           # changed your mind: suggests the original text back
+```
+
+To keep track of a workspace:
+
+```sh
+annox list paper.md --quote "the bound is tight"   # everything on that text, closed annotations too
+annox log --follow                                 # every event, by anyone, as it's written
+annox report --by author --verbose                 # who has what open, broken down by status
+annox commit --dry-run                             # what `annox commit` would commit
 ```
 
 `annox list --unread` lists the threads others changed since you last read them, and every entry says whether it's `unread`. `annox read` marks threads read, and writing to a thread does too. What each author id has read is kept in the git-ignored `.annox/local/read.json`, so an agent with its own id (below) has its own unread list, and its reading doesn't mark anything read for you. `list --as ID` reads as another id.
 
-Write commands use `--author`/`--name`, or `ANNOX_AUTHOR`/`ANNOX_AUTHOR_NAME`, and otherwise your [configured identity](#configuration). Give an agent its own id, for example `ANNOX_AUTHOR=urn:agent:claude`, so its annotations are distinguishable from yours. A running `annox lsp` picks up the changes, so they appear in the editor. Run `annox help` for every command.
+Write commands use `--author`/`--name`, or `ANNOX_AUTHOR`/`ANNOX_AUTHOR_NAME`, and otherwise your [configured identity](#configuration). Give an agent its own id, for example `ANNOX_AUTHOR=urn:agent:claude`, so its annotations are distinguishable from yours. A running `annox lsp` picks up the changes, so they appear in the editor.
 
 `annox init` creates `.annox/` at the project root, which is meant to be committed so collaborators see the annotations. Every change is a new file there, so they add up between commits. `annox report` counts them, and `annox commit` commits just those files, with a message summarizing them, and leaves anything else you've staged alone. It doesn't push. `--dry-run` prints what it would commit. The editor plugins have the same command, which lets you edit the message first. To keep them to yourself, use `annox init --local`. It adds `*` to `.annox/.gitignore`, so git ignores the whole folder. To share them later, delete that line.
 

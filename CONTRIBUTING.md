@@ -44,7 +44,7 @@ The spec is versioned separately from the code. It's still a draft, so incompati
 
 A user-facing feature isn't done until everything that shows or explains it does. When you add or change one, go through these and update the ones it touches, in the same change:
 
-- **[`README.md`](README.md)**: the overview, the CLI listing, and the description of `examples/`.
+- **[`README.md`](README.md)**: the overview, the CLI examples, and the description of `examples/`. Its command listing is `annox -h`, which a test checks; `just readme` regenerates it, and so does the pre-commit hook when the commands change.
 - **Editor READMEs**: [`editors/nvim/README.md`](editors/nvim/README.md) (commands and thread keys) and [`editors/vscode/README.md`](editors/vscode/README.md).
 - **The agent skill**, [`harnesses/skills/annox/SKILL.md`](harnesses/skills/annox/SKILL.md), and the MCP tool descriptions in `crates/annox-lsp/src/mcp.rs`.
 - **The website**: [`site/index.html`](site/index.html), [`site/how-it-works.html`](site/how-it-works.html), and the live demo in [`site/annox-demo/`](site/annox-demo/annox-demo.js), which runs `annox-core` and can show the feature. Check them with `just serve-site`.
