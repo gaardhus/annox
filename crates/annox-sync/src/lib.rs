@@ -45,6 +45,8 @@ pub fn is_well_formed(item: &serde_json::Value) -> bool {
     str_uuid(&item["document"])
         && str_uuid(&event["id"])
         && event["type"].is_string()
+        && event["author"]["id"].is_string()
+        && event["time"].is_string()
         && event["after"].as_array().is_some_and(|a| a.iter().all(str_uuid))
         && (str_uuid(&event["annotation"]) || str_uuid(&event["document"]))
 }

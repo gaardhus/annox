@@ -18,7 +18,7 @@ use tungstenite::http::HeaderValue;
 use tungstenite::stream::MaybeTlsStream;
 
 use crate::rpc::{Error, Peer, Timeout};
-use crate::{is_document_path, is_uuid, is_well_formed, FORMAT, SUBPROTOCOL, UNKNOWN_HUB};
+use crate::{is_document_path, is_well_formed, FORMAT, SUBPROTOCOL, UNKNOWN_HUB};
 
 const PUSH_BATCH: usize = 200;
 
@@ -120,11 +120,18 @@ impl Replica {
         self.config.root.join(".annox/cache/sync.json")
     }
 
-    fn load_cursor(&self, hub_id: &str) -> u64 {
+    /// The saved cursor for `hub_id`, restoring the items that were pending
+    /// with it: the cursor is already past them, so the hub won't send them
+    /// again.
+    fn load_cursor(&mut self, hub_id: &str) -> u64 {
         let saved: Option<Value> =
             std::fs::read_to_string(self.cursor_file()).ok().and_then(|t| serde_json::from_str(&t).ok());
         match saved {
             Some(s) if s["hubId"] == hub_id && s["url"] == self.config.url.as_str() => {
+                if self.pending.is_empty() {
+                    self.pending =
+                        s["pending"].as_array().into_iter().flatten().filter(|i| is_well_formed(i)).cloned().collect();
+                }
                 s["cursor"].as_u64().unwrap_or(0)
             }
             _ => 0,
@@ -136,7 +143,8 @@ impl Replica {
         if let Some(dir) = file.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let _ = std::fs::write(file, json!({ "url": self.config.url, "hubId": hub_id, "cursor": cursor }).to_string());
+        let saved = json!({ "url": self.config.url, "hubId": hub_id, "cursor": cursor, "pending": self.pending });
+        let _ = std::fs::write(file, saved.to_string());
     }
 
     fn connect(&self) -> Result<Conn, Error> {
@@ -197,7 +205,7 @@ impl Replica {
                             .cloned()
                             .collect();
                         if let Some(last) = items.last().and_then(|i| i["seq"].as_u64()) {
-                            self.apply(items);
+                            self.apply(items, events)?;
                             cursor = last;
                             self.save_cursor(&hub_id, cursor);
                             let _ = events.send(FromReplica::Changed { root: root.clone() });
@@ -232,7 +240,7 @@ impl Replica {
             };
             let items = page["items"].as_array().cloned().unwrap_or_default();
             if !items.is_empty() {
-                self.apply(items);
+                self.apply(items, events)?;
                 let _ = events.send(FromReplica::Changed { root: self.config.root.clone() });
             }
             *cursor = page["cursor"].as_u64().unwrap_or(*cursor);
@@ -247,10 +255,16 @@ impl Replica {
     /// §7.5.1), even when git already delivered a copy, so the mirror keeps
     /// every event the hub sent. Items are untrusted: ids and paths are
     /// validated before anything touches the disk.
-    fn apply(&mut self, items: Vec<Value>) {
+    ///
+    /// Fails if an event can't be written, before the caller advances the
+    /// cursor past it, so that it is received again once the session
+    /// reconnects; events already written are skipped then.
+    fn apply(&mut self, items: Vec<Value>, events: &Sender<FromReplica>) -> Result<(), Error> {
         let ws = self.ws();
         let mut queue: Vec<Value> = std::mem::take(&mut self.pending);
         queue.extend(items.into_iter().filter(is_well_formed));
+        let mut seen = HashSet::new();
+        queue.retain(|i| seen.insert(i["event"]["id"].as_str().unwrap_or_default().to_owned()));
         for item in &queue {
             if let Some(id) = item["event"]["id"].as_str() {
                 self.known.insert(id.to_owned());
@@ -260,32 +274,55 @@ impl Replica {
         queue.sort_by_key(|i| i["event"]["annotation"].is_string());
         // Older workspaces don't ignore the mirror yet (§5.9).
         let _ = ws.ensure_ignored();
-        let mut index = Index::read(&ws);
+        let index = Index::read(&ws);
+        // Each document's path, kept up to date as document events are
+        // written rather than by reading the workspace again. Any of a
+        // document's paths names a folder of it (§5.6).
+        let mut paths: BTreeMap<String, String> =
+            index.documents.iter().filter_map(|(id, d)| Some((id.clone(), d.path.clone()?))).collect();
         let mut still_pending = Vec::new();
-        for item in queue {
-            let Ok(event) = serde_json::from_value::<Event>(item["event"].clone()) else { continue };
+        let mut malformed = 0;
+        let mut queue = queue.into_iter();
+        while let Some(item) = queue.next() {
+            let Ok(event) = serde_json::from_value::<Event>(item["event"].clone()) else {
+                malformed += 1;
+                continue;
+            };
             let doc = item["document"].as_str().unwrap_or_default();
             if index.synced.contains(&event.id) {
                 continue;
             }
-            let path = index.documents.get(doc).and_then(|d| d.path.clone()).or_else(|| {
-                (event.kind == "document").then(|| event.field("path")?.as_str().map(str::to_owned)).flatten()
-            });
+            let is_document_event = event.document.as_deref() == Some(doc);
+            let own_path = || event.field("path")?.as_str().filter(|p| is_document_path(p)).map(str::to_owned);
+            let path = paths.get(doc).cloned().or_else(|| (event.kind == "document").then(own_path).flatten());
             let Some(path) = path.filter(|p| is_document_path(p)) else {
                 still_pending.push(item);
                 continue;
             };
-            let is_document_event = event.document.as_deref() == Some(doc);
             let folder = if is_document_event {
                 format!("synced/docs/{path}~{doc}/document")
             } else {
                 format!("synced/docs/{path}~{doc}")
             };
-            if is_uuid(doc) && ws.write_event(&folder, &event).is_ok() && is_document_event {
-                index = Index::read(&ws);
+            if let Err(e) = ws.write_event(&folder, &event) {
+                // Keep what was pending, as the hub won't send it again.
+                still_pending.push(item);
+                still_pending.extend(queue);
+                self.pending = still_pending;
+                return Err(Error::Io(format!("can't write event {}: {e}", event.id)));
+            }
+            if is_document_event {
+                if let Some(p) = own_path() {
+                    paths.insert(doc.to_owned(), p);
+                }
             }
         }
         self.pending = still_pending;
+        if malformed > 0 {
+            let message = format!("ignored {malformed} event(s) from {} that aren't valid", self.config.url);
+            let _ = events.send(FromReplica::Status { root: self.config.root.clone(), message });
+        }
+        Ok(())
     }
 
     /// Pushes every shared event the hub isn't known to have, each after its
@@ -355,7 +392,49 @@ fn causal_order(events: Vec<Event>) -> Vec<Event> {
 
 #[cfg(test)]
 mod tests {
-    use super::check_url;
+    use super::*;
+
+    fn item(doc: &str, id: &str, annotation: bool) -> Value {
+        let mut event = json!({
+            "id": id, "after": [], "author": { "id": "mailto:ada@example.org" }, "time": "2026-09-29T10:00:00Z",
+        });
+        if annotation {
+            event["annotation"] = json!(id);
+            event["type"] = json!("create");
+        } else {
+            event["document"] = json!(doc);
+            event["type"] = json!("document");
+            event["path"] = json!("a.md");
+        }
+        json!({ "document": doc, "event": event })
+    }
+
+    #[test]
+    fn events_that_cant_be_written_are_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let ws = Workspace::init(dir.path()).unwrap();
+        let config =
+            ReplicaConfig { root: ws.root.clone(), url: "ws://localhost".into(), token: None, author: json!({}) };
+        let mut replica = Replica { config, known: HashSet::new(), pending: Vec::new() };
+        let (tx, rx) = unbounded();
+        let doc = "01926d3a-0000-7000-8000-000000000000";
+        let ann = "01926d3a-0001-7000-8000-000000000000";
+        let mut broken = item(doc, "01926d3a-0002-7000-8000-000000000000", true);
+        broken["event"]["author"] = json!(1);
+
+        let marker = dir.path().join(".annox/annox.json");
+        std::fs::write(&marker, "{ \"format\": 2 }").unwrap();
+        assert!(replica.apply(vec![item(doc, doc, false), item(doc, ann, true)], &tx).is_err());
+        assert_eq!(replica.pending.len(), 2, "nothing is lost when writing fails");
+        assert!(Index::read(&ws).synced.is_empty());
+
+        std::fs::write(&marker, "{ \"format\": 1 }").unwrap();
+        replica.apply(vec![broken], &tx).unwrap();
+        assert!(replica.pending.is_empty());
+        let synced = Index::read(&ws).synced;
+        assert!(synced.contains(doc) && synced.contains(ann), "{synced:?}");
+        assert!(rx.try_iter().all(|m| !matches!(m, FromReplica::Status { .. })), "the broken item isn't well-formed");
+    }
 
     #[test]
     fn requires_tls_except_locally() {
