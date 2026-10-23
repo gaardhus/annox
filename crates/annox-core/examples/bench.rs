@@ -9,6 +9,8 @@ use std::time::{Duration, Instant};
 use annox_core::anchor::{self, Anchor};
 use annox_core::event::Event;
 use annox_core::ops::{self, NewAnnotation};
+use annox_core::read::ReadState;
+use annox_core::replay;
 use annox_core::storage::{Index, Workspace};
 use annox_core::text::Text;
 use serde_json::{json, Map};
@@ -151,7 +153,54 @@ fn loading() {
     println!();
 }
 
+/// One long thread: a comment followed by a chain of edits, each after the
+/// last, the deepest causal graph a log can have.
+fn long_logs() {
+    println!("## Replay (§2.5): one annotation with a long chain of edits\n");
+    println!("| events | derive | display order | unread |");
+    println!("|---:|---:|---:|---:|");
+    let text = Text::from_raw(&document(1_000));
+    let author = json!({ "id": "mailto:bench@example.org" });
+    for &n in &[1_000usize, 2_000, 4_000, 16_000] {
+        let id = annox_core::new_id();
+        let fields = Map::from_iter([
+            ("kind".into(), json!("comment")),
+            ("target".into(), json!(anchor::create(&text, 0, 8, "doc.txt"))),
+        ]);
+        let mut events = vec![Event {
+            id: id.clone(),
+            annotation: Some(id.clone()),
+            document: None,
+            after: vec![],
+            kind: "create".into(),
+            author: author.clone(),
+            time: Event::now(),
+            fields,
+        }];
+        for j in 1..n {
+            events.push(Event {
+                id: format!("{id}-{j:06}"),
+                annotation: Some(id.clone()),
+                document: None,
+                after: vec![events[j - 1].id.clone()],
+                kind: "edit".into(),
+                author: author.clone(),
+                time: Event::now(),
+                fields: Map::from_iter([("body".into(), json!(format!("edit {j}")))]),
+            });
+        }
+        let (state, derive) = time(|| replay::derive_annotation(&events, &id));
+        assert_eq!(state.unwrap()["body"], json!(format!("edit {}", n - 1)));
+        let (ordered, order) = time(|| replay::ordered_events(&events, &id));
+        assert_eq!(ordered.len(), n);
+        let (_, unread) = time(|| ReadState::default().is_unread("mailto:other@example.org", &events, &id));
+        println!("| {n} | {} | {} | {} |", ms(derive), ms(order), ms(unread));
+    }
+    println!();
+}
+
 fn main() {
     resolution();
     loading();
+    long_logs();
 }

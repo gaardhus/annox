@@ -1,7 +1,7 @@
 //! Deriving state from events (§2.5), for annotation logs and document logs
 //! (§5.5.1).
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 use serde_json::{json, Map, Value};
 
@@ -13,7 +13,8 @@ pub struct Log<'a> {
     pub root: &'a Event,
     /// Live (non-dangling) events by id.
     pub events: BTreeMap<&'a str, &'a Event>,
-    ancestors: HashMap<&'a str, BTreeSet<&'a str>>,
+    /// The live events in display order (§2.5.5).
+    order: Vec<&'a Event>,
 }
 
 impl<'a> Log<'a> {
@@ -28,44 +29,54 @@ impl<'a> Log<'a> {
         if !root.after.is_empty() {
             return None;
         }
-        let mut live: BTreeSet<&str> = BTreeSet::from([root.id.as_str()]);
-        loop {
-            let before = live.len();
-            for (id, e) in &by_id {
-                if !live.contains(id) && !e.after.is_empty() && e.after.iter().all(|a| live.contains(a.as_str())) {
-                    live.insert(id);
+        // An event is live once every event in its `after` is, starting from
+        // the root. One that follows a missing event, or is in a cycle, which
+        // hand-edited files can make, never is. Other events with no `after`
+        // aren't either, as only the root may have none. Taking the smallest
+        // id among those ready gives the display order (§2.5.5).
+        let mut waiting: HashMap<&str, usize> = HashMap::new();
+        let mut children: HashMap<&str, Vec<&str>> = HashMap::new();
+        for (id, e) in &by_id {
+            if e.after.is_empty() {
+                continue;
+            }
+            let parents: BTreeSet<&str> = e.after.iter().map(String::as_str).collect();
+            waiting.insert(id, parents.len());
+            for parent in parents {
+                children.entry(parent).or_default().push(id);
+            }
+        }
+        let mut ready = BTreeSet::from([root.id.as_str()]);
+        let mut order = Vec::new();
+        while let Some(id) = ready.pop_first() {
+            order.push(by_id[id]);
+            for &child in children.get(id).into_iter().flatten() {
+                let n = waiting.get_mut(child).expect("every child waits");
+                *n -= 1;
+                if *n == 0 {
+                    ready.insert(child);
                 }
             }
-            if live.len() == before {
-                break;
+        }
+        let events = order.iter().map(|e| (e.id.as_str(), *e)).collect();
+        Some(Log { root, events, order })
+    }
+
+    /// Every ancestor of the events `ids`, not counting them unless one is
+    /// an ancestor of another. Unknown ids have none.
+    pub fn ancestors_of<'b>(&self, ids: impl IntoIterator<Item = &'b str>) -> HashSet<&'a str> {
+        let mut found = HashSet::new();
+        let mut stack: Vec<&'a str> = Vec::new();
+        let parents = |id: &str| self.events.get(id).into_iter().flat_map(|e| e.after.iter().map(String::as_str));
+        for id in ids {
+            stack.extend(parents(id));
+        }
+        while let Some(id) = stack.pop() {
+            if found.insert(id) {
+                stack.extend(parents(id));
             }
         }
-        let events: BTreeMap<&str, &Event> = by_id.into_iter().filter(|(id, _)| live.contains(id)).collect();
-        let mut log = Log { root, events, ancestors: HashMap::new() };
-        let ids: Vec<&str> = log.events.keys().copied().collect();
-        for id in ids {
-            log.compute_ancestors(id);
-        }
-        Some(log)
-    }
-
-    fn compute_ancestors(&mut self, id: &'a str) -> BTreeSet<&'a str> {
-        if let Some(a) = self.ancestors.get(id) {
-            return a.clone();
-        }
-        let mut result = BTreeSet::new();
-        let parents: Vec<&'a str> = self.events[id].after.iter().map(|s| s.as_str()).collect();
-        for parent in parents {
-            result.insert(parent);
-            result.extend(self.compute_ancestors(parent));
-        }
-        self.ancestors.insert(id, result.clone());
-        result
-    }
-
-    /// Whether `a` is an ancestor of `b`.
-    pub fn is_ancestor(&self, a: &str, b: &str) -> bool {
-        self.ancestors.get(b).is_some_and(|set| set.contains(a))
+        found
     }
 
     /// The log's heads: events that no other live event lists in `after`
@@ -76,11 +87,17 @@ impl<'a> Log<'a> {
         self.events.keys().filter(|id| !referenced.contains(*id)).map(|s| s.to_string()).collect()
     }
 
+    /// The events in display order: topological along `after` links, ties by
+    /// ascending id (§2.5.5).
+    pub fn ordered(&self) -> &[&'a Event] {
+        &self.order
+    }
+
     /// The heads among `writers`: those not an ancestor of another writer
     /// (§2.5.2), sorted by id.
     pub fn field_heads<'b>(&self, writers: &[&'b str]) -> Vec<&'b str> {
-        let mut heads: Vec<&str> =
-            writers.iter().copied().filter(|w| !writers.iter().any(|o| o != w && self.is_ancestor(w, o))).collect();
+        let behind = self.ancestors_of(writers.iter().copied());
+        let mut heads: Vec<&str> = writers.iter().copied().filter(|w| !behind.contains(w)).collect();
         heads.sort_unstable();
         heads
     }
@@ -305,14 +322,12 @@ pub fn derive_annotation(events: &[Event], id: &str) -> Option<Value> {
     if !conflicts.contains_key("deleted") {
         let delete = fields.sources["deleted"];
         if delete.kind == "delete" {
+            let seen = log.ancestors_of([delete.id.as_str()]);
             let mut others: Vec<String> = fields
                 .writes
                 .iter()
                 .filter(|(eid, w)| {
-                    !w.is_empty()
-                        && log.events[*eid].kind != "reanchor"
-                        && **eid != delete.id
-                        && !log.is_ancestor(eid, &delete.id)
+                    !w.is_empty() && log.events[*eid].kind != "reanchor" && **eid != delete.id && !seen.contains(*eid)
                 })
                 .map(|(eid, _)| eid.to_string())
                 .collect();
@@ -355,7 +370,8 @@ pub fn derive_annotation(events: &[Event], id: &str) -> Option<Value> {
                 .into_iter()
                 .flatten()
                 .map(|e| {
-                    let stale = replacement_heads.iter().any(|h| !log.is_ancestor(h, &e.id));
+                    let seen = log.ancestors_of([e.id.as_str()]);
+                    let stale = replacement_heads.iter().any(|h| !seen.contains(h.as_str()));
                     json!({ "author": e.author, "time": e.time, "stale": stale })
                 })
                 .collect();
@@ -427,23 +443,7 @@ pub fn derive_document(events: &[Event], id: &str, may_merge: &dyn Fn(&str, &str
 pub fn ordered_events(events: &[Event], id: &str) -> Vec<Event> {
     let own = events.iter().filter(|e| e.annotation.as_deref() == Some(id));
     let Some(log) = Log::build(own, id) else { return vec![] };
-    let mut remaining: BTreeMap<&str, usize> = log.events.iter().map(|(k, e)| (*k, e.after.len())).collect();
-    let mut ready: BTreeSet<&str> = remaining.iter().filter(|(_, n)| **n == 0).map(|(k, _)| *k).collect();
-    let mut out = Vec::new();
-    while let Some(next) = ready.pop_first() {
-        remaining.remove(next);
-        out.push(log.events[next].clone());
-        for (k, e) in &log.events {
-            if e.after.iter().any(|a| a == next) {
-                let n = remaining.get_mut(k).expect("child not yet emitted");
-                *n -= 1;
-                if *n == 0 {
-                    ready.insert(k);
-                }
-            }
-        }
-    }
-    out
+    log.ordered().iter().map(|e| (*e).clone()).collect()
 }
 
 /// The events of the thread that annotation `id` belongs to: its root's and
@@ -488,4 +488,45 @@ pub fn document_heads(events: &[Event], id: &str) -> Vec<String> {
 pub fn annotation_heads(events: &[Event], id: &str) -> Vec<String> {
     let own = events.iter().filter(|e| e.annotation.as_deref() == Some(id));
     Log::build(own, id).map(|log| log.heads()).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ev(id: &str, after: &[&str]) -> Event {
+        Event {
+            id: id.into(),
+            annotation: Some("a".into()),
+            document: None,
+            after: after.iter().map(|s| s.to_string()).collect(),
+            kind: "edit".into(),
+            author: json!({ "id": "mailto:ada@example.org" }),
+            time: "2026-09-28T14:01:00Z".into(),
+            fields: Map::new(),
+        }
+    }
+
+    #[test]
+    fn builds_the_live_graph() {
+        let events = [
+            ev("a", &[]),
+            ev("c", &["a", "a"]),
+            ev("b", &["a"]),
+            ev("d", &["b", "c"]),
+            // A cycle, an event after a missing one, and a second root.
+            ev("x", &["y"]),
+            ev("y", &["x"]),
+            ev("z", &["missing"]),
+            ev("r", &[]),
+        ];
+        let log = Log::build(&events, "a").unwrap();
+        let order: Vec<&str> = log.ordered().iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(order, ["a", "b", "c", "d"], "duplicate `after` entries count once");
+        assert_eq!(log.heads(), ["d"]);
+        assert_eq!(log.ancestors_of(["d"]), HashSet::from(["a", "b", "c"]));
+        assert!(log.ancestors_of(["missing", "x"]).is_empty());
+        assert_eq!(log.field_heads(&["b", "c", "a"]), ["b", "c"]);
+        assert_eq!(log.field_heads(&["d", "b"]), ["d"]);
+    }
 }

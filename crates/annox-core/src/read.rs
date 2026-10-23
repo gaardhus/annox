@@ -102,11 +102,13 @@ impl ReadState {
             .map(|e| e.id.as_str())
             .chain(seen.into_iter().flatten().map(String::as_str))
             .collect();
+        let behind = log.ancestors_of(covering.iter().copied());
         log.events.values().any(|e| {
             e.kind != "reanchor"
                 && e.kind != "react"
                 && author_id(e) != Some(reader)
-                && !covering.iter().any(|c| *c == e.id || log.is_ancestor(&e.id, c))
+                && !covering.contains(&e.id.as_str())
+                && !behind.contains(e.id.as_str())
         })
     }
 
