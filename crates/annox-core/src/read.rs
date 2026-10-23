@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{self, Write};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::event::Event;
@@ -26,24 +26,56 @@ pub struct ReadState {
     readers: BTreeMap<String, BTreeMap<String, BTreeSet<String>>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct File {
     version: u32,
-    #[serde(default)]
     readers: BTreeMap<String, Reader>,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize)]
 struct Reader {
-    #[serde(default)]
     seen: BTreeMap<String, BTreeSet<String>>,
 }
 
 impl ReadState {
-    /// Parses `read.json`. Anything unreadable counts as empty.
+    /// Parses `read.json`, keeping whatever has the shape of §5.13 from a
+    /// damaged file. Unknown fields are ignored.
     pub fn parse(text: &str) -> ReadState {
-        let Ok(file) = serde_json::from_str::<File>(text) else { return ReadState::default() };
-        ReadState { readers: file.readers.into_iter().map(|(id, r)| (id, r.seen)).collect() }
+        Self::salvage(text).0
+    }
+
+    /// Parses `read.json` as [`ReadState::parse`] does, and says whether
+    /// anything in it was damaged: not JSON, a `version` other than 1, or an
+    /// entry of the wrong shape. An incompatible change gets a new file name
+    /// instead of a new version (§5.13), so another version can only be
+    /// damage.
+    pub fn salvage(text: &str) -> (ReadState, bool) {
+        let Ok(file) = serde_json::from_str::<Value>(text) else { return (ReadState::default(), true) };
+        let mut damaged = file["version"] != 1;
+        let mut readers = BTreeMap::new();
+        match &file["readers"] {
+            Value::Null => {}
+            Value::Object(entries) => {
+                for (reader, entry) in entries {
+                    let Some(seen) = entry["seen"].as_object() else {
+                        damaged = true;
+                        continue;
+                    };
+                    let mut kept = BTreeMap::new();
+                    for (id, heads) in seen {
+                        let Some(heads) = heads.as_array() else {
+                            damaged = true;
+                            continue;
+                        };
+                        damaged |= heads.iter().any(|h| !h.is_string());
+                        kept.insert(id.clone(), heads.iter().filter_map(Value::as_str).map(str::to_owned).collect());
+                    }
+                    readers.insert(reader.clone(), kept);
+                }
+            }
+            _ => damaged = true,
+        }
+        (ReadState { readers }, damaged)
     }
 
     pub fn to_json(&self) -> String {
@@ -168,6 +200,27 @@ pub fn mark(ws: &Workspace, reader: &str, heads: BTreeMap<String, Vec<String>>) 
     })
 }
 
+/// If `read.json` is damaged, moves it to `read.json.damaged-<id>` and
+/// writes what could be salvaged in its place, so that nothing in it is
+/// lost to the next save. Returns where the damaged file went.
+pub fn repair(ws: &Workspace) -> io::Result<Option<std::path::PathBuf>> {
+    locked(ws, || repair_unlocked(ws))
+}
+
+fn repair_unlocked(ws: &Workspace) -> io::Result<Option<std::path::PathBuf>> {
+    let path = ws.root.join(READ_FILE);
+    let Ok(text) = fs::read_to_string(&path) else { return Ok(None) };
+    let (state, damaged) = ReadState::salvage(&text);
+    if !damaged {
+        return Ok(None);
+    }
+    ws.check_format()?;
+    let backup = path.with_file_name(format!("read.json.damaged-{}", crate::new_id()));
+    fs::rename(&path, &backup)?;
+    save(ws, &state)?;
+    Ok(Some(backup))
+}
+
 /// Runs `f`, which loads, changes and saves the read state, holding a lock,
 /// so that no other writer replaces the file between its load and its save,
 /// losing what that writer added. Where there can be no lock, as in a
@@ -180,6 +233,13 @@ fn locked<T>(ws: &Workspace, f: impl FnOnce() -> io::Result<T>) -> io::Result<T>
     });
     // Released when the file is closed.
     let _lock = file.ok().filter(|f| f.lock().is_ok());
+    // Never save over a damaged file; callers that can say so call `repair`
+    // first. A workspace that can't be written to keeps it as it is.
+    if let Err(e) = repair_unlocked(ws) {
+        if !read_only(&e) {
+            return Err(e);
+        }
+    }
     f()
 }
 
@@ -321,6 +381,41 @@ mod tests {
         t.add(BOB, BTreeMap::new());
         t.merge(s.clone());
         assert!(t.knows(ADA) && t.knows(BOB));
+    }
+
+    #[test]
+    fn salvages_damaged_files() {
+        assert_eq!(ReadState::salvage(&seen(&["a"]).to_json()), (seen(&["a"]), false));
+        assert_eq!(ReadState::salvage(r#"{ "version": 1, "extra": 1 }"#), (ReadState::default(), false));
+        assert_eq!(ReadState::salvage("{ \"version\": 1, \"readers\": "), (ReadState::default(), true));
+        let damaged = format!(
+            r#"{{ "version": 1, "readers": {{ "{ADA}": {{ "seen": {{ "a": ["a", 7], "b": "x" }} }}, "{BOB}": [] }} }}"#
+        );
+        assert_eq!(ReadState::salvage(&damaged), (seen(&["a"]), true));
+        let (_, damaged) = ReadState::salvage(&seen(&["a"]).to_json().replace("\"version\": 1", "\"version\": 2"));
+        assert!(damaged, "another version is damage, as incompatible changes get a new file");
+    }
+
+    #[test]
+    fn damaged_files_are_kept_before_saving() {
+        let root = std::env::temp_dir().join(format!("annox-read-{}", crate::new_id()));
+        let ws = Workspace::init(&root).unwrap();
+        fs::create_dir_all(root.join(".annox/local")).unwrap();
+        let damaged =
+            format!(r#"{{ "version": 1, "readers": {{ "{ADA}": {{ "seen": {{ "a": ["a"] }} }}, "{BOB}": 1 }} }}"#);
+        fs::write(root.join(READ_FILE), &damaged).unwrap();
+        mark(&ws, ADA, BTreeMap::from([("b".to_owned(), vec!["b".to_owned()])])).unwrap();
+        let state = ReadState::load(&ws);
+        assert!(state.seen(ADA, "a").is_some() && state.seen(ADA, "b").is_some());
+        let backups: Vec<String> = fs::read_dir(root.join(".annox/local"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .filter(|n| n.starts_with("read.json.damaged-"))
+            .collect();
+        assert_eq!(backups.len(), 1);
+        assert_eq!(fs::read_to_string(root.join(".annox/local").join(&backups[0])).unwrap(), damaged);
+        assert_eq!(repair(&ws).unwrap(), None, "the repaired file isn't damaged");
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

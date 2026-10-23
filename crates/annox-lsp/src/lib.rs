@@ -720,6 +720,10 @@ impl Server<'_> {
     pub(crate) fn read_state(&self, ws: &Workspace, index: &Index) -> Rc<ReadState> {
         let cached = self.cache.borrow().read_states.get(&ws.root).cloned();
         cached.unwrap_or_else(|| {
+            if let Ok(Some(backup)) = read::repair(ws) {
+                let backup = backup.display();
+                self.warn(format!("annox: read state was damaged; kept what could be read, and the file as {backup}"));
+            }
             let state = read::ensure_reader(ws, index, &self.reader(ws)).unwrap_or_else(|e| {
                 self.warn(format!("annox: could not save read state: {e}"));
                 ReadState::load(ws)

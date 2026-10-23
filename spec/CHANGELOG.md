@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Storage (§5.13).** Read state that is damaged keeps its readable entries and is copied aside before it's replaced, instead of counting as empty. An incompatible change to the file gets a new name rather than a new `version`, so any other `version` is damage (D53).
 - **Storage (§5.13).** Writers of read state should hold a lock while they re-read, merge and replace the file, since merging alone doesn't stop two writers from losing each other's marks.
 - **Data model (§2.4, §2.5.7), suggestions (§4.4.2), protocol (§6.6).** A new `react` event adds or removes an author's emoji reaction on any annotation, and the derived state gains `reactions`. A `👍` on a suggestion is an approval: suggestions gain `approvals`, each marked `stale` if the suggestion was re-targeted since. Reactions never conflict, don't cause delete conflicts, and don't make threads unread. `annox/react` writes them, AnnotationViews list the session author's `ownReactions`, and hover shows reactions and approvals (D51).
 - **Storage (§5.13), protocol (§6.6).** Optional read state: `.annox/local/read.json` records, per reader, the heads of each annotation they've seen, so tools can show what others changed since. It is local, never an event, and kept per author id so a person and their agents don't share it. AnnotationViews gain `unread`, and `annox/markRead` and `annox/unread` mark threads read and list unread threads across the workspace (D50). The `unread` initialization option turns tracking off for a session.

@@ -197,9 +197,13 @@ fn no_workspace(from: &Path) -> anyhow::Error {
     anyhow!("{} is not in an annox workspace; run `annox init` at the project root", from.display())
 }
 
-/// The index of `ws`, warning once per run about event files it skipped.
+/// The index of `ws`, warning once per run about event files it skipped,
+/// and about read state that had to be repaired.
 pub(crate) fn read_index(ws: &Workspace) -> Index {
     static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if let Ok(Some(backup)) = read::repair(ws) {
+        eprintln!("annox: read state was damaged; kept what could be read, and the file as {}", backup.display());
+    }
     let index = Index::read(ws);
     if let Some(first) = index.unreadable.first() {
         if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
