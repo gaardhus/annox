@@ -196,8 +196,8 @@
 annox comment paper.md \
   --quote "the bound is tight" --body "Cite Lemma 4?"
 
-<span class="comment"># Suggest an edit; commands print JSON with the new id</span>
-id=$(annox suggest paper.md \
+<span class="comment"># Suggest an edit; with --json, commands print JSON with the new id</span>
+id=$(annox suggest paper.md --json \
   --quote "teh" --replace "the" | jq -r .id)
 
 <span class="comment"># Apply the suggestion to the file</span>

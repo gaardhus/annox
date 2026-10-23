@@ -32,7 +32,7 @@ fn the_example_still_reads_the_same() {
     let dir = tempfile::tempdir().unwrap();
     copy_dir(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples"), dir.path());
 
-    let report = annox(dir.path(), &["report", "--json"]);
+    let report = annox(dir.path(), &["report"]);
     let doc = &report["documents"][0];
     assert_eq!(report["documents"].as_array().unwrap().len(), 1, "{report:#}");
     assert_eq!(doc["path"], "proposal.md");

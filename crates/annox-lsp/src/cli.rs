@@ -1,6 +1,7 @@
-//! Command-line access to a workspace's annotations, for scripts and agents.
-//! Commands read and write `.annox/` directly through `annox-core`, and print
-//! JSON. Text is targeted by quoting it rather than by offsets.
+//! Command-line access to a workspace's annotations, for people, scripts and
+//! agents. Commands read and write `.annox/` directly through `annox-core`, and
+//! return JSON, which `annox` prints as is with --json, or as text through
+//! [`crate::render`]. Text is targeted by quoting it rather than by offsets.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -18,8 +19,6 @@ use anyhow::{anyhow, bail, Context};
 use clap::{Parser, Subcommand};
 use serde_json::{json, Map, Value};
 
-use crate::style::{self, paint};
-
 /// The annotation commands. `annox` flattens these into its own subcommands.
 #[derive(Subcommand, Debug)]
 pub enum Command {
@@ -27,9 +26,6 @@ pub enum Command {
     Log {
         /// A document in the workspace
         file: Option<String>,
-        /// Print the events as JSON instead of text; with --follow, one line each
-        #[arg(long)]
-        json: bool,
         /// Keep running, and print new events as they're written, instead of the ones so far
         #[arg(short, long)]
         follow: bool,
@@ -42,7 +38,7 @@ pub enum Command {
         #[arg(long)]
         local: bool,
     },
-    /// Print the annotations of FILE, or of every document, as JSON
+    /// Print the threads on FILE, or on every document
     List {
         /// A document in the workspace
         file: Option<String>,
@@ -63,11 +59,8 @@ pub enum Command {
     Report {
         /// A document in the workspace
         file: Option<String>,
-        /// Print JSON instead of text
-        #[arg(long)]
-        json: bool,
         /// Break each line's counts down by status, one line per kind
-        #[arg(short, long, conflicts_with = "json")]
+        #[arg(short, long)]
         verbose: bool,
         /// Group by document or by author; comma-separated to nest, as in `author,document`. An author counts
         /// the suggestions, comments and replies they wrote [default: document]
@@ -80,7 +73,7 @@ pub enum Command {
         #[command(flatten)]
         filter: Filter,
     },
-    /// Print one annotation and its thread as JSON
+    /// Print one annotation and its thread
     Show {
         /// The annotation's id, as printed by `annox list`; a reply's shows its thread
         id: String,
@@ -89,9 +82,6 @@ pub enum Command {
     History {
         /// The annotation's id, as printed by `annox list`; a reply's shows its thread
         id: String,
-        /// Print the events as JSON instead of text
-        #[arg(long)]
-        json: bool,
     },
     /// Comment on a quote in FILE
     Comment {
@@ -374,9 +364,14 @@ struct Cli {
 /// Parses and runs a command (the arguments after `annox`) with `cwd` as the
 /// current directory, and returns its JSON output.
 pub fn run(args: &[String], cwd: &Path) -> anyhow::Result<Value> {
+    execute(parse(args)?, cwd)
+}
+
+/// Parses a command: the arguments after `annox`.
+pub fn parse(args: &[String]) -> anyhow::Result<Command> {
     let cli = Cli::try_parse_from(std::iter::once("annox").chain(args.iter().map(String::as_str)))
         .map_err(|e| anyhow!("{}", e.render().to_string().trim_end()))?;
-    execute(cli.command, cwd)
+    Ok(cli.command)
 }
 
 /// Runs a parsed command with `cwd` as the current directory, and returns its
@@ -400,7 +395,7 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
             Ok(Value::Array(log_events(&Index::read(&ws), only.as_deref(), &BTreeSet::new())))
         }
         Command::Show { id } => show(&id, &cwd),
-        Command::History { id, json: _ } => history(&id, &cwd),
+        Command::History { id } => history(&id, &cwd),
         Command::Comment { file, at, body, meta, author } => {
             create(&file, &at, None, Some(&body), &meta, &author, &cwd)
         }
@@ -1128,205 +1123,11 @@ fn event_id(file: &str) -> Option<&str> {
     file.rsplit('/').next()?.strip_suffix(".json")
 }
 
-/// `report`'s entries in display order, each with how deeply it's nested.
-fn report_entries(report: &Value) -> Vec<(usize, &Value)> {
-    fn walk<'a>(entries: &'a Value, depth: usize, out: &mut Vec<(usize, &'a Value)>) {
-        for entry in entries.as_array().into_iter().flatten() {
-            out.push((depth, entry));
-            for key in ["documents", "authors"] {
-                if let Some(nested) = entry.get(key) {
-                    walk(nested, depth + 1, out);
-                }
-            }
-        }
-    }
-    let mut out = Vec::new();
-    for key in ["documents", "authors"] {
-        if let Some(entries) = report.get(key) {
-            walk(entries, 0, &mut out);
-        }
-    }
-    out
-}
-
-/// A `report` entry's label, plain and styled: a document's path, or an
-/// author's name and id.
-fn report_label(entry: &Value) -> (String, String) {
-    if let Some(path) = entry["path"].as_str() {
-        return (path.to_owned(), paint(style::PATH, path));
-    }
-    let id = entry["author"]["id"].as_str().unwrap_or("unknown");
-    match entry["author"]["name"].as_str() {
-        Some(name) => (
-            format!("{name} <{id}>"),
-            format!("{} {}", paint(style::AUTHOR, name), paint(style::MUTED, format!("<{id}>"))),
-        ),
-        None => (id.to_owned(), paint(style::AUTHOR, id)),
-    }
-}
-
-/// `n` and `what`, made plural unless `n` is 1.
-fn plural(n: u64, what: &str) -> String {
-    match (n, what.strip_suffix('y')) {
-        (1, _) => format!("1 {what}"),
-        (_, Some(stem)) => format!("{n} {stem}ies"),
-        _ => format!("{n} {what}s"),
-    }
-}
-
-/// The summary line a report ends with, if any: the files `annox commit`
-/// would commit.
-fn report_footer(report: &Value) -> String {
-    match report["uncommitted"].as_u64().unwrap_or(0) {
-        0 => String::new(),
-        n => format!(
-            "{}; see `{}`\n",
-            paint(style::PENDING, format!("{} to commit", plural(n, "file"))),
-            paint(style::PATH, "annox commit --dry-run")
-        ),
-    }
-}
-
-/// `report`'s output as text, one line per entry, nested ones indented,
-/// styled (see [`style`]).
-pub fn render_report(report: &Value) -> String {
-    let entries = report_entries(report);
-    if entries.is_empty() {
-        return format!("{}\n{}", paint(style::MUTED, "no annotations"), report_footer(report));
-    }
-    let count = |v: &Value| v.as_u64().unwrap_or(0);
-    let labels: Vec<(String, String)> = entries.iter().map(|(_, e)| report_label(e)).collect();
-    let width = entries
-        .iter()
-        .zip(&labels)
-        .map(|((depth, _), (plain, _))| 2 * depth + plain.chars().count())
-        .max()
-        .unwrap_or(0);
-    let mut out = String::new();
-    for ((depth, entry), (plain, label)) in entries.iter().zip(labels) {
-        let mut parts = Vec::new();
-        if entry["missing"] == json!(true) {
-            parts.push(paint(style::PROBLEM, "file missing"));
-        }
-        for (n, what) in [
-            (count(&entry["suggestions"]["open"]), "open suggestion"),
-            (count(&entry["comments"]["open"]), "open comment"),
-        ] {
-            if n > 0 {
-                parts.push(paint(style::OPEN, plural(n, what)));
-            }
-        }
-        if count(&entry["approved"]) > 0 {
-            parts.push(paint(style::DONE, format!("{} approved", count(&entry["approved"]))));
-        }
-        if count(&entry["replies"]) > 0 {
-            parts.push(plural(count(&entry["replies"]), "reply"));
-        }
-        for what in ["orphaned", "stale", "conflicted"] {
-            if count(&entry[what]) > 0 {
-                parts.push(paint(style::PROBLEM, format!("{} {what}", count(&entry[what]))));
-            }
-        }
-        let closed = count(&entry["comments"]["resolved"])
-            + ["accepted", "rejected", "withdrawn"].iter().map(|s| count(&entry["suggestions"][s])).sum::<u64>();
-        if closed > 0 {
-            parts.push(paint(style::MUTED, format!("{closed} closed")));
-        }
-        if count(&entry["uncommitted"]) > 0 {
-            parts.push(paint(style::PENDING, plural(count(&entry["uncommitted"]), "uncommitted change")));
-        }
-        let pad = " ".repeat(width - 2 * depth - plain.chars().count());
-        out.push_str(&format!("{}{label}{pad}  {}\n", "  ".repeat(*depth), parts.join(&separator())));
-    }
-    out + &report_footer(report)
-}
-
-/// What goes between the counts of a report line.
-fn separator() -> String {
-    paint(style::MUTED, " · ")
-}
-
-/// `report --verbose`'s output as text: each entry's counts broken down by
-/// status, one indented line per kind, leaving out zeros.
-pub fn render_report_verbose(report: &Value) -> String {
-    let entries = report_entries(report);
-    if entries.is_empty() {
-        return render_report(report);
-    }
-    let count = |v: &Value| v.as_u64().unwrap_or(0);
-    let counts = |of: &Value, names: &[&str]| -> Vec<String> {
-        names
-            .iter()
-            .filter(|n| count(&of[n]) > 0)
-            .map(|n| paint(style::of(n), format!("{} {n}", count(&of[n]))))
-            .collect()
-    };
-    let mut out = String::new();
-    for (depth, entry) in entries {
-        let indent = "  ".repeat(depth);
-        out.push_str(&format!("{indent}{}", report_label(entry).1));
-        if entry["missing"] == json!(true) {
-            out.push_str(&format!("  {}", paint(style::PROBLEM, "(file missing)")));
-        }
-        out.push('\n');
-        let uncommitted = match count(&entry["uncommitted"]) {
-            0 => vec![],
-            1 => vec![paint(style::PENDING, "1 change")],
-            n => vec![paint(style::PENDING, format!("{n} changes"))],
-        };
-        let mut suggestions = counts(&entry["suggestions"], &["open", "accepted", "rejected", "withdrawn"]);
-        if count(&entry["approved"]) > 0 {
-            suggestions.insert(1, paint(style::DONE, format!("{} approved", count(&entry["approved"]))));
-        }
-        let rows = [
-            ("suggestions", suggestions),
-            ("comments", counts(&entry["comments"], &["open", "resolved"])),
-            ("replies", [count(&entry["replies"])].into_iter().filter(|n| *n > 0).map(|n| n.to_string()).collect()),
-            ("needs work", counts(entry, &["orphaned", "stale", "conflicted"])),
-            ("uncommitted", uncommitted),
-        ];
-        for (label, parts) in rows.iter().filter(|(_, parts)| !parts.is_empty()) {
-            out.push_str(&format!(
-                "{indent}  {}  {}\n",
-                paint(style::MUTED, format!("{label:11}")),
-                parts.join(&separator())
-            ));
-        }
-    }
-    out + &report_footer(report)
-}
-
 /// The events of an annotation's thread in display order (§2.5.5).
 fn history(id: &str, cwd: &Path) -> anyhow::Result<Value> {
     let (_, index) = open_workspace(cwd)?;
     let path = document_path(&index, id)?;
     Ok(json!(annox_core::replay::thread_events(&index.load(&path).events, id)))
-}
-
-/// The text form of `annox history`: one line per event. Events that change a
-/// reply say so.
-pub fn render_history(events: &Value) -> String {
-    let events = events.as_array().map_or(&[][..], Vec::as_slice);
-    let replies: BTreeSet<&str> = events
-        .iter()
-        .filter(|e| e["type"] == "create" && e["kind"] == "reply")
-        .filter_map(|e| e["id"].as_str())
-        .collect();
-    let name = |e: &Value| e["author"]["name"].as_str().or(e["author"]["id"].as_str()).unwrap_or("unknown").to_owned();
-    let width = events.iter().map(|e| name(e).chars().count()).max().unwrap_or(0);
-    let mut out = String::new();
-    for e in events {
-        let detail = e["body"].as_str().or(e["edit"]["replacement"].as_str()).and_then(|d| d.lines().next());
-        let detail = detail.map_or(String::new(), |d| format!(": {d}"));
-        let reply = e["type"] != "create" && e["annotation"].as_str().is_some_and(|a| replies.contains(a));
-        out.push_str(&format!(
-            "{}  {}  {}{detail}\n",
-            paint(style::MUTED, e["time"].as_str().unwrap_or_default()),
-            paint(style::AUTHOR, format!("{:width$}", name(e))),
-            painted_action(e, reply),
-        ));
-    }
-    out
 }
 
 /// The workspace a log covers, and the one document it's limited to, if any.
@@ -1389,65 +1190,6 @@ pub fn follow_log(
         new.into_iter().try_for_each(&mut emit)?;
     }
     Ok(())
-}
-
-/// The text form of `annox log`: one line per event, with its document.
-pub fn render_log(events: &Value) -> String {
-    let events = events.as_array().map_or(&[][..], Vec::as_slice);
-    let name = |e: &Value| e["author"]["name"].as_str().or(e["author"]["id"].as_str()).unwrap_or("unknown").to_owned();
-    let path = |e: &Value| e["path"].as_str().unwrap_or("(no path)").to_owned();
-    let width = events.iter().map(|e| name(e).chars().count()).max().unwrap_or(0);
-    let path_width = events.iter().map(|e| path(e).chars().count()).max().unwrap_or(0);
-    let mut out = String::new();
-    for e in events {
-        let detail = e["body"].as_str().or(e["edit"]["replacement"].as_str()).and_then(|d| d.lines().next());
-        let detail = detail.map_or(String::new(), |d| format!(": {d}"));
-        let reply = e["type"] != "create" && e["annotation"] != e["thread"];
-        out.push_str(&format!(
-            "{}  {}  {}  {}{detail}\n",
-            paint(style::MUTED, e["time"].as_str().unwrap_or_default()),
-            paint(style::PATH, format!("{:path_width$}", path(e))),
-            paint(style::AUTHOR, format!("{:width$}", name(e))),
-            painted_action(e, reply),
-        ));
-    }
-    out
-}
-
-/// [`action`], styled by what it did, and saying so if it changed a reply.
-fn painted_action(event: &Value, reply: bool) -> String {
-    let action = action(event);
-    let verb = action.split(' ').next().unwrap_or_default();
-    paint(style::of(verb), format!("{action}{}", if reply { " reply" } else { "" }))
-}
-
-/// What an event did, as a past-tense verb for history views.
-fn action(event: &Value) -> String {
-    let status = event["status"].as_str().unwrap_or_default();
-    match (event["type"].as_str().unwrap_or_default(), event["kind"].as_str().unwrap_or_default()) {
-        ("create", "comment") => "commented".into(),
-        ("create", "suggestion") => "suggested".into(),
-        ("create", "reply") => "replied".into(),
-        ("edit", _) => "edited".into(),
-        ("status", _) => match status {
-            "open" => "reopened".into(),
-            "withdrawn" => "withdrew".into(),
-            _ => status.into(),
-        },
-        ("reanchor", _) => "re-anchored (automatic)".into(),
-        ("retarget", _) => "retargeted".into(),
-        ("delete", _) => "deleted".into(),
-        ("restore", _) => "restored".into(),
-        ("react", _) => {
-            let reaction = event["reaction"].as_str().unwrap_or_default();
-            if event["removed"] == json!(true) {
-                format!("removed {reaction}")
-            } else {
-                format!("reacted {reaction}")
-            }
-        }
-        (kind, _) => kind.into(),
-    }
 }
 
 fn show(id: &str, cwd: &Path) -> anyhow::Result<Value> {

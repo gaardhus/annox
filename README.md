@@ -98,16 +98,16 @@ Edits always go through `workspace/applyEdit`, and the status event is written o
 
 ## Command line
 
-The `annox` binary also reads and writes annotations directly, printing JSON (`annox report` prints a one-line-per-file summary, or per author with `--by author`, or a per-status breakdown with `--verbose`, and `annox history` one line per event, unless given `--json`). It's meant for scripts and AI agents: text is targeted by quoting it, not by offsets, and an ambiguous quote is an error that lists where it occurs.
+The `annox` binary also reads and writes annotations directly. Text is targeted by quoting it, not by offsets, and an ambiguous quote is an error that lists where it occurs. Commands print text for people: `annox list` the threads under each document, with their ids, `annox report` a line per document (per author with `--by author`, broken down by status with `--verbose`), `annox history` a line per event, and the write commands what they did. With `--json`, every command prints JSON instead, for scripts and agents; set `ANNOX_OUTPUT=json`, or `"output": "json"` in [`config.json`](#configuration), to make that the default.
 
 ```sh
 annox init [--local]
 annox list [FILE] [--all | --closed] [--kind K] [--status S] [--mine | --others] [--broken] [--unread]
 annox list paper.md --quote "the bound is tight"   # everything on that text, closed annotations too
 annox show ID
-annox history ID [--json]
-annox log [FILE] [--json] [--follow]                # every event, by anyone; -f prints new ones as they're written
-annox report [FILE] [--json | --verbose] [--by author,document] [--mine | --others] [--unread] ...
+annox history ID
+annox log [FILE] [--follow]                         # every event, by anyone; -f prints new ones as they're written
+annox report [FILE] [--verbose] [--by author,document] [--mine | --others] [--unread] ...
 annox comment paper.md --quote "the bound is tight" --body "Cite Lemma 4?"
 annox highlight paper.md --quote "the bound is tight"
 annox suggest paper.md --quote "teh" --replace "the" --body "typo"
@@ -145,7 +145,7 @@ It works on the directory it's started in, or the one given with `--root`.
 
 #### Live: let the agent pick up threads as you write them
 
-`annox watch` prints, one JSON line each, the threads others changed for you, as they change: already unread ones first, then each new comment or reply once it has been unchanged for `--settle` milliseconds (default 2000). With `--mention @claude`, only threads that mention `@claude` or that the agent wrote in. Your own changes and threads you've marked read don't count, so an agent watching as itself never wakes itself up.
+`annox watch` prints the threads others changed for you, as they change, each as `annox show` prints it, or with `--json`, one JSON line each: already unread ones first, then each new comment or reply once it has been unchanged for `--settle` milliseconds (default 2000). With `--mention @claude`, only threads that mention `@claude` or that the agent wrote in. Your own changes and threads you've marked read don't count, so an agent watching as itself never wakes itself up.
 
 ```sh
 ANNOX_AUTHOR=urn:agent:claude annox watch --mention @claude
@@ -153,7 +153,7 @@ ANNOX_AUTHOR=urn:agent:claude annox watch --mention @claude
 
 For a feed of everything that happens, by anyone, your own changes included, use `annox log --follow` (add `--json` for one JSON line per event). It doesn't use read state, so don't point an agent at it: it would see, and answer, its own replies.
 
-Anything that can read lines can drive an agent with `annox watch`. In Claude Code, ask the agent to run that command with its Monitor tool and handle each thread as it arrives.
+Anything that can read lines can drive an agent with `annox watch --json`. In Claude Code, ask the agent to run that command with its Monitor tool and handle each thread as it arrives.
 
 `annox mcp --channel` does the same through a [Claude Code channel](https://code.claude.com/docs/en/channels-reference): it pushes the threads into the running session, which handles them without being prompted. Channels are a research preview, so a custom one has to be loaded explicitly:
 
@@ -201,16 +201,16 @@ annox reads configuration from four places:
 | Where                              | Scope                    | Settings                                                                                              |
 | ---------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------- |
 | `.annox/annox.json`                | The workspace, committed | `format` and `sync.url`, the hub to sync with (see [Live sync](#live-sync))                           |
-| `~/.config/annox/config.json`      | You, on every workspace  | `author`, your identity                                                                               |
+| `~/.config/annox/config.json`      | You, on every workspace  | `author`, your identity, and `output`, what the CLI prints                                            |
 | `~/.config/annox/credentials.json` | You, never committed     | `hubs`, a token per hub URL (see [Live sync](#live-sync))                                             |
 | Editor settings                    | One editor               | The LSP `initializationOptions` above, or the [Neovim plugin's options](editors/nvim/README.md#setup) |
 
 The user files live under `$XDG_CONFIG_HOME/annox/` when it's set. `ANNOX_CONFIG_FILE` and `ANNOX_CREDENTIALS_FILE` point at a file elsewhere. A missing file is the same as an empty one.
 
-`config.json` sets the identity your annotations are written as:
+`config.json` sets the identity your annotations are written as, and with `"output": "json"`, makes the CLI print JSON unless `ANNOX_OUTPUT=text` says otherwise:
 
 ```json
-{ "author": { "id": "mailto:ada@example.org", "name": "Ada Lovelace" } }
+{ "author": { "id": "mailto:ada@example.org", "name": "Ada Lovelace" }, "output": "json" }
 ```
 
 The identity is taken from the first of these that is set:

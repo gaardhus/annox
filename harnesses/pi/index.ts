@@ -72,7 +72,7 @@ export default function (pi: ExtensionAPI) {
 			process.env.ANNOX_AUTHOR_NAME = "Pi";
 		}
 
-		const child = spawn("annox", ["watch", "--mention", mention], {
+		const child = spawn("annox", ["watch", "--json", "--mention", mention], {
 			cwd: ctx.cwd,
 			stdio: ["ignore", "pipe", "pipe"],
 		});

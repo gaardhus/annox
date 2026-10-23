@@ -5,7 +5,7 @@
 //! (default `~/.config/annox/config.json`):
 //!
 //! ```json
-//! { "author": { "id": "mailto:ada@example.org", "name": "Ada" } }
+//! { "author": { "id": "mailto:ada@example.org", "name": "Ada" }, "output": "json" }
 //! ```
 //!
 //! A missing file is the same as an empty one. Unknown fields are ignored.
@@ -18,6 +18,8 @@ use serde_json::Value;
 pub struct Config {
     /// The identity to write events under (§2.1, §2.7).
     pub author: Option<Value>,
+    /// What the CLI prints by default: `json` or `text`.
+    pub output: Option<String>,
 }
 
 /// The directory holding annox's per-user files: `$XDG_CONFIG_HOME/annox`,
@@ -69,7 +71,12 @@ fn parse(text: &str) -> Result<Config, String> {
             Some(clean)
         }
     };
-    Ok(Config { author })
+    let output = match &file["output"] {
+        Value::Null => None,
+        Value::String(o) if o == "json" || o == "text" => Some(o.clone()),
+        _ => return Err("`output` must be \"json\" or \"text\"".into()),
+    };
+    Ok(Config { author, output })
 }
 
 #[cfg(test)]
@@ -82,6 +89,12 @@ mod tests {
         let config = parse(r#"{ "author": { "id": "mailto:a@b", "name": "A", "extra": 1 }, "other": true }"#).unwrap();
         assert_eq!(config.author, Some(json!({ "id": "mailto:a@b", "name": "A" })));
         assert_eq!(parse("{}").unwrap(), Config::default());
+    }
+
+    #[test]
+    fn parses_output() {
+        assert_eq!(parse(r#"{ "output": "json" }"#).unwrap().output.as_deref(), Some("json"));
+        assert!(parse(r#"{ "output": "yaml" }"#).is_err());
     }
 
     #[test]

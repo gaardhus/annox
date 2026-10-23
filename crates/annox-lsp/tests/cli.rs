@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use annox_lsp::cli;
+use annox_lsp::{cli, render};
 use serde_json::Value;
 
 const DOC: &str = "In Section 3, we prove that teh bound is tight.\nThe bound is tight.\n";
@@ -395,7 +395,7 @@ fn history_lists_who_did_what() {
     let shown = annox(dir.path(), &["show", &c]);
     assert_eq!(shown["editedBy"], Value::Null);
     assert_eq!(shown["replies"][0]["editedBy"]["author"]["name"], "Agent");
-    let text = plain(cli::render_history(&events));
+    let text = plain(render::history(&events));
     let actions: Vec<&str> = text.lines().map(|l| l.split("  ").nth(2).unwrap()).collect();
     assert_eq!(
         actions,
@@ -403,7 +403,7 @@ fn history_lists_who_did_what() {
     );
     assert!(text.lines().all(|l| l.contains("  Agent  ")), "{text}");
 
-    let text = plain(cli::render_history(&annox(dir.path(), &["history", &s])));
+    let text = plain(render::history(&annox(dir.path(), &["history", &s])));
     assert_eq!(text.lines().map(|l| l.split("  ").nth(2).unwrap()).collect::<Vec<_>>(), ["suggested: the", "accepted"]);
     assert!(error(dir.path(), &["history", "nope"]).contains("unknown annotation"));
 }
@@ -447,20 +447,20 @@ fn report_counts_each_document() {
     assert_eq!((&paper["suggestions"]["open"], &paper["stale"]), (&1.into(), &0.into()));
     assert_eq!(annox(dir.path(), &["report", "paper.md"])["documents"].as_array().unwrap().len(), 1);
 
-    let text = plain(cli::render_report(&report));
+    let text = plain(render::report(&report));
     assert_eq!(
         text,
         "notes.md  file missing · 1 open comment · 1 orphaned\n\
          paper.md  1 open suggestion · 1 open comment · 1 closed\n"
     );
-    assert_eq!(plain(cli::render_report(&serde_json::json!({ "documents": [] }))), "no annotations\n");
+    assert_eq!(plain(render::report(&serde_json::json!({ "documents": [] }))), "no annotations\n");
 
     assert_eq!(
-        plain(cli::render_report_verbose(&report)),
+        plain(render::report_verbose(&report)),
         "notes.md  (file missing)\n  comments     1 open\n  needs work   1 orphaned\n\
          paper.md\n  suggestions  1 open\n  comments     1 open · 1 resolved\n"
     );
-    assert_eq!(plain(cli::render_report_verbose(&serde_json::json!({ "documents": [] }))), "no annotations\n");
+    assert_eq!(plain(render::report_verbose(&serde_json::json!({ "documents": [] }))), "no annotations\n");
 }
 
 #[test]
@@ -492,7 +492,7 @@ fn report_groups_by_author() {
     assert_eq!((&agent["comments"]["open"], &agent["comments"]["resolved"]), (&1.into(), &1.into()));
     assert_eq!(agent["replies"], 1);
     assert_eq!(
-        plain(cli::render_report(&report)),
+        plain(render::report(&report)),
         "Ada Lovelace <mailto:ada@example.org>  1 open suggestion · 2 replies\n\
          Agent <urn:test:agent>                 1 open comment · 1 reply · 1 closed\n"
     );
@@ -501,7 +501,7 @@ fn report_groups_by_author() {
     assert_eq!(nested["authors"][0]["documents"][0]["path"], "paper.md");
     assert_eq!(nested["authors"][0]["documents"][0]["replies"], 2);
     assert_eq!(
-        plain(cli::render_report(&nested)),
+        plain(render::report(&nested)),
         "Ada Lovelace <mailto:ada@example.org>  1 open suggestion · 2 replies\n\
          \x20 paper.md                             1 open suggestion · 2 replies\n\
          Agent <urn:test:agent>                 1 open comment · 1 reply · 1 closed\n\
@@ -546,9 +546,9 @@ fn commit_takes_only_annotation_events() {
     let report = annox(dir.path(), &["report"]);
     // annox.json, .gitignore, the document event, and two annotation events.
     assert_eq!((&report["uncommitted"], &report["documents"][0]["uncommitted"]), (&5.into(), &2.into()));
-    assert!(plain(cli::render_report(&report)).contains("2 uncommitted changes"));
-    assert!(plain(cli::render_report(&report)).ends_with("5 files to commit; see `annox commit --dry-run`\n"));
-    let verbose = plain(cli::render_report_verbose(&report));
+    assert!(plain(render::report(&report)).contains("2 uncommitted changes"));
+    assert!(plain(render::report(&report)).ends_with("5 files to commit; see `annox commit --dry-run`\n"));
+    let verbose = plain(render::report_verbose(&report));
     assert!(verbose.contains("\n  uncommitted  2 changes\n"));
     assert!(verbose.ends_with("5 files to commit; see `annox commit --dry-run`\n"));
 
@@ -684,7 +684,7 @@ fn log_lists_and_follows_every_event() {
     );
     assert_eq!(log[0]["path"], "paper.md");
     assert_eq!(annox(dir.path(), &["log"]).as_array().unwrap().len(), 4);
-    let text = plain(cli::render_log(&log));
+    let text = plain(render::log(&log));
     assert!(text.lines().nth(2).unwrap().ends_with("edited reply: The third one."), "{text}");
 
     // Following prints only what's written after it starts, by anyone.
@@ -739,7 +739,7 @@ fn reactions_and_approvals() {
     let list = annox(dir.path(), &["list"]);
     assert!(list[0].get("reactions").is_none() && list[0].get("approvals").is_none(), "{list}");
 
-    let history = cli::render_history(&annox(dir.path(), &["history", &s]));
+    let history = render::history(&annox(dir.path(), &["history", &s]));
     assert!(history.contains("reacted 👍") && history.contains("removed 👍"), "{history}");
     assert!(error(dir.path(), &["react", &s, ""]).contains("empty"));
 
@@ -747,6 +747,47 @@ fn reactions_and_approvals() {
     annox(dir.path(), &["react", &s, "👍"]);
     let report = annox(dir.path(), &["report"]);
     assert_eq!(report["documents"][0]["approved"], 1);
-    assert_eq!(plain(cli::render_report(&report)), "paper.md  1 open suggestion · 1 approved\n");
-    assert_eq!(plain(cli::render_report_verbose(&report)), "paper.md\n  suggestions  1 open · 1 approved\n");
+    assert_eq!(plain(render::report(&report)), "paper.md  1 open suggestion · 1 approved\n");
+    assert_eq!(plain(render::report_verbose(&report)), "paper.md\n  suggestions  1 open · 1 approved\n");
+}
+
+/// What `annox ARGS` prints as text in `cwd`.
+fn text(cwd: &Path, args: &[&str]) -> String {
+    let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+    let render = render::of(&cli::parse(&args).unwrap());
+    plain(render(&annox(cwd, &args.iter().map(String::as_str).collect::<Vec<_>>())))
+}
+
+#[test]
+fn prints_threads_as_text() {
+    let dir = setup("# Title\n\nThe bound is tight.\nThe proof is short.\n");
+    let d = dir.path();
+    let tight = id(&annox(d, &["comment", "paper.md", "--quote", "tight", "--body", "Prove it.\n\nOr cite it."]));
+    let reply = id(&annox(d, &["reply", &tight, "--body", "Done"]));
+    let short = id(&annox(d, &["suggest", "paper.md", "--quote", "short", "--replace", "long", "--label", "typo"]));
+    let mark = id(&annox(d, &["highlight", "paper.md", "--quote", "proof"]));
+    assert_eq!(
+        text(d, &["list", "paper.md"]),
+        format!(
+            "paper.md\n  3  open  “tight”  {tight}\n     Agent: Prove it.\n\n       Or cite it.\n     ↳ Agent: Done\n  \
+             4  open  “short” → “long”  [typo]  {short}\n     Agent suggested it\n  \
+             4  open  “proof”  {mark}\n     Agent highlighted it\n"
+        )
+    );
+    // A reply's thread, as `list` prints it.
+    assert_eq!(text(d, &["show", &reply]), text(d, &["list", "paper.md", "--quote", "tight"]));
+    assert_eq!(text(d, &["list", "paper.md", "--kind", "comment", "--status", "resolved"]), "no annotations\n");
+}
+
+#[test]
+fn prints_what_writes_did_as_text() {
+    let dir = setup("# Title\n\nThe bound is tight.\n");
+    let d = dir.path();
+    let out = text(d, &["comment", "paper.md", "--quote", "tight", "--body", "Why?"]);
+    let tight = out.rsplit("  ").next().unwrap().trim().to_owned();
+    assert_eq!(out, format!("Commented on paper.md:3  {tight}\n"));
+    assert_eq!(text(d, &["status", &tight, "resolved"]), format!("Resolved  {tight}\n"));
+    assert_eq!(text(d, &["react", &tight, "👍"]), format!("Reacted 👍 to {tight}\n"));
+    assert_eq!(text(d, &["react", &tight, "👍"]), format!("{tight} already has your 👍\n"));
+    assert_eq!(text(d, &["read", "--all"]), "Marked 1 thread read\n");
 }

@@ -7,14 +7,14 @@ description: Read and write annox annotations — review comments and suggested 
 
 annox stores comments and suggested edits beside the files they're about, in `.annox/`. The user reviews them in their editor: they see your comments in context, and accept or reject each suggestion. Use it whenever the user should decide on a change, not you.
 
-Use the `annox` CLI through the shell. Every command prints JSON. If the `annox` MCP server is connected, its tools (`list_annotations`, `comment`, `suggest`, …) do the same things with the same arguments; use whichever is available.
+Use the `annox` CLI through the shell. Commands print text for people, or JSON with `ANNOX_OUTPUT=json` (set below) or `--json`; this skill describes the JSON. If the `annox` MCP server is connected, its tools (`list_annotations`, `comment`, `suggest`, …) do the same things with the same arguments; use whichever is available.
 
 ## Identity
 
-Write as yourself, not as the user, so your annotations are distinguishable from theirs. Use `urn:agent:` followed by your harness's name in lowercase, and the same id every time, so all your annotations share one author: `urn:agent:claude` for Claude Code, `urn:agent:codex`, `urn:agent:gemini`, `urn:agent:copilot`, `urn:agent:cursor`, `urn:agent:opencode`, `urn:agent:pi`. Set it once per shell command, or export it:
+Write as yourself, not as the user, so your annotations are distinguishable from theirs. Use `urn:agent:` followed by your harness's name in lowercase, and the same id every time, so all your annotations share one author: `urn:agent:claude` for Claude Code, `urn:agent:codex`, `urn:agent:gemini`, `urn:agent:copilot`, `urn:agent:cursor`, `urn:agent:opencode`, `urn:agent:pi`. Set it, and JSON output, once per shell command, or export them:
 
 ```sh
-export ANNOX_AUTHOR=urn:agent:claude ANNOX_AUTHOR_NAME=Claude
+export ANNOX_AUTHOR=urn:agent:claude ANNOX_AUTHOR_NAME=Claude ANNOX_OUTPUT=json
 ```
 
 The MCP server may already be started with an identity; then you don't need to set one.
@@ -27,8 +27,8 @@ annox list paper.md         # one file
 annox list --all            # also resolved, accepted, rejected, withdrawn, deleted
 annox list --closed         # also resolved, accepted, rejected, withdrawn, but not deleted
 annox show ID               # one annotation and its thread
-annox history ID --json     # who did what to a thread (replies included), and when
-annox report --json         # counts per document: open, closed, orphaned, stale
+annox history ID            # who did what to a thread (replies included), and when
+annox report                # counts per document: open, closed, orphaned, stale
 annox report --by author    # who wrote what: suggestions, comments and replies per author
 annox list --unread         # threads others changed since you marked them read, closed ones too
 ```
@@ -94,7 +94,7 @@ annox delete ID / annox restore ID
 If the user asks you to keep an eye on the document, or to answer what they write as they write it, follow the threads addressed to you with `annox watch`, using your identity (see above):
 
 ```sh
-annox watch --mention @claude    # one JSON line per thread, as `annox list` prints it
+annox watch --mention @claude    # with ANNOX_OUTPUT=json, one JSON line per thread, as `annox list` prints it
 ```
 
 Run it with a tool that reports each line as it arrives, such as a monitor or background task, not one that waits for the command to end, since it never does. If you're connected to the `annox` MCP server as a channel, threads arrive as `<channel source="annox">` events instead, and you don't need to run it.

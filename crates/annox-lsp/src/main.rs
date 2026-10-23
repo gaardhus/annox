@@ -7,10 +7,10 @@ use lsp_server::Connection;
 
 /// Review comments and suggested edits, stored next to your files in `.annox/`.
 ///
-/// The annotation commands print JSON, except `report` without --json. Their
-/// write commands take --author and --name, or read ANNOX_AUTHOR and
-/// ANNOX_AUTHOR_NAME, then the author in ~/.config/annox/config.json, and
-/// otherwise use git's identity.
+/// The commands print text, or JSON with --json, or when ANNOX_OUTPUT=json or
+/// "output": "json" in ~/.config/annox/config.json. The write commands take
+/// --author and --name, or read ANNOX_AUTHOR and ANNOX_AUTHOR_NAME, then the
+/// author in that file, and otherwise use git's identity.
 #[derive(Parser)]
 #[command(
     name = "annox",
@@ -21,6 +21,9 @@ use lsp_server::Connection;
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
+    /// Print JSON instead of text [default: text, unless ANNOX_OUTPUT or the config file say json]
+    #[arg(long, global = true)]
+    json: bool,
 }
 
 #[derive(Subcommand)]
@@ -67,10 +70,11 @@ enum Command {
         #[arg(long, value_name = "MS", default_value_t = 2000, requires = "channel")]
         settle: u64,
     },
-    /// Print threads others changed for you as they change, one JSON line each, until stopped
+    /// Print threads others changed for you as they change, until stopped
     ///
-    /// Each line is a thread as `annox list` prints it. Threads already unread are printed at the
-    /// start. A thread is printed again when someone else changes it; `annox read` stops that.
+    /// Each is a thread as `annox show` prints it, or with --json, one line of JSON as `annox list`
+    /// prints it. Threads already unread are printed at the start. A thread is printed again when
+    /// someone else changes it; `annox read` stops that.
     Watch(annox_lsp::cli::Watch),
     /// Install the latest release over this binary, and the agent skill wherever it's installed
     ///
@@ -159,12 +163,11 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Command::Watch(options) => {
+            let json = output_json(args.json);
             let stop = std::sync::atomic::AtomicBool::new(false);
-            let print = |thread: serde_json::Value| {
-                use std::io::Write;
-                let mut out = std::io::stdout().lock();
-                writeln!(out, "{thread}")?;
-                Ok(out.flush()?)
+            let print = |thread: serde_json::Value| match json {
+                true => print_line(&thread.to_string()),
+                false => print_line(&annox_lsp::render::threads(&serde_json::json!([thread]))),
             };
             let watched = annox_lsp::cli::Watcher::new(options, &std::env::current_dir()?).and_then(|watcher| {
                 // Easy to miss: watching as yourself, your own comments never show up.
@@ -176,17 +179,12 @@ fn main() -> anyhow::Result<()> {
             }
             Ok(())
         }
-        Command::Annotations(annox_lsp::cli::Command::Log { file, json, follow: true }) => {
+        Command::Annotations(annox_lsp::cli::Command::Log { file, follow: true }) => {
+            let json = output_json(args.json);
             let stop = std::sync::atomic::AtomicBool::new(false);
-            let print = |event: serde_json::Value| {
-                use std::io::Write;
-                let mut out = anstream::stdout().lock();
-                if json {
-                    writeln!(out, "{event}")?;
-                } else {
-                    write!(out, "{}", annox_lsp::cli::render_log(&serde_json::json!([event])))?;
-                }
-                Ok(out.flush()?)
+            let print = |event: serde_json::Value| match json {
+                true => print_line(&event.to_string()),
+                false => print_line(&annox_lsp::render::log(&serde_json::json!([event]))),
             };
             if let Err(e) = annox_lsp::cli::follow_log(file.as_deref(), &std::env::current_dir()?, &stop, print) {
                 fail(e);
@@ -194,15 +192,7 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Command::Annotations(command) => {
-            let render: Option<fn(&serde_json::Value) -> String> = match command {
-                annox_lsp::cli::Command::Report { json: false, verbose: false, .. } => {
-                    Some(annox_lsp::cli::render_report)
-                }
-                annox_lsp::cli::Command::Report { verbose: true, .. } => Some(annox_lsp::cli::render_report_verbose),
-                annox_lsp::cli::Command::History { json: false, .. } => Some(annox_lsp::cli::render_history),
-                annox_lsp::cli::Command::Log { json: false, .. } => Some(annox_lsp::cli::render_log),
-                _ => None,
-            };
+            let render = (!output_json(args.json)).then(|| annox_lsp::render::of(&command));
             match (annox_lsp::cli::execute(command, &std::env::current_dir()?), render) {
                 (Ok(output), Some(render)) => {
                     anstream::print!("{}", render(&output));
@@ -228,6 +218,24 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }
     }
+}
+
+/// Whether to print JSON: with --json (`flag`), or as ANNOX_OUTPUT or the
+/// config file say. Exits if ANNOX_OUTPUT is neither json nor text.
+fn output_json(flag: bool) -> bool {
+    annox_lsp::render::json_output(flag).unwrap_or_else(|e| fail(e))
+}
+
+/// Prints `text`, which may hold styles, ending it with a line break if it
+/// doesn't, and flushes it, for output that streams.
+fn print_line(text: &str) -> anyhow::Result<()> {
+    use std::io::Write;
+    let mut out = anstream::stdout().lock();
+    write!(out, "{text}")?;
+    if !text.ends_with('\n') {
+        writeln!(out)?;
+    }
+    Ok(out.flush()?)
 }
 
 /// Prints `e` as annox's errors read, and exits with status 1.
