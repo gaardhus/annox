@@ -55,6 +55,8 @@ A user-facing feature isn't done until everything that shows or explains it does
 
 ## Commits and pull requests
 
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat: …`, `fix(nvim): …`). A commit-msg hook and CI check them with [committed](https://github.com/crate-ci/committed) (see `committed.toml`), and PR titles too, since PRs are squash-merged. The PR title becomes the commit message on `main`, and the changelog entry.
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat: …`, `fix(nvim): …`). A commit-msg hook and CI check them with [committed](https://github.com/crate-ci/committed) (see `committed.toml`), and PR titles too, since PRs are squash-merged. The PR title becomes the subject of the commit on `main`, and its one changelog entry; the branch's commit messages become its body.
+
+Before a branch is merged, fold each fix into the commit it fixes (`git commit --fixup`, then `git rebase --autosquash`), so the body tells what the branch does rather than how it got there. Why something is done the way it is goes in a comment where it's done, not only in a commit message, and workarounds for other tools in a doc under `docs/` once there are several. A branch that adds several features can land on `main` as it is instead, so that each gets its own changelog entry; decide which when it's ready to merge.
 
 Releases are automated. Every push to `main` updates a release PR that bumps the version and `CHANGELOG.md` with [git-cliff](https://git-cliff.org) (see `cliff.toml`), and merging that PR tags `vX.Y.Z` and attaches `annox` binaries and the VS Code extension to the GitHub release. The binary, the crates, and the editor plugins share that one version.
