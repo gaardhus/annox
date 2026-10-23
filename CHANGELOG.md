@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0](https://github.com/gaardhus/annox/compare/v0.16.0...v0.17.0) - 2026-10-23
+
+### Breaking changes
+
+- *(cli)* Print text by default, and JSON with --json: scripts that parse the CLI's output must pass --json or
+set ANNOX_OUTPUT=json.
+
+### Added
+
+- *(vscode)* Tint the words that changed within inline suggestions
+- *(sync)* Have the hub print connections, refusals and, verbosely, events
+- *(cli)* Add `annox config`, to show the settings in effect
+
+### Documentation
+
+- Say what squash-merging keeps, and to fold fixups before merging
+- *(readme)* List the commands as `annox -h` prints them, then examples
+
+### Changed
+
+- *(cli)* Split cli.rs into a module
+- *(lsp)* Split features, Markdown and sync out of lib.rs
+
 ## [0.16.0](https://github.com/gaardhus/annox/compare/v0.15.5...v0.16.0) - 2026-10-15
 
 ### Added
