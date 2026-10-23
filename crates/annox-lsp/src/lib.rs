@@ -288,6 +288,9 @@ pub(crate) struct Cache {
     /// part of an analysis, so this outlives storage changes, which rebuild
     /// every analysis but rarely move an orphan's text or target.
     suggested: HashMap<String, (String, Anchor, Option<Suggested>)>,
+    /// Event files already warned about as unreadable, which outlive storage
+    /// changes so that each is reported once.
+    unreadable: BTreeSet<String>,
 }
 
 /// Loaded events, derived annotation states, and the annotations unread by
@@ -701,7 +704,13 @@ impl Server<'_> {
         let cached = self.cache.borrow().indexes.get(&ws.root).cloned();
         cached.unwrap_or_else(|| {
             let index = Rc::new(Index::read(ws));
-            self.cache.borrow_mut().indexes.insert(ws.root.clone(), index.clone());
+            let mut cache = self.cache.borrow_mut();
+            let new: Vec<&String> = index.unreadable.iter().filter(|p| cache.unreadable.insert((*p).clone())).collect();
+            if !new.is_empty() {
+                let list = new.iter().map(|p| p.as_str()).collect::<Vec<_>>().join(", ");
+                self.warn(format!("annox: ignoring event files that aren't valid events: {list}"));
+            }
+            cache.indexes.insert(ws.root.clone(), index.clone());
             index
         })
     }

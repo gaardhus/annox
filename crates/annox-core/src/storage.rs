@@ -260,6 +260,9 @@ pub struct Index {
     pub areas: BTreeMap<String, Area>,
     /// Ids of events with a copy in the sync mirror (§5.12).
     pub synced: BTreeSet<String>,
+    /// Event files that were skipped because they aren't a valid event
+    /// named after its id (§5.4), so that tools can say so.
+    pub unreadable: Vec<String>,
 }
 
 impl Index {
@@ -272,7 +275,14 @@ impl Index {
         for path in paths {
             let Some(loc) = classify(&path) else { continue };
             index.folders.entry(loc.document.clone()).or_default().insert(loc.folder.clone());
-            let Some(event) = parse_event(source, &path) else { continue };
+            let Some(event) = parse_event(source, &path) else {
+                // Not the temporary file of a write in progress (§5.4).
+                let name = path.rsplit('/').next().unwrap_or_default();
+                if name.ends_with(".json") && !name.starts_with('.') {
+                    index.unreadable.push(path);
+                }
+                continue;
+            };
             if loc.synced {
                 index.synced.insert(event.id.clone());
             }
@@ -379,6 +389,17 @@ impl Loaded {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn notes_unreadable_event_files() {
+        let folder = ".annox/docs/a.md~01926d3a-0100-7000-8000-000000000000";
+        let ev = "01926d3a-0001-7000-8000-000000000000";
+        let files = BTreeMap::from([
+            (format!("{folder}/{ev}.json"), "not json".to_owned()),
+            (format!("{folder}/.{ev}.json.tmp"), "{".to_owned()),
+        ]);
+        assert_eq!(Index::read(&files).unreadable, [format!("{folder}/{ev}.json")]);
+    }
 
     #[test]
     fn classifies_folders() {

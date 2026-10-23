@@ -63,7 +63,7 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
         Command::Log { follow: true, .. } => bail!("`annox log --follow` streams; run it with `follow_log`"),
         Command::Log { file, .. } => {
             let (ws, only) = log_scope(file.as_deref(), &cwd)?;
-            Ok(Value::Array(log_events(&Index::read(&ws), only.as_deref(), &BTreeSet::new())))
+            Ok(Value::Array(log_events(&read_index(&ws), only.as_deref(), &BTreeSet::new())))
         }
         Command::Show { id } => show(&id, &cwd),
         Command::History { id } => history(&id, &cwd),
@@ -197,9 +197,22 @@ fn no_workspace(from: &Path) -> anyhow::Error {
     anyhow!("{} is not in an annox workspace; run `annox init` at the project root", from.display())
 }
 
+/// The index of `ws`, warning once per run about event files it skipped.
+pub(crate) fn read_index(ws: &Workspace) -> Index {
+    static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    let index = Index::read(ws);
+    if let Some(first) = index.unreadable.first() {
+        if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            let n = index.unreadable.len();
+            eprintln!("annox: ignoring {n} event file(s) that aren't valid events, such as {first}");
+        }
+    }
+    index
+}
+
 fn open_workspace(cwd: &Path) -> anyhow::Result<(Workspace, Index)> {
     let ws = Workspace::find(cwd).ok_or_else(|| no_workspace(cwd))?;
-    let index = Index::read(&ws);
+    let index = read_index(&ws);
     Ok((ws, index))
 }
 
@@ -282,7 +295,7 @@ fn create(
         local: meta.local,
         reverts: None,
     };
-    let index = Index::read(&ws);
+    let index = read_index(&ws);
     let event = ops::create_annotation(&ws, &index, &rel, &text, &new, &author(who, &ws)?)?;
     Ok(json!({ "id": event.id, "path": rel, "line": line_of(&text, start) }))
 }
@@ -302,7 +315,7 @@ fn list(
         }
         None => {
             let ws = Workspace::find(cwd).ok_or_else(|| no_workspace(cwd))?;
-            let index = Index::read(&ws);
+            let index = read_index(&ws);
             let paths =
                 index.documents.values().filter(|d| d.merged_into.is_none()).filter_map(|d| d.path.clone()).collect();
             (ws, paths)
@@ -312,7 +325,7 @@ fn list(
     if filter.mine || filter.others {
         if filter.mine { &mut filter.author } else { &mut filter.not_author }.push(me.clone());
     }
-    let index = Index::read(&ws);
+    let index = read_index(&ws);
     let events: Vec<Event> = index.events.values().map(|(e, _)| e.clone()).collect();
     let unread = read::ensure_reader(&ws, &index, &me)?.unread(&me, &events);
     let mut out = Vec::new();

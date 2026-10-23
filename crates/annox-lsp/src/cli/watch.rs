@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use annox_core::storage::{Index, Workspace};
 use serde_json::{json, Value};
 
-use super::{author, list, no_workspace, open_file, reader, Author, Filter, Watch};
+use super::{author, list, no_workspace, open_file, read_index, reader, Author, Filter, Watch};
 
 /// How often `watch` checks `.annox/` for changes.
 const WATCH_INTERVAL: Duration = Duration::from_millis(500);
@@ -179,7 +179,7 @@ pub fn follow_log(
     mut emit: impl FnMut(Value) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let (ws, only) = log_scope(file, &cwd.canonicalize()?)?;
-    let mut seen: BTreeSet<String> = Index::read(&ws).events.into_keys().collect();
+    let mut seen: BTreeSet<String> = read_index(&ws).events.into_keys().collect();
     let mut last = crate::fingerprint(&ws.root);
     while !stop.load(Ordering::Relaxed) {
         std::thread::sleep(WATCH_INTERVAL);
@@ -188,7 +188,7 @@ pub fn follow_log(
             continue;
         }
         last = print;
-        let index = Index::read(&ws);
+        let index = read_index(&ws);
         let new = log_events(&index, only.as_deref(), &seen);
         seen.extend(index.events.into_keys());
         new.into_iter().try_for_each(&mut emit)?;
