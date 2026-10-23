@@ -20,10 +20,44 @@ use lopdf::{Document, Object, ObjectId};
 use pdf_extract::{MediaBox, OutputDev, OutputError, Transform};
 use unicode_normalization::UnicodeNormalization;
 
-pub use export::{export, Exported, Reply, Thread};
+pub use export::{export, Exported, Owned, Reply, Thread};
 pub use import::{import, Found, Parent, What};
 pub use layout::{find_loose, is_pdf, read_document};
 pub use source::Syntax;
+
+/// The key of the page annox appends, in its page dictionary. The page isn't
+/// part of the document's text, and each export replaces it.
+const APPENDIX: &str = "AnnoxAppendix";
+
+/// The numbers of the pages annox appended to `doc`.
+fn appendix_pages(doc: &Document) -> Vec<u32> {
+    doc.get_pages()
+        .into_iter()
+        .filter(|(_, id)| doc.get_dictionary(*id).is_ok_and(|d| d.has(APPENDIX.as_bytes())))
+        .map(|(n, _)| n)
+        .collect()
+}
+
+/// A PDF text string, such as an annotation's note, as text. Tabs and line
+/// breaks are kept: lopdf drops them from strings in PDFDocEncoding, which
+/// has them, so a note of several paragraphs would run together.
+fn decode_text(o: &Object) -> Option<String> {
+    let bytes = o.as_str().ok()?;
+    if bytes.starts_with(b"\xFE\xFF") || bytes.starts_with(b"\xEF\xBB\xBF") {
+        return lopdf::decode_text_string(o).ok();
+    }
+    let mut out = String::new();
+    for piece in bytes.split_inclusive(|b| matches!(b, b'\t' | b'\n' | b'\r')) {
+        let (text, end) = match piece.split_last() {
+            Some((&b, text)) if matches!(b, b'\t' | b'\n' | b'\r') => (text, Some(b as char)),
+            _ => (piece, None),
+        };
+        let text = Object::String(text.to_vec(), lopdf::StringFormat::Literal);
+        out.push_str(&lopdf::decode_text_string(&text).ok()?);
+        out.extend(end);
+    }
+    Some(out)
+}
 
 /// A glyph on a page, with its box in the page's default user space.
 #[derive(Clone, Debug)]
@@ -98,8 +132,10 @@ impl OutputDev for Collector {
     }
 }
 
-/// Every glyph of `doc`, page by page, in content stream order.
+/// Every glyph of `doc`, page by page, in content stream order, but for the
+/// page annox appended.
 fn extract(doc: &Document) -> anyhow::Result<Vec<Glyph>> {
+    let appended = appendix_pages(doc);
     let mut doc = doc.clone();
     expand_cid_widths(&mut doc);
     let doc = &doc;
@@ -112,7 +148,7 @@ fn extract(doc: &Document) -> anyhow::Result<Vec<Glyph>> {
     }));
     std::panic::set_hook(hook);
     match result {
-        Ok(Ok(())) => Ok(collector.glyphs),
+        Ok(Ok(())) => Ok(collector.glyphs.into_iter().filter(|g| !appended.contains(&g.page)).collect()),
         Ok(Err(e)) => Err(e.context("can't read the PDF's text")),
         Err(_) => bail!("can't read the PDF's text"),
     }
@@ -217,6 +253,18 @@ mod tests {
     use lopdf::Dictionary;
 
     use super::*;
+
+    #[test]
+    fn decodes_text_strings_with_their_line_breaks() {
+        let literal = |b: &[u8]| Object::String(b.to_vec(), lopdf::StringFormat::Literal);
+        assert_eq!(
+            decode_text(&literal(b"Prove it\n\nSee\tLemma 4.\r")).as_deref(),
+            Some("Prove it\n\nSee\tLemma 4.\r")
+        );
+        // PDFDocEncoding: 0x8D and 0x8E are curly quotes.
+        assert_eq!(decode_text(&literal(b"\x8Da\x8E\n")).as_deref(), Some("\u{201c}a\u{201d}\n"));
+        assert_eq!(decode_text(&literal(b"\xFE\xFF\x00a\x00\n")).as_deref(), Some("a\n"));
+    }
 
     #[test]
     fn expands_cid_width_ranges() {

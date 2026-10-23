@@ -102,7 +102,7 @@ const GROUPS: &[(&str, &[&str])] = &[
     ("Annotate", &["comment", "highlight", "suggest", "reply", "edit"]),
     ("Review", &["status", "react", "accept", "revert", "retarget", "reattach", "delete", "restore", "read"]),
     ("Workspace", &["init", "commit"]),
-    ("PDF", &["export-pdf", "import-pdf"]),
+    ("PDF", &["export-pdf", "import-pdf", "sync-pdf"]),
     ("Servers", &["lsp", "hub", "mcp"]),
     ("Other", &["update"]),
 ];
@@ -176,6 +176,27 @@ fn main() -> anyhow::Result<()> {
                 annox_lsp::cli::watch(watcher, &stop, print)
             });
             if let Err(e) = watched {
+                fail(e);
+            }
+            Ok(())
+        }
+        Command::Annotations(annox_lsp::cli::Command::SyncPdf(options)) if options.watch => {
+            let json = output_json(args.json);
+            let stop = std::sync::atomic::AtomicBool::new(false);
+            let print = |sync: serde_json::Value| match json {
+                true => print_line(&sync.to_string()),
+                false => {
+                    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
+                    let time = annox_core::event::rfc3339(secs as i64);
+                    let style = annox_lsp::style::MUTED;
+                    print_line(&format!(
+                        "{}  {}",
+                        annox_lsp::style::paint(style, time),
+                        annox_lsp::render::synced(&sync)
+                    ))
+                }
+            };
+            if let Err(e) = annox_lsp::cli::watch_pdf(options, &std::env::current_dir()?, &stop, print) {
                 fail(e);
             }
             Ok(())

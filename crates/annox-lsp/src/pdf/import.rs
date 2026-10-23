@@ -7,21 +7,28 @@ use std::path::Path;
 use anyhow::{bail, Context};
 use lopdf::{Dictionary, Document, Object, ObjectId};
 
+use super::export::WRITTEN;
 use super::layout::same_word;
 use super::source::{strip_indexed, Syntax};
-use super::{best_match, extract, glyph_key, key_chars, Glyph, Rect};
+use super::{best_match, decode_text, extract, glyph_key, key_chars, Glyph, Rect};
 
 /// A comment, suggestion or reply found in a PDF.
 #[derive(Debug, PartialEq)]
 pub struct Found {
     /// The PDF annotation's name (`/NM`), or one made up from where it is.
     pub name: String,
+    /// What tells it apart from every other PDF annotation: its name, when
+    /// it was made, and where it is, since names alone repeat between viewers.
+    pub key: String,
     pub page: u32,
     /// The name of whoever wrote it (`/T`).
     pub author: Option<String>,
     /// When it was made, in RFC 3339.
     pub time: Option<String>,
     pub body: Option<String>,
+    /// For a thread's root that annox wrote, the note it wrote, which the
+    /// body differs from if a reviewer changed it.
+    pub written: Option<String>,
     pub what: What,
 }
 
@@ -35,11 +42,11 @@ pub enum What {
     Reply { parent: Parent },
 }
 
-/// What a reply is to: the annotation's name, and when it was made.
+/// What a reply is to: the annotation's name and [`Found::key`].
 #[derive(Debug, PartialEq)]
 pub struct Parent {
     pub name: String,
-    pub time: Option<String>,
+    pub key: String,
 }
 
 /// How many letters and digits around a mark [`import`] compares, to tell
@@ -55,9 +62,11 @@ struct Raw {
     page: u32,
     subtype: Vec<u8>,
     name: String,
+    key: String,
     author: Option<String>,
     time: Option<String>,
     contents: Option<String>,
+    written: Option<String>,
     rect: Option<Rect>,
     quads: Vec<Rect>,
     /// What it's in reply to (`/IRT`), and whether it's grouped with it
@@ -123,18 +132,18 @@ pub fn import(pdf: &Path, source: &str, syntax: Syntax) -> anyhow::Result<Vec<Fo
     for (i, raw) in raws.iter().enumerate() {
         let found = |what| Found {
             name: raw.name.clone(),
+            key: raw.key.clone(),
             page: raw.page,
             author: raw.author.clone(),
             time: raw.time.clone(),
             body: raw.contents.clone().filter(|c| !c.trim().is_empty()),
+            written: raw.written.clone(),
             what,
         };
         if let Some(irt) = raw.irt {
             if !raw.grouped && by_id.contains_key(&irt) {
                 let parent = &raws[root(i)];
-                out.push(found(What::Reply {
-                    parent: Parent { name: parent.name.clone(), time: parent.time.clone() },
-                }));
+                out.push(found(What::Reply { parent: Parent { name: parent.name.clone(), key: parent.key.clone() } }));
             }
             continue;
         }
@@ -186,7 +195,15 @@ pub fn import(pdf: &Path, source: &str, syntax: Syntax) -> anyhow::Result<Vec<Fo
             }
             _ => {
                 let Some((first, last)) = covered(&glyphs, raw.page, &raw.quads) else { continue };
-                found(What::Root { range: place(first, last), quote: shown(first, last), replacement: None })
+                let quote = shown(first, last);
+                let mut f = found(What::Root { range: place(first, last), quote: quote.clone(), replacement: None });
+                // Okular fills a new highlight's note with the text it
+                // covers, which says nothing the quote doesn't. A note annox
+                // wrote is kept, to be compared with what it wrote.
+                if f.written.is_none() && f.body.as_deref().is_some_and(|b| key_chars(b).eq(key_chars(&quote))) {
+                    f.body = None;
+                }
+                f
             }
         };
         out.push(f);
@@ -196,19 +213,8 @@ pub fn import(pdf: &Path, source: &str, syntax: Syntax) -> anyhow::Result<Vec<Fo
 
 /// The annotations of `doc` that [`import`] reads, page by page.
 fn annotations(doc: &Document) -> Vec<Raw> {
-    let string = |d: &Dictionary, key: &[u8]| {
-        d.get(key).ok().and_then(|o| doc.dereference(o).ok()).and_then(|(_, o)| lopdf::decode_text_string(o).ok())
-    };
-    let numbers = |d: &Dictionary, key: &[u8]| -> Vec<f64> {
-        let Ok((_, Object::Array(a))) = d.get(key).and_then(|o| doc.dereference(o)) else { return Vec::new() };
-        a.iter().filter_map(|o| o.as_float().ok()).map(f64::from).collect()
-    };
-    let bounds = |v: &[f64]| {
-        let (xs, ys): (Vec<f64>, Vec<f64>) = v.chunks(2).map(|p| (p[0], p[1])).unzip();
-        let min = |v: &[f64]| v.iter().copied().fold(f64::INFINITY, f64::min);
-        let max = |v: &[f64]| v.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-        Rect { x0: min(&xs), y0: min(&ys), x1: max(&xs), y1: max(&ys) }
-    };
+    let string = |d, key| string(doc, d, key);
+    let numbers = |d, key| numbers(doc, d, key);
     let mut out = Vec::new();
     for (page, page_id) in doc.get_pages() {
         let Ok(page_dict) = doc.get_dictionary(page_id) else { continue };
@@ -223,22 +229,23 @@ fn annotations(doc: &Document) -> Vec<Raw> {
             if !MARKUP.contains(&subtype) || d.has(b"State") {
                 continue;
             }
-            let rect = numbers(d, b"Rect");
-            let rect = (rect.len() == 4).then(|| bounds(&rect));
+            let rect = rect_of(doc, d);
             let quads: Vec<Rect> = numbers(d, b"QuadPoints").as_chunks::<8>().0.iter().map(|q| bounds(q)).collect();
             let name = string(d, b"NM").filter(|n| !n.is_empty()).unwrap_or_else(|| {
                 let r = rect.unwrap_or(Rect { x0: 0.0, y0: 0.0, x1: 0.0, y1: 0.0 });
                 format!("page{page}-{}-{:.0}-{:.0}", String::from_utf8_lossy(subtype), r.x0, r.y0)
             });
-            let time = string(d, b"CreationDate").or_else(|| string(d, b"M")).and_then(|t| rfc3339_of(&t));
+            let time = created(doc, d);
             out.push(Raw {
                 id,
                 page,
                 subtype: subtype.to_vec(),
+                key: identity(doc, page, d),
                 name,
                 author: string(d, b"T").filter(|t| !t.trim().is_empty()),
                 time,
                 contents: string(d, b"Contents").map(|c| c.replace("\r\n", "\n").replace('\r', "\n")),
+                written: string(d, WRITTEN.as_bytes()),
                 rect,
                 quads,
                 irt: d.get(b"IRT").and_then(Object::as_reference).ok(),
@@ -247,6 +254,44 @@ fn annotations(doc: &Document) -> Vec<Raw> {
         }
     }
     out
+}
+
+/// What tells the PDF annotation `d` on `page` apart from every other: its
+/// name, when it was made, and where it is. Names alone repeat: viewers such
+/// as PyMuPDF number annotations afresh in each session, and may leave out
+/// the time. Nothing moves an annotation between importing it and replacing
+/// it with annox's own, which is when this must match.
+pub(super) fn identity(doc: &Document, page: u32, d: &Dictionary) -> String {
+    let name = string(doc, d, b"NM").unwrap_or_default();
+    let at = rect_of(doc, d).map_or_else(String::new, |r| format!("{:.0},{:.0}", r.x0, r.y0));
+    format!("{name}@{}@{page}:{at}", created(doc, d).unwrap_or_default())
+}
+
+/// When the annotation `d` was made, or else last changed, in RFC 3339.
+fn created(doc: &Document, d: &Dictionary) -> Option<String> {
+    string(doc, d, b"CreationDate").or_else(|| string(doc, d, b"M")).and_then(|t| rfc3339_of(&t))
+}
+
+fn string(doc: &Document, d: &Dictionary, key: &[u8]) -> Option<String> {
+    d.get(key).ok().and_then(|o| doc.dereference(o).ok()).and_then(|(_, o)| decode_text(o))
+}
+
+fn numbers(doc: &Document, d: &Dictionary, key: &[u8]) -> Vec<f64> {
+    let Ok((_, Object::Array(a))) = d.get(key).and_then(|o| doc.dereference(o)) else { return Vec::new() };
+    a.iter().filter_map(|o| o.as_float().ok()).map(f64::from).collect()
+}
+
+/// The box around the points `v`, given as x, y pairs.
+fn bounds(v: &[f64]) -> Rect {
+    let (xs, ys): (Vec<f64>, Vec<f64>) = v.chunks(2).map(|p| (p[0], p[1])).unzip();
+    let min = |v: &[f64]| v.iter().copied().fold(f64::INFINITY, f64::min);
+    let max = |v: &[f64]| v.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    Rect { x0: min(&xs), y0: min(&ys), x1: max(&xs), y1: max(&ys) }
+}
+
+fn rect_of(doc: &Document, d: &Dictionary) -> Option<Rect> {
+    let rect = numbers(doc, d, b"Rect");
+    (rect.len() == 4).then(|| bounds(&rect))
 }
 
 /// The first and last glyph on `page` whose middle is in one of `quads`.

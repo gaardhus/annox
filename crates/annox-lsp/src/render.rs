@@ -43,9 +43,10 @@ pub fn of(command: &Command) -> Render {
         Command::Report { .. } => Box::new(report),
         Command::History { .. } => Box::new(history),
         Command::Log { .. } => Box::new(log),
-        Command::ExportPdf { .. } => Box::new(exported),
         Command::Text { .. } => Box::new(|v| str(v).to_owned()),
+        Command::ExportPdf { .. } => Box::new(exported),
         Command::ImportPdf { .. } => Box::new(imported),
+        Command::SyncPdf(_) => Box::new(synced),
         Command::Comment { .. } => Box::new(|v| created("Commented on", v)),
         Command::Highlight { .. } => Box::new(|v| created("Highlighted", v)),
         Command::Suggest { .. } => Box::new(|v| created("Suggested an edit to", v)),
@@ -348,6 +349,16 @@ fn imported(v: &Value) -> String {
         ));
     }
     out
+}
+
+/// What `sync-pdf` prints: what it imported, as `import-pdf` does, then what
+/// it wrote, as `export-pdf` does.
+pub fn synced(v: &Value) -> String {
+    let mut out = String::new();
+    if v["added"].as_array().is_some_and(|a| !a.is_empty()) || v["skipped"].as_array().is_some_and(|s| !s.is_empty()) {
+        out.push_str(&imported(v));
+    }
+    out + &wrote(str(&v["pdf"]), v)
 }
 
 /// `report`'s entries in display order, each with how deeply it's nested.

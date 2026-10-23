@@ -154,6 +154,18 @@ const TOOLS: &[Tool] = &[
         read_only: false,
     },
     Tool {
+        name: "sync_pdf",
+        command: "sync-pdf",
+        description: "Bring a PDF and a file's threads in step, in the PDF itself: import the comments reviewers made on it in a viewer, as import_pdf does, then write the file's open threads into the PDF, replacing what an earlier sync wrote. `file` is the document the PDF was compiled from, or the PDF itself.",
+        positional: &["file", "pdf"],
+        params: &[
+            ("file", "string", true, "The document the PDF was compiled from, or the PDF itself."),
+            ("pdf", "string", false, "The PDF to sync. Defaults to `file` when it's a PDF."),
+            LOCAL,
+        ],
+        read_only: false,
+    },
+    Tool {
         name: "comment",
         command: "comment",
         description: "Comment on a passage of a file.",

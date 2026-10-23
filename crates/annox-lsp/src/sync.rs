@@ -19,18 +19,14 @@ impl Server<'_> {
         if self.replicas.contains_key(&ws.root) {
             return;
         }
-        let marker = std::fs::read_to_string(ws.root.join(".annox/annox.json")).unwrap_or_default();
-        let url =
-            serde_json::from_str::<Value>(&marker).ok().and_then(|m| m["sync"]["url"].as_str().map(str::to_owned));
-        let replica = url.and_then(|url| {
-            let Some(credential) = annox_sync::credentials::lookup(&url) else {
-                self.warn(format!("annox: {url} has no entry in the credentials file; not syncing"));
-                return None;
-            };
-            let config =
-                ReplicaConfig { root: ws.root.clone(), url, token: credential.token, author: self.author(&ws) };
-            Some(replica::spawn(config, self.sync_tx.clone()))
-        });
+        let replica = match replica_config(&ws, || self.author(&ws)) {
+            Some(Ok(config)) => Some(replica::spawn(config, self.sync_tx.clone())),
+            Some(Err(message)) => {
+                self.warn(message);
+                None
+            }
+            None => None,
+        };
         self.replicas.insert(ws.root, replica);
     }
 
@@ -113,4 +109,15 @@ impl Server<'_> {
             let _ = tx.send(ToReplica::Presence(presence));
         }
     }
+}
+
+/// How to sync workspace `ws` with the hub its `annox.json` names, if it
+/// names one (§7.2), syncing as `author`; or why it can't.
+pub(crate) fn replica_config(ws: &Workspace, author: impl FnOnce() -> Value) -> Option<Result<ReplicaConfig, String>> {
+    let marker = std::fs::read_to_string(ws.root.join(".annox/annox.json")).unwrap_or_default();
+    let url = serde_json::from_str::<Value>(&marker).ok()?["sync"]["url"].as_str()?.to_owned();
+    let Some(credential) = annox_sync::credentials::lookup(&url) else {
+        return Some(Err(format!("annox: {url} has no entry in the credentials file; not syncing")));
+    };
+    Some(Ok(ReplicaConfig { root: ws.root.clone(), url, token: credential.token, author: author() }))
 }

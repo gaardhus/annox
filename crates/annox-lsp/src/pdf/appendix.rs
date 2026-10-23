@@ -4,7 +4,7 @@ use lopdf::{Dictionary, Document, Object, ObjectId, Stream, StringFormat};
 
 use super::export::{contents, Thread};
 use super::write::{fit, helvetica, helvetica_width, media_box, one_line, pdf_literal, rect_object};
-use super::Rect;
+use super::{Rect, APPENDIX};
 
 const MARGIN: f64 = 56.0;
 
@@ -101,6 +101,7 @@ pub(super) fn appendix(
     page.set("Resources", resources);
     page.set("Contents", content);
     page.set("Annots", Object::Array(vec![Object::Reference(link)]));
+    page.set(APPENDIX, true);
     let page_id = doc.add_object(page);
     let pages = doc.get_object_mut(pages_id)?.as_dict_mut()?;
     pages.get_mut(b"Kids")?.as_array_mut()?.push(Object::Reference(page_id));

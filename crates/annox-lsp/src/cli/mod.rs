@@ -24,10 +24,11 @@ mod report;
 mod watch;
 
 use args::Cli;
-pub use args::{Author, Command, Filter, Meta, MoveTo, Quote, Watch};
+pub use args::{Author, Command, Filter, Meta, MoveTo, Quote, SyncPdf, Watch};
 use commit::commit;
 pub use commit::commit_workspace;
-use pdf::{export_pdf, import_pdf};
+pub use pdf::watch_pdf;
+use pdf::{export_pdf, import_pdf, sync_pdf};
 use report::report;
 pub use watch::{follow_log, watch, Watcher};
 use watch::{log_events, log_scope};
@@ -73,6 +74,10 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
         Command::ImportPdf { file, pdf, dry_run, local, author } => {
             import_pdf(&file, pdf.as_deref(), dry_run, local, &author, &cwd)
         }
+        Command::SyncPdf(SyncPdf { watch: true, .. }) => {
+            bail!("`annox sync-pdf --watch` keeps running; run it with `watch_pdf`")
+        }
+        Command::SyncPdf(options) => sync_pdf(&options, &cwd),
         Command::Text { file } => {
             let (_, rel, abs) = open_file(&cwd, &file)?;
             let raw = crate::pdf::read_document(&abs).with_context(|| format!("can't read {rel}"))?;

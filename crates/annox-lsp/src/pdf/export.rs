@@ -4,17 +4,20 @@
 //! Each thread is placed by finding its quote in the PDF's text. Threads that
 //! can't be placed go on a page appended to the end.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use anyhow::{anyhow, bail, Context};
 use lopdf::{Dictionary, Document, Object, ObjectId, Stream};
 
 use super::appendix::{appendix, appendix_slots};
+use super::import::identity;
 use super::source::{source_key, strip_indexed, Syntax};
 use super::words::{collapse, word_changes};
-use super::write::{add_annots, color, date, fit, helvetica, helvetica_width, pdf_literal, rect_object, text};
-use super::{best_match, extract, glyph_key, key_chars, Glyph, Rect};
+use super::write::{
+    add_annots, color, date, fit, helvetica, helvetica_width, media_box, pdf_literal, rect_object, text,
+};
+use super::{appendix_pages, best_match, decode_text, extract, glyph_key, key_chars, Glyph, Rect};
 
 /// A thread to export.
 pub struct Thread {
@@ -49,14 +52,21 @@ pub struct Exported {
     pub unplaced: Vec<String>,
 }
 
+/// Whether the PDF annotation with a name and an identity, as in
+/// [`Found::key`](super::Found::key), is one annox wrote or imported, which
+/// an export replaces.
+pub type Owned<'a> = &'a dyn Fn(&str, &str) -> bool;
+
 /// Writes `input`, a PDF compiled from the document at `source`, with
-/// `threads` added as annotations to `output`.
-pub fn export(threads: &[Thread], source: &str, input: &Path, output: &Path) -> anyhow::Result<Exported> {
+/// `threads` added as annotations to `output`, which may be `input`. What an
+/// earlier export wrote, and the annotations that are `owned`, are replaced.
+pub fn export(threads: &[Thread], source: &str, input: &Path, output: &Path, owned: Owned) -> anyhow::Result<Exported> {
     let syntax = Syntax::of(source);
     let mut doc = Document::load(input).with_context(|| format!("can't read {}", input.display()))?;
     if doc.is_encrypted() {
         bail!("{} is encrypted", input.display());
     }
+    remove_exported(&mut doc, owned)?;
     let glyphs = extract(&doc)?;
     let (key, owner) = glyph_key(&glyphs);
     let pages = doc.get_pages();
@@ -91,15 +101,91 @@ pub fn export(threads: &[Thread], source: &str, input: &Path, output: &Path) -> 
         let page_id =
             appendix(&mut doc, &unplaced, source, *pages.values().next().ok_or_else(|| anyhow!("no pages"))?)?;
         for (thread, rect) in unplaced.iter().zip(appendix_slots(&doc, page_id, unplaced.len())) {
-            let ids = note(&mut doc, page_id, thread, rect);
-            annots.entry(page_id).or_default().extend(ids);
+            let id = note(&mut doc, page_id, thread, rect);
+            annots.entry(page_id).or_default().push(id);
+            annots.entry(page_id).or_default().extend(add_popup(&mut doc, page_id, id, rect));
         }
     }
     for (page_id, ids) in annots {
         add_annots(&mut doc, page_id, ids)?;
     }
-    doc.save(output).with_context(|| format!("can't write {}", output.display()))?;
+    save(&mut doc, output).with_context(|| format!("can't write {}", output.display()))?;
     Ok(Exported { placed, unplaced: unplaced.iter().map(|t| t.id.clone()).collect() })
+}
+
+/// Saves `doc` to `path` through a file next to it, so that a viewer that
+/// reloads the PDF when it changes never reads it half written.
+fn save(doc: &mut Document, path: &Path) -> std::io::Result<()> {
+    // Without gaps left by what was removed: Okular (poppler) silently
+    // doesn't save edits to the annotations of a PDF whose cross-reference
+    // table skips object numbers. lopdf doesn't write the input's own
+    // cross-reference streams and the like, so they'd leave gaps too.
+    doc.objects
+        .retain(|_, o| o.type_name().map_or(true, |t| ![b"ObjStm".as_slice(), b"XRef", b"Linearized"].contains(&t)));
+    doc.renumber_objects();
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let tmp = path.with_file_name(format!(".{name}.annox-tmp"));
+    if let Err(e) = doc.save(&tmp).and_then(|_| std::fs::rename(&tmp, path)) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    Ok(())
+}
+
+/// Removes what an earlier export wrote to `doc`, so exporting again
+/// replaces it: the appended page, the annotations that are `owned`, and
+/// their popups and replies, which were imported with them or are empty.
+fn remove_exported(doc: &mut Document, owned: Owned) -> anyhow::Result<()> {
+    let appended = appendix_pages(doc);
+    doc.delete_pages(&appended);
+    let mut removed: BTreeSet<ObjectId> = BTreeSet::new();
+    let mut pages: Vec<(ObjectId, Vec<Object>)> = Vec::new();
+    for (number, page) in doc.get_pages() {
+        let Ok((_, Object::Array(annots))) = doc.get_dictionary(page)?.get(b"Annots").and_then(|o| doc.dereference(o))
+        else {
+            continue;
+        };
+        for annot in annots {
+            let Ok(id) = annot.as_reference() else { continue };
+            let Ok(d) = doc.get_dictionary(id) else { continue };
+            let name = d.get(b"NM").ok().and_then(decode_text);
+            if name.is_some_and(|name| owned(&name, &identity(doc, number, d))) {
+                removed.insert(id);
+            }
+        }
+        pages.push((page, annots.clone()));
+    }
+    // Popups and replies of what's removed, and theirs in turn.
+    loop {
+        let before = removed.len();
+        for (_, annots) in &pages {
+            for id in annots.iter().filter_map(|a| a.as_reference().ok()) {
+                let Ok(d) = doc.get_dictionary(id) else { continue };
+                let points = |key: &[u8]| d.get(key).and_then(Object::as_reference).is_ok_and(|r| removed.contains(&r));
+                if points(b"Parent") || points(b"IRT") {
+                    removed.insert(id);
+                }
+            }
+        }
+        if removed.len() == before {
+            break;
+        }
+    }
+    if removed.is_empty() && appended.is_empty() {
+        return Ok(());
+    }
+    for (page, annots) in pages {
+        let kept: Vec<Object> = annots
+            .into_iter()
+            .filter(|a| a.as_reference().is_ok_and(|r| !removed.contains(&r)) || a.as_reference().is_err())
+            .collect();
+        doc.get_object_mut(page)?.as_dict_mut()?.set("Annots", kept);
+    }
+    for id in removed {
+        doc.objects.remove(&id);
+    }
+    doc.prune_objects();
+    Ok(())
 }
 
 /// The range of `key` that holds `thread`'s quote, if it can be found.
@@ -166,8 +252,11 @@ fn set_quads(d: &mut Dictionary, rects: &[Rect], page: ObjectId) {
     d.set("P", page);
 }
 
-/// The note a thread's root shows: its body, and for a suggestion whose
-/// change isn't drawn in full on the page, what it replaces the quote with.
+/// The note a thread's root shows: its body, for a suggestion whose change
+/// isn't drawn in full on the page, what it replaces the quote with, and its
+/// replies, each as "Name, date: text". Replies go in the note rather than
+/// in reply annotations: Okular stops opening a comment that has those, and
+/// browsers don't show them.
 pub(super) fn contents(thread: &Thread, with_quote: bool, with_replacement: bool) -> Option<String> {
     let mut parts = Vec::new();
     if with_quote {
@@ -179,7 +268,48 @@ pub(super) fn contents(thread: &Thread, with_quote: bool, with_replacement: bool
         None => {}
     }
     parts.extend(thread.body.clone().filter(|b| !b.is_empty()));
+    for reply in &thread.replies {
+        let day = reply.created.get(..10).unwrap_or_default();
+        parts.push(format!("{}, {day}: {}", reply.author, reply.body.trim()));
+    }
     (!parts.is_empty()).then(|| parts.join("\n\n"))
+}
+
+/// The key under which a thread's root keeps a copy of the note annox wrote,
+/// so that what a reviewer adds to the note in their viewer can be told
+/// apart from it.
+pub(super) const WRITTEN: &str = "AnnoxContents";
+
+/// Sets the note of the root annotation `d`, and the copy of it in [`WRITTEN`].
+fn set_note(d: &mut Dictionary, note: Option<String>) {
+    let note = note.unwrap_or_default();
+    if !note.is_empty() {
+        d.set("Contents", text(&note));
+    }
+    d.set(WRITTEN, text(&note));
+}
+
+/// Adds a closed popup to the annotation `parent` on `page`, if it has a
+/// note, in the page's right margin level with `anchor`. Firefox lists and
+/// edits only notes that have one.
+fn add_popup(doc: &mut Document, page: ObjectId, parent: ObjectId, anchor: Rect) -> Option<ObjectId> {
+    let has_note = doc.get_dictionary(parent).is_ok_and(|d| d.has(b"Contents"));
+    if !has_note {
+        return None;
+    }
+    let edge = media_box(doc, page);
+    let y1 = anchor.y1.min(edge.y1);
+    let rect = Rect { x0: edge.x1 - 200.0, y0: (y1 - 120.0).max(edge.y0), x1: edge.x1, y1 };
+    let mut p = Dictionary::new();
+    p.set("Type", Object::Name(b"Annot".to_vec()));
+    p.set("Subtype", Object::Name(b"Popup".to_vec()));
+    p.set("Rect", rect_object(rect));
+    p.set("Parent", parent);
+    p.set("Open", false);
+    p.set("P", page);
+    let id = doc.add_object(p);
+    doc.get_object_mut(parent).and_then(Object::as_dict_mut).ok()?.set("Popup", id);
+    Some(id)
 }
 
 /// A thread's markup on one page: the lines it marks, highlighted or, for a
@@ -236,7 +366,7 @@ fn marks(thread: &Thread, syntax: Syntax, glyphs: &[Glyph], owner: &[usize], rig
 }
 
 /// The annotations of `mark`, the `n`th page of `thread`'s markup: a
-/// highlight, or a strikeout and a caret grouped with it, whose appearance
+/// highlight, or a strikeout and a caret beside it, whose appearance
 /// writes the replacement above the struck text and tints the words that
 /// change. The first page's highlight or strikeout is the thread's root,
 /// which holds its note and its replies; `root` keeps it.
@@ -261,15 +391,17 @@ fn annotate(
     if is_root {
         // The page shows the change, so the note needn't repeat it, unless
         // it had to be cut short.
-        if let Some(c) = contents(thread, false, mark.cut) {
-            d.set("Contents", text(&c));
-        }
+        set_note(&mut d, contents(thread, false, mark.cut));
     }
     let id = doc.add_object(d);
     let mut ids = vec![id];
+    if is_root {
+        let bbox = mark.struck.iter().copied().reduce(Rect::union).expect("a rect");
+        ids.extend(add_popup(doc, page, id, bbox));
+    }
     if !mark.runs.is_empty() || !mark.deleted.is_empty() {
-        // Acrobat's "replace text" markup is a caret grouped with struck
-        // text. Its appearance does the drawing, as viewers otherwise show the
+        // Acrobat's "replace text" markup: a caret with struck text. Its
+        // appearance does the drawing, as viewers otherwise show the
         // replacement only in a popup, if at all.
         let mut c = base(thread, "Caret");
         c.set("NM", text(&suffix("caret")));
@@ -280,15 +412,15 @@ fn annotate(
         let mut ap = Dictionary::new();
         ap.set("N", form);
         c.set("AP", ap);
+        // Acrobat groups the two with `/IRT`, but Okular stops opening a
+        // note that anything points at that way. The caret's name, the
+        // struck text's with "-caret", is enough for annox to know it.
         c.set("Contents", text(thread.replacement.as_deref().unwrap_or_default()));
-        c.set("IRT", id);
-        c.set("RT", Object::Name(b"Group".to_vec()));
         c.set("P", page);
         ids.push(doc.add_object(c));
     }
     if is_root {
         *root = Some(id);
-        ids.extend(replies(doc, page, thread, id, mark.struck[0]));
     }
     ids
 }
@@ -412,51 +544,13 @@ fn draw(runs: &[Run], deleted: &[Rect], inserted: &[Rect]) -> (Rect, Stream) {
 }
 
 /// A thread that couldn't be placed, as a note at `rect` on the appended page.
-fn note(doc: &mut Document, page: ObjectId, thread: &Thread, rect: Rect) -> Vec<ObjectId> {
+fn note(doc: &mut Document, page: ObjectId, thread: &Thread, rect: Rect) -> ObjectId {
     let mut d = base(thread, "Text");
     d.set("Rect", rect_object(rect));
     d.set("P", page);
     d.set("Name", Object::Name(b"Comment".to_vec()));
-    if let Some(c) = contents(thread, true, true) {
-        d.set("Contents", text(&c));
-    }
-    let root = doc.add_object(d);
-    let mut ids = vec![root];
-    ids.extend(replies(doc, page, thread, root, rect));
-    ids
-}
-
-fn replies(doc: &mut Document, page: ObjectId, thread: &Thread, root: ObjectId, at: Rect) -> Vec<ObjectId> {
-    thread
-        .replies
-        .iter()
-        .map(|r| {
-            let mut d = Dictionary::new();
-            d.set("Type", Object::Name(b"Annot".to_vec()));
-            d.set("Subtype", Object::Name(b"Text".to_vec()));
-            d.set("NM", text(&r.id));
-            d.set("T", text(&r.author));
-            d.set("M", date(&r.created));
-            d.set("CreationDate", date(&r.created));
-            d.set("Contents", text(&r.body));
-            d.set("IRT", root);
-            d.set("Rect", rect_object(Rect { x0: at.x0, y0: at.y1, x1: at.x0, y1: at.y1 }));
-            d.set("P", page);
-            // NoZoom and NoRotate, like a reply made in Acrobat, and an empty
-            // appearance: viewers show a reply in its parent's thread, but
-            // some, such as those built on poppler, also draw it as an icon
-            // over the text unless its appearance is empty.
-            d.set("F", 24);
-            let mut form = Dictionary::new();
-            form.set("Type", Object::Name(b"XObject".to_vec()));
-            form.set("Subtype", Object::Name(b"Form".to_vec()));
-            form.set("BBox", rect_object(Rect { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 }));
-            let mut ap = Dictionary::new();
-            ap.set("N", doc.add_object(Stream::new(form, Vec::new())));
-            d.set("AP", ap);
-            doc.add_object(d)
-        })
-        .collect()
+    set_note(&mut d, contents(thread, true, true));
+    doc.add_object(d)
 }
 
 #[cfg(test)]

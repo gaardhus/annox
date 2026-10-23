@@ -881,21 +881,28 @@ fn export_pdf_places_threads_on_their_text() {
     // On the second line, starting after "The ".
     let q = quads(highlight);
     assert!(q.len() == 8 && q[0] > 95.0 && q[0] < 110.0 && q[5] > 675.0 && q[1] < 700.0, "{q:?}");
-    let reply = &page
-        .iter()
-        .find(|(_, d)| d.get(b"IRT").is_ok() && d.get(b"Subtype").unwrap().as_name().unwrap() == b"Text")
-        .unwrap()
-        .1;
-    assert_eq!(reply.get(b"Contents").unwrap().as_str().unwrap(), b"Done");
+    // Replies are in the thread's note, not annotations of their own, which
+    // Okular won't open the thread's highlight beside and browsers don't show.
+    assert!(page.iter().all(|(_, d)| d.get(b"Subtype").unwrap().as_name().unwrap() != b"Text"));
+    let note = String::from_utf8(highlight.get(b"Contents").unwrap().as_str().unwrap().to_vec()).unwrap();
+    assert!(note.starts_with("Prove it\n\nAgent, 20") && note.ends_with(": Done"), "{note}");
+    assert_eq!(highlight.get(b"AnnoxContents").unwrap().as_str().unwrap(), note.as_bytes());
+    // A closed popup, without which Firefox neither lists nor edits the note.
+    let doc = lopdf::Document::load(&output).unwrap();
+    let popup = doc.get_dictionary(highlight.get(b"Popup").unwrap().as_reference().unwrap()).unwrap();
+    assert_eq!(popup.get(b"Subtype").unwrap().as_name().unwrap(), b"Popup");
+    assert!(!popup.get(b"Open").unwrap().as_bool().unwrap());
+    assert!(page.iter().any(|(_, d)| d.get(b"Subtype").unwrap().as_name().unwrap() == b"Popup"));
     // A suggestion across a line break strikes its whole quote, a quad per
-    // line, and a caret grouped with it draws the replacement.
+    // line, and a caret named after it draws the replacement.
     let strike = get(&loose);
     assert_eq!(strike.get(b"Subtype").unwrap().as_name().unwrap(), b"StrikeOut");
     // The page shows the whole change and there's no reason, so there's no note.
     assert!(strike.get(b"Contents").is_err());
     assert_eq!(quads(strike).len(), 16);
     let caret = get(&format!("{loose}-caret"));
-    assert!(caret.get(b"IRT").is_ok());
+    // Not in reply to the struck text, which Okular would then not open.
+    assert!(caret.get(b"IRT").is_err());
     // It draws the replacement itself, above the struck text.
     assert!(caret.get(b"AP").unwrap().as_dict().unwrap().get(b"N").is_ok());
     let rect: Vec<f32> =
@@ -906,10 +913,9 @@ fn export_pdf_places_threads_on_their_text() {
     // What can't be found goes on a page of its own, which links to annox.
     let appendix = pdf_annots(&output, 2);
     let names: Vec<&str> = appendix.iter().map(|(n, _)| n.as_str()).collect();
-    assert_eq!(names, ["", gone.as_str()]);
+    assert_eq!(names, ["", gone.as_str(), ""]);
     let uri = appendix[0].1.get(b"A").unwrap().as_dict().unwrap().get(b"URI").unwrap().as_str().unwrap();
     assert_eq!(uri, b"https://gaardhus.github.io/annox/");
-    let doc = lopdf::Document::load(&output).unwrap();
     let text = doc.extract_text(&[2]).unwrap();
     assert!(text.contains("Review comments on paper.md, exported by annox"), "{text}");
 }
@@ -1002,7 +1008,8 @@ fn export_pdf_writes_to_output_and_keeps_existing_annotations() {
     assert_eq!(Path::new(out["output"].as_str().unwrap()), d.canonicalize().unwrap().join("review.pdf"));
     let annots = pdf_annots(&d.join("review.pdf"), 1);
     let names: Vec<&str> = annots.iter().map(|(n, _)| n.as_str()).collect();
-    assert_eq!(names, ["link", c.as_str()]);
+    // The comment's popup has no name.
+    assert_eq!(names, ["link", c.as_str(), ""]);
     assert_eq!(std::fs::read(&input).unwrap(), before, "the input PDF is left alone");
 }
 
@@ -1264,4 +1271,198 @@ fn import_pdf_adds_what_reviewers_wrote_in_a_viewer() {
     assert_eq!(kinds, ["comment", "suggestion", "comment", "reply"], "{into_pdf:#}");
     assert_eq!(into_pdf["unchanged"], 2, "{into_pdf:#}");
     assert_eq!(annox(d, &["import-pdf", "paper.pdf"])["added"], serde_json::json!([]));
+}
+
+/// The `/Subtype` and `/Contents` of each annotation on page `n` but popups.
+fn annot_texts(path: &Path, n: u32) -> Vec<(String, String)> {
+    let text = |d: &lopdf::Dictionary, key: &[u8]| {
+        let bytes = d.get(key).ok().and_then(|o| o.as_str().ok()).unwrap_or_default();
+        match bytes.strip_prefix(b"\xFE\xFF") {
+            Some(utf16) => {
+                String::from_utf16(&utf16.chunks(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect::<Vec<_>>())
+                    .unwrap()
+            }
+            None => String::from_utf8_lossy(bytes).into_owned(),
+        }
+    };
+    pdf_annots(path, n)
+        .iter()
+        // A popup shows its parent's note.
+        .filter(|(_, d)| d.get(b"Subtype").unwrap().as_name().unwrap() != b"Popup")
+        .map(|(_, d)| {
+            (String::from_utf8_lossy(d.get(b"Subtype").unwrap().as_name().unwrap()).into_owned(), text(d, b"Contents"))
+        })
+        .collect()
+}
+
+#[test]
+fn export_pdf_replaces_what_it_wrote_before() {
+    let dir = setup("The bound is tight.\n\nGone from the PDF.\n");
+    let d = dir.path();
+    let pdf = d.join("paper.pdf");
+    write_pdf(&pdf, &[&["The bound is tight."]]);
+    annox(d, &["comment", "paper.md", "--quote", "tight", "--body", "Prove it"]);
+    annox(d, &["comment", "paper.md", "--quote", "Gone", "--body", "Where?"]);
+    for _ in 0..2 {
+        annox(d, &["export-pdf", "paper.md", "paper.pdf", "-o", "paper.pdf"]);
+        // Once each, and one appended page.
+        assert_eq!(annot_texts(&pdf, 1), [("Highlight".to_owned(), "Prove it".to_owned())]);
+        assert_eq!(lopdf::Document::load(&pdf).unwrap().get_pages().len(), 2);
+        // Object numbers with no gaps, or Okular won't save edits to the notes.
+        let doc = lopdf::Document::load(&pdf).unwrap();
+        let numbers: Vec<u32> = doc.reference_table.entries.keys().copied().collect();
+        assert_eq!(numbers, (1..=numbers.len() as u32).collect::<Vec<_>>());
+    }
+    // The appended page isn't part of a PDF's text.
+    annox(d, &["export-pdf", "paper.md", "paper.pdf", "-o", "copy.pdf"]);
+    assert_eq!(annox(d, &["text", "copy.pdf"]), "The bound is tight.\n");
+}
+
+#[test]
+fn sync_pdf_keeps_a_pdf_and_its_threads_in_step() {
+    let dir = setup("");
+    let d = dir.path();
+    let pdf = d.join("paper.pdf");
+    write_pdf_in(&pdf, &[&["The bound is tight, and", "the proof is short."]], "Courier");
+    let mine = id(&annox(d, &["comment", "paper.pdf", "--quote", "tight", "--body", "Prove it"]));
+    let out = annox(d, &["sync-pdf", "paper.pdf"]);
+    assert_eq!(out["placed"], serde_json::json!([mine]));
+
+    // A reviewer comments, as two viewer sessions that both name their first
+    // comment "A0" and give no time.
+    let mut first = markup("Highlight", "A0", "Why?", &[courier_box(1, 4, 9)]);
+    first.remove(b"CreationDate");
+    add_annot(&pdf, first);
+    let out = annox(d, &["sync-pdf", "paper.pdf"]);
+    assert_eq!(out["added"][0]["quote"], "proof");
+    let mut second = markup("Highlight", "A0", "How short?", &[courier_box(1, 13, 18)]);
+    second.remove(b"CreationDate");
+    add_annot(&pdf, second);
+    let out = annox(d, &["sync-pdf", "paper.pdf"]);
+    assert_eq!(out["added"][0]["quote"], "short", "{out:#}");
+
+    // Each is now one of annox's, once.
+    let mut texts = annot_texts(&pdf, 1);
+    texts.sort();
+    let want = ["How short?", "Prove it", "Why?"].map(|t| ("Highlight".to_owned(), t.to_owned()));
+    assert_eq!(texts, want);
+    let again = annox(d, &["sync-pdf", "paper.pdf"]);
+    assert_eq!(again["added"], serde_json::json!([]));
+    assert_eq!(annot_texts(&pdf, 1).len(), 3);
+    assert_eq!(annox(d, &["text", "paper.pdf"]), "The bound is tight, and\nthe proof is short.\n");
+}
+
+#[test]
+fn sync_pdf_knows_the_caret_of_its_own_suggestions() {
+    let dir = setup("");
+    let d = dir.path();
+    let pdf = d.join("paper.pdf");
+    write_pdf_in(&pdf, &[&["The bound is tight, and", "the proof is short."]], "Courier");
+    annox(d, &["suggest", "paper.pdf", "--quote", "tight", "--replace", "loose"]);
+    annox(d, &["sync-pdf", "paper.pdf"]);
+    // The caret that draws "loose" isn't taken for a suggestion to insert it.
+    assert_eq!(annox(d, &["sync-pdf", "paper.pdf"])["added"], serde_json::json!([]));
+    assert_eq!(annox(d, &["list", "paper.pdf"]).as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn import_pdf_leaves_out_a_note_that_repeats_the_quote() {
+    let dir = setup("");
+    let d = dir.path();
+    let pdf = d.join("paper.pdf");
+    write_pdf_in(&pdf, &[&["The bound is tight, and", "the proof is short."]], "Courier");
+    // As Okular makes a highlight: its note is the text it covers.
+    add_annot(&pdf, markup("Highlight", "o1", "the proof", &[courier_box(1, 0, 9)]));
+    let out = annox(d, &["import-pdf", "paper.pdf"]);
+    assert_eq!(out["added"][0]["quote"], "the proof", "{out:#}");
+    assert!(annox(d, &["list", "paper.pdf"])[0]["body"].is_null());
+    // Not so a note annox wrote, which would then look changed.
+    annox(d, &["comment", "paper.pdf", "--quote", "tight", "--body", "tight"]);
+    annox(d, &["sync-pdf", "paper.pdf"]);
+    assert_eq!(annox(d, &["sync-pdf", "paper.pdf"])["skipped"], serde_json::json!([]));
+}
+
+#[test]
+fn sync_pdf_watches_threads_and_the_pdf() {
+    let dir = setup("");
+    let d = dir.path().canonicalize().unwrap();
+    let pdf = d.join("paper.pdf");
+    write_pdf_in(&pdf, &[&["The bound is tight, and", "the proof is short."]], "Courier");
+    let args: Vec<String> = ["sync-pdf", "paper.pdf", "--watch", "--settle", "50", "--author", "urn:test:agent"]
+        .map(str::to_owned)
+        .to_vec();
+    let cli::Command::SyncPdf(options) = cli::parse(&args).unwrap() else { panic!("not sync-pdf") };
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let syncs = std::sync::Mutex::new(Vec::new());
+    let wait_for = |what: &str, done: &dyn Fn() -> bool| {
+        let start = std::time::Instant::now();
+        while !done() {
+            assert!(start.elapsed() < std::time::Duration::from_secs(20), "timed out waiting for {what}");
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    };
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            cli::watch_pdf(options, &d, &stop, |sync| {
+                syncs.lock().unwrap().push(sync);
+                Ok(())
+            })
+            .unwrap()
+        });
+        wait_for("the first sync", &|| syncs.lock().unwrap().len() == 1);
+        // A new thread is written into the PDF.
+        annox(&d, &["comment", "paper.pdf", "--quote", "tight", "--body", "Prove it"]);
+        wait_for("the thread in the PDF", &|| annot_texts(&pdf, 1).len() == 1);
+        // A comment saved into the PDF becomes a thread.
+        add_annot(&pdf, markup("Highlight", "r1", "Why?", &[courier_box(1, 4, 9)]));
+        wait_for("the import", &|| annox(&d, &["list", "paper.pdf"]).as_array().unwrap().len() == 2);
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    });
+    let syncs = syncs.into_inner().unwrap();
+    assert!(syncs.iter().any(|s| s["added"][0]["quote"] == "proof"), "{syncs:#?}");
+}
+
+/// Sets the note of the annotation named `nm` on page 1 of the PDF at
+/// `path`, as a viewer would when someone edits it.
+fn set_note(path: &Path, nm: &str, note: &str) {
+    let mut doc = lopdf::Document::load(path).unwrap();
+    let page = doc.get_pages()[&1];
+    let annots = doc.get_dictionary(page).unwrap().get(b"Annots").unwrap().as_array().unwrap().clone();
+    let id = annots
+        .iter()
+        .map(|a| a.as_reference().unwrap())
+        .find(|&id| doc.get_dictionary(id).unwrap().get(b"NM").is_ok_and(|n| n.as_str().unwrap() == nm.as_bytes()))
+        .unwrap();
+    let d = doc.get_object_mut(id).unwrap().as_dict_mut().unwrap();
+    d.set("Contents", lopdf::Object::String(note.as_bytes().to_vec(), lopdf::StringFormat::Literal));
+    doc.save(path).unwrap();
+}
+
+#[test]
+fn sync_pdf_takes_what_is_added_to_a_note_as_a_reply() {
+    let dir = setup("");
+    let d = dir.path();
+    let pdf = d.join("paper.pdf");
+    write_pdf(&pdf, &[&["The bound is tight, and the proof is short."]]);
+    let tight = id(&annox(d, &["comment", "paper.pdf", "--quote", "tight", "--body", "Prove it"]));
+    let short = id(&annox(d, &["comment", "paper.pdf", "--quote", "short", "--body", "How short?"]));
+    annox(d, &["sync-pdf", "paper.pdf"]);
+
+    // In Okular, which can't reply, a reviewer types their answer into the
+    // note; and another rewords a note.
+    set_note(&pdf, &tight, "Prove it\n\nSee Lemma 4.");
+    set_note(&pdf, &short, "How long?");
+    let out = annox(d, &["sync-pdf", "paper.pdf"]);
+    assert_eq!(out["added"][0]["kind"], "reply", "{out:#}");
+    assert_eq!(out["added"][0]["parent"], tight.as_str());
+    // By whoever syncs: the note still names the thread's author.
+    assert_eq!(out["added"][0]["author"], "Agent");
+    assert!(out["skipped"][0]["reason"].as_str().unwrap().contains("changed, not added to"), "{out:#}");
+    assert_eq!(annox(d, &["show", &tight])["replies"][0]["body"], "See Lemma 4.");
+
+    // The note now shows the reply, and the reworded one is put back.
+    let notes = annot_texts(&pdf, 1);
+    assert!(notes[0].1.starts_with("Prove it\n\nAgent, ") && notes[0].1.ends_with(": See Lemma 4."), "{notes:?}");
+    assert_eq!(notes[1].1, "How short?");
+    assert_eq!(annox(d, &["sync-pdf", "paper.pdf"])["added"], serde_json::json!([]));
 }

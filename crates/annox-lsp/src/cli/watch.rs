@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use super::{author, list, no_workspace, open_file, reader, Author, Filter, Watch};
 
 /// How often `watch` checks `.annox/` for changes.
-const WATCH_INTERVAL: Duration = Duration::from_millis(500);
+pub(super) const WATCH_INTERVAL: Duration = Duration::from_millis(500);
 
 /// Follows the threads that are unread for a reader (§5.13) and, with
 /// `mention`, addressed to them, and reports each one once it has settled.

@@ -115,6 +115,21 @@ pub enum Command {
     ///
     /// Quotes and line numbers in a PDF refer to this text: a line per line of text, and a blank line
     /// between pages.
+    /// Keep FILE's threads written into PDF, and the comments made on PDF in a viewer in FILE's threads
+    ///
+    /// Imports what reviewers added to PDF in their viewer, as `import-pdf` does, then writes FILE's open
+    /// threads into PDF itself, as `export-pdf` does, replacing what it wrote before. Reviewers who don't
+    /// use annox see the current threads in PDF, and what they add there becomes threads. With --watch,
+    /// it keeps doing so whenever FILE's threads change or PDF is saved, and syncs with the workspace's
+    /// hub, if it has one, so threads others add show up in PDF too. Use a viewer that saves into the
+    /// file, such as Okular, rather than one that saves a copy. When FILE is itself a PDF, PDF defaults
+    /// to FILE.
+    #[command(name = "sync-pdf")]
+    SyncPdf(SyncPdf),
+    /// Print FILE's text as annox reads it: for a PDF, the text of its text layer
+    ///
+    /// Quotes and line numbers in a PDF refer to this text: a line per line of text, and a blank line
+    /// between pages.
     Text {
         /// A document in the workspace
         file: String,
@@ -307,6 +322,29 @@ pub struct Watch {
     /// written isn't picked up half done
     #[arg(long, value_name = "MS", default_value_t = 2000)]
     pub settle: u64,
+}
+
+/// Options of `annox sync-pdf`.
+#[derive(clap::Args, Debug)]
+pub struct SyncPdf {
+    /// The document the PDF was compiled from, or the PDF itself
+    pub(super) file: String,
+    /// The PDF to keep in step [default: FILE, when it's a PDF]
+    pub(super) pdf: Option<PathBuf>,
+    /// Keep running, and sync again whenever FILE's threads change or PDF is saved; prints what each
+    /// sync did, or with --json, a line of JSON
+    #[arg(short, long)]
+    pub watch: bool,
+    /// How long FILE's threads and PDF must stay unchanged before syncing again, in milliseconds, so a
+    /// PDF still being saved isn't read half written
+    #[arg(long, value_name = "MS", default_value_t = 2000, requires = "watch")]
+    pub(super) settle: u64,
+    /// Keep what's imported in the local area, which isn't shared
+    #[arg(long)]
+    pub(super) local: bool,
+    /// Who to import comments without an author name as, and who syncs with the hub
+    #[command(flatten)]
+    pub(super) author: Author,
 }
 
 /// The text a command targets.
