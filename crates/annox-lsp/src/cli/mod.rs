@@ -19,6 +19,7 @@ use serde_json::{json, Map, Value};
 
 mod args;
 mod commit;
+mod config;
 mod report;
 mod watch;
 
@@ -26,6 +27,7 @@ use args::Cli;
 pub use args::{Author, Command, Filter, Meta, MoveTo, Quote, Watch};
 use commit::commit;
 pub use commit::commit_workspace;
+use config::config;
 use report::report;
 pub use watch::{follow_log, watch, Watcher};
 use watch::{log_events, log_scope};
@@ -136,6 +138,7 @@ pub fn execute(command: Command, cwd: &Path) -> anyhow::Result<Value> {
         Command::React { id, reaction, remove, author } => react(&id, &reaction, remove, &author, &cwd),
         Command::Read { ids, all, author: who } => mark_read(&ids, all, &who, &cwd),
         Command::Commit { message, dry_run } => commit(message.as_deref(), dry_run, &cwd),
+        Command::Config => config(&cwd),
     }
 }
 

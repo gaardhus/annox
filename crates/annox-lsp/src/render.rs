@@ -72,6 +72,7 @@ pub fn of(command: &Command) -> Render {
             format!("Marked {} read\n", plural(n, "thread"))
         }),
         Command::Commit { .. } => Box::new(committed),
+        Command::Config => Box::new(config),
     }
 }
 
@@ -288,6 +289,77 @@ fn committed(v: &Value) -> String {
         ),
         None => format!("Would commit {}\n{message}\n", plural(files, "file")),
     }
+}
+
+/// What `config` prints: each setting, its value and where it comes from,
+/// then the files they're read from.
+fn config(v: &Value) -> String {
+    // What `config`'s `from` values say, as text.
+    let from = |source: &Value| match str(source) {
+        "config" => "config.json".to_owned(),
+        "default" => "by default".to_owned(),
+        "git" => "git's identity".to_owned(),
+        other => other.to_owned(),
+    };
+    let row = |label: &str, value: String, note: String| {
+        let note = if note.is_empty() { note } else { format!("  {}", paint(style::MUTED, note)) };
+        format!("{label:<11}{value}{note}\n")
+    };
+
+    let author = &v["author"];
+    let mut out = match author["id"].as_str() {
+        Some(id) => {
+            let (id_from, name_from) = (&author["from"]["id"], &author["from"]["name"]);
+            let note = match name_from {
+                Value::Null => format!("from {}", from(id_from)),
+                n if n == id_from => format!("from {}", from(id_from)),
+                n => format!("id from {}, name from {}", from(id_from), from(n)),
+            };
+            let value = match author["name"].as_str() {
+                Some(name) => format!("{} {}", paint(style::AUTHOR, name), paint(style::MUTED, format!("<{id}>"))),
+                None => paint(style::AUTHOR, id),
+            };
+            row("author", value, note)
+        }
+        None => row("author", paint(style::PROBLEM, "none"), "config.json is invalid, so write commands refuse".into()),
+    };
+    out += &row("output", str(&v["output"]["value"]).to_owned(), from(&v["output"]["from"]));
+
+    let ws = &v["workspace"];
+    if ws.is_null() {
+        out += &row("workspace", paint(style::MUTED, "none here"), String::new());
+    } else {
+        out += &row("workspace", paint(style::PATH, str(&ws["root"])), String::new());
+        out += &row("format", ws["format"].to_string(), "annox.json".into());
+        out += &match ws["sync"]["url"].as_str() {
+            None => row("sync", paint(style::MUTED, "off"), "no sync.url in annox.json".into()),
+            Some(url) => {
+                let (state, note) = match str(&ws["sync"]["credential"]) {
+                    "token" => (style::DONE, "with a token from credentials.json"),
+                    "none" => (style::DONE, "without a token, as credentials.json says"),
+                    _ => (style::PROBLEM, "not syncing: no entry for it in credentials.json"),
+                };
+                row("sync", paint(state, url), note.into())
+            }
+        };
+    }
+
+    out += "\n";
+    for file in v["files"].as_array().into_iter().flatten() {
+        let name = match str(&file["name"]) {
+            "config" => "config.json",
+            "credentials" => "credentials.json",
+            _ => "annox.json",
+        };
+        let path = file["path"].as_str().map_or_else(|| paint(style::MUTED, "no location"), |p| paint(style::PATH, p));
+        let state = match str(&file["state"]) {
+            "ok" => String::new(),
+            "missing" => format!("  {}", paint(style::MUTED, "missing")),
+            _ => format!("  {}", paint(style::PROBLEM, format!("invalid: {}", str(&file["error"])))),
+        };
+        out += &format!("{name:<18}{path}{state}\n");
+    }
+    out
 }
 
 /// `report`'s entries in display order, each with how deeply it's nested.

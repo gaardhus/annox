@@ -118,6 +118,7 @@ annox accept ID
 annox revert ID [--accept] [--body TEXT]
 annox read ID... | --all
 annox commit [-m TEXT] [--dry-run]
+annox config                                        # the settings in effect here, and where each comes from
 ```
 
 `annox list --unread` lists the threads others changed since you last read them, and every entry says whether it's `unread`. `annox read` marks threads read, and writing to a thread does too. What each author id has read is kept in the git-ignored `.annox/local/read.json`, so an agent with its own id (below) has its own unread list, and its reading doesn't mark anything read for you. `list --as ID` reads as another id.
@@ -206,6 +207,8 @@ annox reads configuration from four places:
 | Editor settings                    | One editor               | The LSP `initializationOptions` above, or the [Neovim plugin's options](editors/nvim/README.md#setup) |
 
 The user files live under `$XDG_CONFIG_HOME/annox/` when it's set. `ANNOX_CONFIG_FILE` and `ANNOX_CREDENTIALS_FILE` point at a file elsewhere. A missing file is the same as an empty one.
+
+`annox config` prints the settings in effect in the current directory and where each comes from: the identity write commands use, what the CLI prints, the workspace's format and hub, and whether you have credentials for that hub (never the token itself). It also lists the files it read them from, and says if one is missing or invalid.
 
 `config.json` sets the identity your annotations are written as, and with `"output": "json"`, makes the CLI print JSON unless `ANNOX_OUTPUT=text` says otherwise:
 

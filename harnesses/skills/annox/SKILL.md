@@ -17,7 +17,7 @@ Write as yourself, not as the user, so your annotations are distinguishable from
 export ANNOX_AUTHOR=urn:agent:claude ANNOX_AUTHOR_NAME=Claude ANNOX_OUTPUT=json
 ```
 
-The MCP server may already be started with an identity; then you don't need to set one.
+The MCP server may already be started with an identity; then you don't need to set one. `annox config` prints the identity the CLI writes as, and where it comes from.
 
 ## Reading
 

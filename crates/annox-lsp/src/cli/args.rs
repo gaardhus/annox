@@ -233,6 +233,12 @@ pub enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Print the settings in effect here, such as who write commands write as, and where each comes from
+    ///
+    /// The settings are read from ~/.config/annox/config.json, ~/.config/annox/credentials.json,
+    /// the workspace's .annox/annox.json, and the environment. A file that's missing or invalid is
+    /// listed as such.
+    Config,
 }
 
 /// Options of `annox watch`, and of the channel of `annox mcp`.

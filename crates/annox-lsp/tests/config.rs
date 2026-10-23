@@ -11,6 +11,8 @@ fn config_file_sets_the_default_author() {
     // SAFETY: this binary runs no other test, so nothing reads the environment concurrently.
     unsafe {
         std::env::set_var("ANNOX_CONFIG_FILE", &config);
+        std::env::set_var("ANNOX_CREDENTIALS_FILE", home.path().join("credentials.json"));
+        std::env::remove_var("ANNOX_OUTPUT");
         std::env::remove_var("ANNOX_AUTHOR");
         std::env::remove_var("ANNOX_AUTHOR_NAME");
     }
@@ -22,6 +24,15 @@ fn config_file_sets_the_default_author() {
     std::fs::write(&config, json!({ "author": { "id": "mailto:ada@example.org", "name": "Ada" } }).to_string())
         .unwrap();
     assert_eq!(default_author(dir.path()).unwrap(), json!({ "id": "mailto:ada@example.org", "name": "Ada" }));
+
+    // `annox config` says where it comes from, and what the files hold.
+    let shown = run(&["config"]).unwrap();
+    assert_eq!(shown["author"]["from"], json!({ "id": "config", "name": "config" }), "{shown}");
+    assert_eq!(shown["output"], json!({ "value": "text", "from": "default" }));
+    assert_eq!(shown["workspace"]["format"], json!(1));
+    assert_eq!(shown["workspace"]["sync"], json!(null));
+    let states: Vec<_> = shown["files"].as_array().unwrap().iter().map(|f| f["state"].clone()).collect();
+    assert_eq!(states, [json!("ok"), json!("missing"), json!("ok")]);
 
     // The CLI writes as the configured author, and --name only renames it.
     run(&["comment", "paper.md", "--quote", "Some", "--body", "a"]).unwrap();
@@ -40,4 +51,9 @@ fn config_file_sets_the_default_author() {
     std::fs::write(&config, r#"{ "author": { "name": "Ada" } }"#).unwrap();
     let err = format!("{:#}", run(&["comment", "paper.md", "--quote", "Some", "--body", "d"]).unwrap_err());
     assert!(err.contains("config.json") && err.contains("author.id"), "{err}");
+    // `annox config` reports it instead of failing.
+    let shown = run(&["config"]).unwrap();
+    assert_eq!(shown["author"], json!(null));
+    assert_eq!(shown["files"][0]["state"], json!("invalid"));
+    assert!(shown["files"][0]["error"].as_str().unwrap().starts_with("`author.id`"), "{shown}");
 }

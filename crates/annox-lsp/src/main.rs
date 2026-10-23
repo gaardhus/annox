@@ -103,7 +103,7 @@ const GROUPS: &[(&str, &[&str])] = &[
     ("Review", &["status", "react", "accept", "revert", "retarget", "reattach", "delete", "restore", "read"]),
     ("Workspace", &["init", "commit"]),
     ("Servers", &["lsp", "hub", "mcp"]),
-    ("Other", &["update"]),
+    ("Other", &["config", "update"]),
 ];
 
 /// `annox`'s command, with its subcommands listed under the headings of [`GROUPS`]: clap can't
