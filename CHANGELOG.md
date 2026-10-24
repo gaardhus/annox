@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.3](https://github.com/gaardhus/annox/compare/v0.17.2...v0.17.3) - 2026-10-24
+
+### Fixed
+
+- *(core)* Report repaired read state, and keep it if saving fails
+- *(sync)* Report every invalid item, and retry pending ones on connect
+- *(cli)* Say when a workspace can only be read
+- *(cli)* Say an annotation is ignored when its create event isn't valid
+
 ## [0.17.2](https://github.com/gaardhus/annox/compare/v0.17.1...v0.17.2) - 2026-10-23
 
 ### Added
