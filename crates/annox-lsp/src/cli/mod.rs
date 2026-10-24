@@ -245,7 +245,12 @@ fn document_path(index: &Index, id: &str) -> anyhow::Result<String> {
 /// The derived state of annotation `id` (§2.5.6).
 fn derived(index: &Index, id: &str) -> anyhow::Result<Value> {
     let path = document_path(index, id)?;
-    index.load(&path).derive().remove(id).ok_or_else(|| anyhow!("unknown annotation {id}"))
+    index.load(&path).derive().remove(id).ok_or_else(|| match index.events.get(id) {
+        Some((create, loc)) if create.kind == "create" => {
+            anyhow!("annotation {id} is ignored: its create event in .annox/{} isn't valid (§2.4)", loc.folder)
+        }
+        _ => anyhow!("unknown annotation {id}"),
+    })
 }
 
 /// Finds `quote` in `text`: its only occurrence, or the `occurrence`-th
