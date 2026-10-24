@@ -5,6 +5,7 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use annox_core::anchor::{self, Anchor, State};
 use annox_core::event::Event;
@@ -197,16 +198,23 @@ fn no_workspace(from: &Path) -> anyhow::Error {
     anyhow!("{} is not in an annox workspace; run `annox init` at the project root", from.display())
 }
 
-/// The index of `ws`, warning once per run about event files it skipped,
-/// and about read state that had to be repaired.
+/// The index of `ws`, warning once per run about a format that can only be
+/// read (§5.3), about event files it skipped, and about read state that had
+/// to be repaired.
 pub(crate) fn read_index(ws: &Workspace) -> Index {
-    static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    static FORMAT: AtomicBool = AtomicBool::new(false);
+    static UNREADABLE: AtomicBool = AtomicBool::new(false);
+    if let Err(e) = ws.check_format() {
+        if !FORMAT.swap(true, Ordering::Relaxed) {
+            eprintln!("annox: {e}; its annotations can be read but not changed");
+        }
+    }
     if let Ok(Some(repaired)) = read::repair(ws) {
         eprintln!("annox: {repaired}");
     }
     let index = Index::read(ws);
     if let Some(warning) = annox_core::storage::unreadable_warning(&index.unreadable) {
-        if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        if !UNREADABLE.swap(true, Ordering::Relaxed) {
             eprintln!("annox: {warning}");
         }
     }
@@ -330,7 +338,11 @@ fn list(
     }
     let index = read_index(&ws);
     let events: Vec<Event> = index.events.values().map(|(e, _)| e.clone()).collect();
-    let unread = read::ensure_reader(&ws, &index, &me)?.unread(&me, &events);
+    let (state, kept) = read::baseline(&ws, &index, &me)?;
+    if filter.unread && !kept {
+        eprintln!("annox: read state can't be saved in this workspace, so nothing is tracked as unread");
+    }
+    let unread = state.unread(&me, &events);
     let mut out = Vec::new();
     for path in paths {
         let text = std::fs::read_to_string(ws.root.join(&path)).ok().map(|raw| Text::from_raw(&raw));

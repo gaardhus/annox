@@ -249,7 +249,7 @@ fn locked<T>(ws: &Workspace, f: impl FnOnce() -> io::Result<T>) -> io::Result<T>
     with_lock(ws, || {
         // A workspace that can't be written to keeps the file as it is.
         if let Err(e) = repair_unlocked(ws) {
-            if !read_only(&e) {
+            if !unwritable(&e) {
                 return Err(e);
             }
         }
@@ -275,9 +275,15 @@ fn with_lock<T>(ws: &Workspace, f: impl FnOnce() -> io::Result<T>) -> io::Result
 /// workspace can't be written to, such as a read-only checkout, the baseline
 /// is returned without being saved, so that reading still works.
 pub fn ensure_reader(ws: &Workspace, index: &Index, reader: &str) -> io::Result<ReadState> {
+    baseline(ws, index, reader).map(|(state, _)| state)
+}
+
+/// [`ensure_reader`], also saying whether `reader`'s state is kept. If it
+/// isn't, every run starts from a new baseline, so nothing is ever unread.
+pub fn baseline(ws: &Workspace, index: &Index, reader: &str) -> io::Result<(ReadState, bool)> {
     let state = ReadState::load(ws);
     if state.knows(reader) {
-        return Ok(state);
+        return Ok((state, true));
     }
     let events: Vec<Event> = index.events.values().map(|(e, _)| e.clone()).collect();
     let ids: BTreeSet<String> = by_annotation(&events).into_keys().map(str::to_owned).collect();
@@ -288,15 +294,17 @@ pub fn ensure_reader(ws: &Workspace, index: &Index, reader: &str) -> io::Result<
         let mut merged = ReadState::load(ws);
         merged.merge(state);
         match save(ws, &merged) {
-            Err(e) if !read_only(&e) => Err(e),
-            _ => Ok(merged),
+            Ok(()) => Ok((merged, true)),
+            Err(e) if unwritable(&e) => Ok((merged, false)),
+            Err(e) => Err(e),
         }
     })
 }
 
-/// Whether `e` says the workspace can't be written to at all, rather than
-/// that writing failed.
-fn read_only(e: &io::Error) -> bool {
+/// Whether `e` says the workspace can't be written to at all, because it is
+/// read-only or its format isn't supported (§5.3), rather than that writing
+/// failed.
+fn unwritable(e: &io::Error) -> bool {
     matches!(e.kind(), io::ErrorKind::PermissionDenied | io::ErrorKind::ReadOnlyFilesystem | io::ErrorKind::Unsupported)
 }
 
