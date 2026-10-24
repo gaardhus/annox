@@ -171,6 +171,11 @@ impl Replica {
         let hello = Self::call(&mut conn, "annoxSync/hello", json!({ "format": FORMAT, "subscribe": true }))?;
         let hub_id = hello["hubId"].as_str().unwrap_or_default().to_owned();
         let mut cursor = self.load_cursor(&hub_id);
+        // Pending items may have found their document since, for example
+        // through git, and the hub won't send them again.
+        if !self.pending.is_empty() {
+            self.apply(Vec::new(), events)?;
+        }
         self.pull(&mut conn, &hub_id, &mut cursor, events)?;
         self.push_missing(&mut conn)?;
         loop {
@@ -261,8 +266,10 @@ impl Replica {
     /// reconnects; events already written are skipped then.
     fn apply(&mut self, items: Vec<Value>, events: &Sender<FromReplica>) -> Result<(), Error> {
         let ws = self.ws();
+        let (well_formed, ill_formed): (Vec<Value>, Vec<Value>) = items.into_iter().partition(is_well_formed);
+        let mut malformed = ill_formed.len();
         let mut queue: Vec<Value> = std::mem::take(&mut self.pending);
-        queue.extend(items.into_iter().filter(is_well_formed));
+        queue.extend(well_formed);
         let mut seen = HashSet::new();
         queue.retain(|i| seen.insert(i["event"]["id"].as_str().unwrap_or_default().to_owned()));
         for item in &queue {
@@ -281,7 +288,6 @@ impl Replica {
         let mut paths: BTreeMap<String, String> =
             index.documents.iter().filter_map(|(id, d)| Some((id.clone(), d.path.clone()?))).collect();
         let mut still_pending = Vec::new();
-        let mut malformed = 0;
         let mut queue = queue.into_iter();
         while let Some(item) = queue.next() {
             let Ok(event) = serde_json::from_value::<Event>(item["event"].clone()) else {
@@ -433,7 +439,9 @@ mod tests {
         assert!(replica.pending.is_empty());
         let synced = Index::read(&ws).synced;
         assert!(synced.contains(doc) && synced.contains(ann), "{synced:?}");
-        assert!(rx.try_iter().all(|m| !matches!(m, FromReplica::Status { .. })), "the broken item isn't well-formed");
+        let reported =
+            rx.try_iter().any(|m| matches!(m, FromReplica::Status { message, .. } if message.contains("ignored 1")));
+        assert!(reported, "the broken item is reported");
     }
 
     #[test]
