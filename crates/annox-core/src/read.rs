@@ -220,7 +220,7 @@ impl fmt::Display for Repaired {
 /// writes what could be salvaged in its place, so that nothing in it is
 /// lost to the next save.
 pub fn repair(ws: &Workspace) -> io::Result<Option<Repaired>> {
-    locked(ws, || repair_unlocked(ws))
+    with_lock(ws, || repair_unlocked(ws))
 }
 
 fn repair_unlocked(ws: &Workspace) -> io::Result<Option<Repaired>> {
@@ -233,15 +233,33 @@ fn repair_unlocked(ws: &Workspace) -> io::Result<Option<Repaired>> {
     ws.check_format()?;
     let backup = path.with_file_name(format!("read.json.damaged-{}", crate::new_id()));
     fs::rename(&path, &backup)?;
-    save(ws, &state)?;
+    if let Err(e) = save(ws, &state) {
+        // Without a file, the next load would start from nothing.
+        let _ = fs::rename(&backup, &path);
+        return Err(e);
+    }
     Ok(Some(Repaired { backup }))
 }
 
 /// Runs `f`, which loads, changes and saves the read state, holding a lock,
 /// so that no other writer replaces the file between its load and its save,
-/// losing what that writer added. Where there can be no lock, as in a
-/// workspace that can't be written to, `f` runs without one.
+/// losing what that writer added. A damaged file is repaired first, so that
+/// it is never saved over; callers that can say so call [`repair`] before.
 fn locked<T>(ws: &Workspace, f: impl FnOnce() -> io::Result<T>) -> io::Result<T> {
+    with_lock(ws, || {
+        // A workspace that can't be written to keeps the file as it is.
+        if let Err(e) = repair_unlocked(ws) {
+            if !read_only(&e) {
+                return Err(e);
+            }
+        }
+        f()
+    })
+}
+
+/// Runs `f` holding the read state's lock, or without one where there can
+/// be none, as in a workspace that can't be written to.
+fn with_lock<T>(ws: &Workspace, f: impl FnOnce() -> io::Result<T>) -> io::Result<T> {
     let path = ws.root.join(LOCK_FILE);
     let file = ws.check_format().and_then(|()| {
         fs::create_dir_all(path.parent().expect("LOCK_FILE has a parent"))?;
@@ -249,13 +267,6 @@ fn locked<T>(ws: &Workspace, f: impl FnOnce() -> io::Result<T>) -> io::Result<T>
     });
     // Released when the file is closed.
     let _lock = file.ok().filter(|f| f.lock().is_ok());
-    // Never save over a damaged file; callers that can say so call `repair`
-    // first. A workspace that can't be written to keeps it as it is.
-    if let Err(e) = repair_unlocked(ws) {
-        if !read_only(&e) {
-            return Err(e);
-        }
-    }
     f()
 }
 
@@ -413,6 +424,18 @@ mod tests {
     }
 
     #[test]
+    fn repairing_reports_where_the_file_went() {
+        let root = std::env::temp_dir().join(format!("annox-read-{}", crate::new_id()));
+        let ws = Workspace::init(&root).unwrap();
+        fs::create_dir_all(root.join(".annox/local")).unwrap();
+        fs::write(root.join(READ_FILE), "not json").unwrap();
+        let repaired = repair(&ws).unwrap().expect("the damaged file is reported");
+        assert_eq!(fs::read_to_string(&repaired.backup).unwrap(), "not json");
+        assert_eq!(repair(&ws).unwrap(), None, "the repaired file isn't damaged");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn damaged_files_are_kept_before_saving() {
         let root = std::env::temp_dir().join(format!("annox-read-{}", crate::new_id()));
         let ws = Workspace::init(&root).unwrap();
@@ -430,7 +453,6 @@ mod tests {
             .collect();
         assert_eq!(backups.len(), 1);
         assert_eq!(fs::read_to_string(root.join(".annox/local").join(&backups[0])).unwrap(), damaged);
-        assert_eq!(repair(&ws).unwrap(), None, "the repaired file isn't damaged");
         let _ = fs::remove_dir_all(&root);
     }
 
